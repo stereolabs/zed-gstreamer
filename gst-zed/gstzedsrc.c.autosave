@@ -1,0 +1,20 @@
+#include <gst/gst.h>
+
+#include "gstzedsrc.h"
+
+GST_DEBUG_CATEGORY_STATIC (gst_zedsrc_debug);
+#define GST_CAT_DEFAULT gst_zedsrc_debug
+
+static void gst_aptinasrc_set_property (GObject * object,
+    guint property_id, const GValue * value, GParamSpec * pspec);
+static void gst_aptinasrc_get_property (GObject * object,
+    guint property_id, GValue * value, GParamSpec * pspec);
+static void gst_aptinasrc_dispose (GObject * object);
+static void gst_aptinasrc_finalize (GObject * object);
+
+static gboolean gst_aptinasrc_start (GstBaseSrc * src);
+static gboolean gst_aptinasrc_stop (GstBaseSrc * src);
+static GstCaps *gst_aptinasrc_get_caps (GstBaseSrc * src, GstCaps * filter);
+static gboolean gst_aptinasrc_set_caps (GstBaseSrc * src, GstCaps * caps);
+static gboolean gst_aptinasrc_unlock (GstBaseSrc * src);
+static gboolean gst_aptinasrc_unlock_stop (GstBaseSrc * src);
