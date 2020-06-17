@@ -1,45 +1,50 @@
 #ifndef GSTZED_H_
 #define GSTZED_H_
 
-#include <gst/gstelement.h>
+#include <gst/base/gstpushsrc.h>
+
+#include "sl/Camera.hpp"
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_ZED_SRC   (gst_zedsrc_get_type())
-#define GST_ZED_SRC(obj)   (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ZED_SRC,GstZedSrc))
-#define GST_ZED_SRC_CLASS(klass)   (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_ZED_SRC,GstZedSrcClass))
-#define GST_IS_ZED_SRC(obj)   (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_ZED_SRC))
-#define GST_IS_ZED_SRC_CLASS(obj)   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_ZED_SRC))
+#define GST_TYPE_ZED            (gst_zed_get_type())
+#define GST_ZED(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ZED,GstZed))
+#define GST_ZED_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_ZED,GstZedClass))
+#define GST_IS_ZED(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_ZED))
+#define GST_IS_ZED_CLASS(obj)   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_ZED))
 
-typedef struct _GstZedSrc GstZedSrc;
-typedef struct _GstZedSrcClass GstZedSrcClass;
+typedef struct _GstZed GstZed;
+typedef struct _GstZedClass GstZedClass;
 
-struct _GstZedSrc
+typedef enum
 {
-  GstElement base_zedsrc;
+    RGB_LEFT = 0,
+    RGB_RIGHT = 1,
+    DEPTH = 2,
+    LAST=100
+} DataType;
 
-  gboolean is_started;
+struct _GstZed
+{
+  GstPushSrc parent;
+
+  gint dropped_frame_count;
+  gboolean acq_started;
 
   /* properties */
+  sl::Camera* zed;
 
-  GstClockTime acq_start_time;
-  guint32 last_frame_count;
-  guint32 total_dropped_frames;
-
-  GstCaps *caps;
-  gint raw_framesize;
-  guint out_framesize;
-  guint8 *buffer;
-
-  gboolean stop_requested;
+  sl::RESOLUTION resolution;
+  int frame_rate;
+  DataType type;
 };
 
-struct _GstZedSrcClass
+struct _GstZedClass
 {
-  GstPushSrcClass base_zedsrc_class;
+  GstPushSrcClass parent_class;
 };
 
-GType gst_zedsrc_get_type (void);
+GType gst_zed_get_type (void);
 
 G_END_DECLS
 

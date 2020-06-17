@@ -13,10 +13,10 @@ include(MacroLogFeature)
 
 find_package(GStreamer REQUIRED COMPONENTS base)
 macro_log_feature(GSTREAMER_FOUND "GStreamer" "Required to build ${proj_name}" "http://gstreamer.freedesktop.org/" TRUE "1.2.0")
-macro_log_feature(GSTREAMER_BASE_LIBRARY_FOUND "GStreamer base library" "Required to build most plugins" "http://gstreamer.freedesktop.org/" FALSE "1.2.0")
+macro_log_feature(GSTREAMER_BASE_LIBRARY_FOUND "GStreamer base library" "Required to build ${proj_name}" "http://gstreamer.freedesktop.org/" FALSE "1.2.0")
 
 find_package(GStreamerPluginsBase COMPONENTS video)
-macro_log_feature(GSTREAMER_VIDEO_LIBRARY_FOUND "GStreamer video library" "Required to build several video plugins" "http://gstreamer.freedesktop.org/" FALSE "1.2.0")
+macro_log_feature(GSTREAMER_VIDEO_LIBRARY_FOUND "GStreamer video library" "Required to build ${proj_name}" "http://gstreamer.freedesktop.org/" FALSE "1.2.0")
 
 find_package(GLIB2 REQUIRED)
 macro_log_feature(GLIB2_FOUND "GLib" "Required to build ${proj_name}" "http://www.gtk.org/" TRUE)
