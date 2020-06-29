@@ -25,20 +25,23 @@ struct _GstZedSrc
     gboolean is_started;
 
     /* properties */
-    gint camera_index;
-    //gchar *config_file;
-    //gchar *config_preset;
-    //gchar *xsdat_file;
+    gint camera_resolution;     // Camera resolution [enum]
+    gint camera_fps;            // Camera FPS [enum]
+    gboolean sdk_verbose;
+    gboolean camera_image_flip;
+    gint camera_id;
+    gint64 camera_sn;
+    GString svo_file;
+    GString stream_ip;
+    gint stream_port;
+
 
     GstClockTime acq_start_time;
     guint32 last_frame_count;
     guint32 total_dropped_frames;
 
     GstCaps *caps;
-    //gint raw_framesize;
     guint out_framesize;
-    //gboolean convert_to_rgb;
-    guint8 *buffer;
 
     gboolean stop_requested;
 };
