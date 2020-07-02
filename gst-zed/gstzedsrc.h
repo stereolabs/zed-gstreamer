@@ -20,11 +20,12 @@ struct _GstZedSrc
 {
     GstPushSrc base_zedsrc;
 
-    /*AP_HANDLE apbase;*/
+    // ZED camera object
     sl::Camera zed;
-    gboolean is_started;
 
-    /* properties */
+    gboolean is_started; // grab started flag
+
+    // ----> Properties
     gint camera_resolution;     // Camera resolution [enum]
     gint camera_fps;            // Camera FPS [enum]
     gboolean sdk_verbose;
@@ -34,6 +35,13 @@ struct _GstZedSrc
     GString svo_file;
     GString stream_ip;
     gint stream_port;
+    gint stream_type;
+
+    gfloat depth_min_dist;
+    gfloat depth_max_dist;
+    gboolean camera_disable_self_calib;
+    gboolean depth_stabilization;
+    // <---- Properties
 
 
     GstClockTime acq_start_time;

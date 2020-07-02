@@ -21,7 +21,7 @@ static void gst_zedsrc_finalize (GObject * object);
 
 static gboolean gst_zedsrc_start (GstBaseSrc * src);
 static gboolean gst_zedsrc_stop (GstBaseSrc * src);
-static GstCaps *gst_zedsrc_get_caps (GstBaseSrc * src, GstCaps * filter);
+static GstCaps* gst_zedsrc_get_caps (GstBaseSrc * src, GstCaps * filter);
 static gboolean gst_zedsrc_set_caps (GstBaseSrc * src, GstCaps * caps);
 static gboolean gst_zedsrc_unlock (GstBaseSrc * src);
 static gboolean gst_zedsrc_unlock_stop (GstBaseSrc * src);
@@ -40,6 +40,11 @@ enum
     PROP_SVO_FILE,
     PROP_STREAM_IP,
     PROP_STREAM_PORT,
+    PROP_STREAM_TYPE,
+    PROP_DEPTH_MIN,
+    PROP_DEPTH_MAX,
+    PROP_DIS_SELF_CALIB,
+    PROP_DEPTH_STAB,
     N_PROPERTIES
 };
 
@@ -50,6 +55,14 @@ typedef enum {
     GST_ZEDSRC_15FPS = 15
 } GstZedSrcFPS;
 
+typedef enum {
+    GST_ZEDSRC_ONLY_LEFT = 0,
+    GST_ZEDSRC_ONLY_RIGHT = 1,
+    GST_ZEDSRC_LEFT_RIGHT = 2,
+    GST_ZEDSRC_DEPTH_16 = 3,
+    GST_ZEDSRC_LEFT_DEPTH = 4
+} GstZedSrcStreamType;
+
 #define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::HD1080)
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_30FPS
 #define DEFAULT_PROP_SDK_VERBOSE    FALSE
@@ -59,10 +72,15 @@ typedef enum {
 #define DEFAULT_PROP_SVO_FILE       ""
 #define DEFAULT_PROP_STREAM_IP      ""
 #define DEFAULT_PROP_STREAM_PORT    30000
+#define DEFAULT_PROP_STREAM_TYPE    0
+#define DEFAULT_PROP_DEPTH_MIN      300.f
+#define DEFAULT_PROP_DEPTH_MAX      20000.f
+#define DEFAULT_PROP_DIS_SELF_CALIB FALSE
+#define DEFAULT_PROP_DEPTH_STAB     TRUE
+
 
 #define GST_TYPE_ZED_RESOL (gst_zedtsrc_resol_get_type ())
-static GType
-gst_zedtsrc_resol_get_type (void)
+static GType gst_zedtsrc_resol_get_type (void)
 {
     static GType zedsrc_resol_type = 0;
 
@@ -84,8 +102,7 @@ gst_zedtsrc_resol_get_type (void)
 }
 
 #define GST_TYPE_ZED_FPS (gst_zedtsrc_fps_get_type ())
-static GType
-gst_zedtsrc_fps_get_type (void)
+static GType gst_zedtsrc_fps_get_type (void)
 {
     static GType zedsrc_fps_type = 0;
 
@@ -106,25 +123,56 @@ gst_zedtsrc_fps_get_type (void)
     return zedsrc_fps_type;
 }
 
+#define GST_TYPE_ZED_STREAM_TYPE (gst_zedtsrc_stream_type_get_type ())
+static GType gst_zedtsrc_stream_type_get_type (void)
+{
+    static GType zedsrc_stream_type_type = 0;
+
+    if (!zedsrc_stream_type_type) {
+        static GEnumValue pattern_types[] = {
+            { GST_ZEDSRC_ONLY_LEFT,    "32 bit Left image",     "Left image [BGRA]" },
+            { GST_ZEDSRC_ONLY_RIGHT,   "32 bit Right image",    "Right image [BGRA]"  },
+            { GST_ZEDSRC_LEFT_RIGHT,   "32 bit Left and Right", "Stereo couple up/down [BGRA]" },
+            { GST_ZEDSRC_DEPTH_16,     "16 bit depth",          "Depth image [GRAY16_LE]" },
+            { GST_ZEDSRC_LEFT_DEPTH,   "32 bit Left and Depth", "Left and Depth up/down [BGRA]" },
+            { 0, NULL, NULL },
+        };
+
+        zedsrc_stream_type_type =
+                g_enum_register_static ("GstZedsrcStreamType",
+                                        pattern_types);
+    }
+
+    return zedsrc_stream_type_type;
+}
 
 /* pad templates */
-
 static GstStaticPadTemplate gst_zedsrc_src_template =
         GST_STATIC_PAD_TEMPLATE ("src",
                                  GST_PAD_SRC,
                                  GST_PAD_ALWAYS,
-                                 GST_STATIC_CAPS( "video/x-raw, "
-                                                  "format = (string) { BGRA }, "
-                                                  "width =  (int) [ 1, 2208 ] , "
-                                                  "height =  (int) [ 1, 1242 ] , "
-                                                  "framerate =  (fraction) [ 15, 100 ]") );
+                                 GST_STATIC_CAPS( ("video/x-raw, " // Single color stream
+                                                   "format = (string) { BGRA }, "
+                                                   "width = (int) { 672, 1280, 1920, 2208 } , "
+                                                   "height =  (int) { 376, 720, 1080, 1242 } , "
+                                                   "framerate =  (fraction) { 15, 30, 60, 100 }"
+                                                   ";"
+                                                   "video/x-raw, " // Single depth stream
+                                                   "format = (string) { GRAY16_LE }, "
+                                                   "width = (int) { 672, 1280, 1920, 2208 } , "
+                                                   "height =  (int) { 376, 720, 1080, 1242 } , "
+                                                   "framerate =  (fraction)  { 15, 30, 60, 100 }"
+                                                   ";"
+                                                   "video/x-raw, " // Double stream
+                                                   "format = (string) { BGRA }, "
+                                                   "width = (int) { 672, 1280, 1920, 2208 } , "
+                                                   "height =  (int) { 752, 1440, 2160, 2484 } , "
+                                                   "framerate =  (fraction) { 15, 30, 60, 100 }") ) );
 
 /* class initialization */
+G_DEFINE_TYPE( GstZedSrc, gst_zedsrc, GST_TYPE_PUSH_SRC );
 
-G_DEFINE_TYPE (GstZedSrc, gst_zedsrc, GST_TYPE_PUSH_SRC);
-
-static void
-gst_zedsrc_class_init (GstZedSrcClass * klass)
+static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 {
     GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
     GstElementClass *gstelement_class = GST_ELEMENT_CLASS (klass);
@@ -203,7 +251,33 @@ gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                       DEFAULT_PROP_STREAM_PORT,
                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property( gobject_class, PROP_STREAM_TYPE,
+                                     g_param_spec_enum("stream-type", "Image stream type",
+                                                       "Image stream type", GST_TYPE_ZED_STREAM_TYPE,
+                                                       DEFAULT_PROP_STREAM_TYPE,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property( gobject_class, PROP_DEPTH_MIN,
+                                     g_param_spec_float("min-depth", "Minimum depth value",
+                                                        "Minimum depth value", 100.f, 3000.f, DEFAULT_PROP_DEPTH_MIN,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_DEPTH_MAX,
+                                     g_param_spec_float("max-depth", "Maximum depth value",
+                                                        "Maximum depth value", 500.f, 40000.f, DEFAULT_PROP_DEPTH_MAX,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_DIS_SELF_CALIB,
+                                     g_param_spec_boolean("disable-self-calib", "Disable self calibration",
+                                                          "Disable the self calibration processing when the camera is opened",
+                                                          DEFAULT_PROP_DIS_SELF_CALIB,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_DEPTH_STAB,
+                                     g_param_spec_boolean("depth-stability", "Depth stabilization",
+                                                          "Enable depth stabilization ",
+                                                          DEFAULT_PROP_DEPTH_STAB,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_zedsrc_reset (GstZedSrc * src)
@@ -233,7 +307,7 @@ static void gst_zedsrc_init (GstZedSrc * src)
     /* override default of BYTES to operate in time mode */
     gst_base_src_set_format (GST_BASE_SRC (src), GST_FORMAT_TIME);
 
-    /* initialize member variables */
+    // ----> Parameters initialization
     src->camera_resolution = DEFAULT_PROP_CAM_RES;
     src->camera_fps = DEFAULT_PROP_CAM_FPS;
     src->sdk_verbose = DEFAULT_PROP_SDK_VERBOSE;
@@ -243,6 +317,13 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->svo_file = *g_string_new( DEFAULT_PROP_SVO_FILE );
     src->stream_ip = *g_string_new( DEFAULT_PROP_STREAM_IP );;
     src->stream_port = DEFAULT_PROP_STREAM_PORT;
+    src->stream_type = DEFAULT_PROP_STREAM_TYPE;
+
+    src->depth_min_dist = DEFAULT_PROP_DEPTH_MIN;
+    src->depth_max_dist = DEFAULT_PROP_DEPTH_MAX;
+    src->camera_disable_self_calib = DEFAULT_PROP_DIS_SELF_CALIB;
+    src->depth_stabilization = DEFAULT_PROP_DEPTH_STAB;
+    // <---- Parameters initialization
 
     src->stop_requested = FALSE;
     src->caps = NULL;
@@ -250,11 +331,11 @@ static void gst_zedsrc_init (GstZedSrc * src)
     gst_zedsrc_reset (src);
 }
 
-void
-gst_zedsrc_set_property (GObject * object, guint property_id,
-                         const GValue * value, GParamSpec * pspec)
+void gst_zedsrc_set_property (GObject * object, guint property_id,
+                              const GValue * value, GParamSpec * pspec)
 {
     GstZedSrc *src;
+    const gchar* str;
 
     src = GST_ZED_SRC(object);
 
@@ -278,19 +359,30 @@ gst_zedsrc_set_property (GObject * object, guint property_id,
         src->camera_sn = g_value_get_int64(value);
         break;
     case PROP_SVO_FILE:
-    {
-        const gchar* str = g_value_get_string(value);
+        str = g_value_get_string(value);
         src->svo_file = *g_string_new( str );
-    }
         break;
     case PROP_STREAM_IP:
-    {
-        const gchar* str = g_value_get_string(value);
+        str = g_value_get_string(value);
         src->stream_ip = *g_string_new( str );
-    }
         break;
     case PROP_STREAM_PORT:
         src->stream_port = g_value_get_int(value);
+        break;
+    case PROP_STREAM_TYPE:
+        src->stream_type = g_value_get_enum(value);
+        break;
+    case PROP_DEPTH_MIN:
+        src->depth_min_dist = g_value_get_float(value);
+        break;
+    case PROP_DEPTH_MAX:
+        src->depth_max_dist = g_value_get_float(value);
+        break;
+    case PROP_DIS_SELF_CALIB:
+        src->camera_disable_self_calib = g_value_get_boolean(value);
+        break;
+    case PROP_DEPTH_STAB:
+        src->depth_stabilization = g_value_get_boolean(value);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -335,6 +427,21 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_STREAM_PORT:
         g_value_set_int( value, src->stream_port );
         break;
+    case PROP_STREAM_TYPE:
+        g_value_set_enum( value, src->stream_type );
+        break;
+    case PROP_DEPTH_MIN:
+        g_value_set_float( value, src->depth_min_dist );
+        break;
+    case PROP_DEPTH_MAX:
+        g_value_set_float( value, src->depth_max_dist );
+        break;
+    case PROP_DIS_SELF_CALIB:
+        g_value_set_boolean( value, src->camera_disable_self_calib );
+        break;
+    case PROP_DEPTH_STAB:
+        g_value_set_boolean( value, src->depth_stabilization );
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
         break;
@@ -378,10 +485,22 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc* src)
     GstVideoInfo vinfo;
     GstVideoFormat format = GST_VIDEO_FORMAT_BGRA;
 
-    // ----> CAPS for color stream
-    width = src->zed.getCameraInformation().camera_configuration.resolution.width;
-    height = src->zed.getCameraInformation().camera_configuration.resolution.height;
-    fps = static_cast<gint>(src->zed.getCameraInformation().camera_configuration.fps);
+    if(src->stream_type==GST_ZEDSRC_DEPTH_16 )
+    {
+        format = GST_VIDEO_FORMAT_GRAY16_LE;
+    }
+
+    sl::CameraInformation cam_info = src->zed.getCameraInformation();
+
+    width = cam_info.camera_configuration.resolution.width;
+    height = cam_info.camera_configuration.resolution.height;
+
+    if(src->stream_type==GST_ZEDSRC_LEFT_RIGHT || src->stream_type==GST_ZEDSRC_LEFT_DEPTH)
+    {
+        height *= 2;
+    }
+
+    fps = static_cast<gint>(cam_info.camera_configuration.fps);
 
     if( format != GST_VIDEO_FORMAT_UNKNOWN ) {
         gst_video_info_init( &vinfo );
@@ -394,7 +513,6 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc* src)
         vinfo.fps_d = 1;
         src->caps = gst_video_info_to_caps (&vinfo);
     }
-    // <---- CAPS for color stream
 
     gst_base_src_set_blocksize( GST_BASE_SRC(src), src->out_framesize );
     gst_base_src_set_caps ( GST_BASE_SRC(src), src->caps );
@@ -411,11 +529,18 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     GST_DEBUG_OBJECT (src, "start");
 
 
+    // ----> Set parameters
     sl::InitParameters init_params;
+    init_params.coordinate_units = sl::UNIT::MILLIMETER; // ready for 16bit depth image
     init_params.camera_resolution = static_cast<sl::RESOLUTION>(src->camera_resolution);
     init_params.camera_fps = src->camera_fps;
     init_params.sdk_verbose = src->sdk_verbose==TRUE;
     init_params.camera_image_flip = src->camera_image_flip;
+
+    init_params.depth_minimum_distance = src->depth_min_dist;
+    init_params.depth_maximum_distance = src->depth_max_dist;
+    init_params.depth_stabilization = src->depth_stabilization;
+    init_params.camera_disable_self_calib = src->camera_disable_self_calib==TRUE;
 
     if( src->svo_file.len != 0 )
     {
@@ -435,10 +560,9 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         sl::String ip( static_cast<char*>(src->stream_ip.str) );
         init_params.input.setFromStream(ip,src->stream_port);
     }
+    // <---- Set parameters
 
-
-    // TODO Set parameters
-
+    // ----> Open camera
     ret = src->zed.open( init_params );
 
     if (ret!=sl::ERROR_CODE::SUCCESS) {
@@ -446,6 +570,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
                            ("Failed to open camera, '%s'", sl::toString(ret).c_str() ), (NULL));
         return FALSE;
     }
+    // <---- Open camera
 
     if (!gst_zedsrc_calculate_caps(src) ) {
         return FALSE;
@@ -454,8 +579,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     return TRUE;
 }
 
-static gboolean
-gst_zedsrc_stop (GstBaseSrc * bsrc)
+static gboolean gst_zedsrc_stop (GstBaseSrc * bsrc)
 {
     GstZedSrc *src = GST_ZED_SRC (bsrc);
 
@@ -520,7 +644,7 @@ unsupported_caps:
     return FALSE;
 }
 
-static gboolean gst_zedsrc_unlock (GstBaseSrc * bsrc)
+static gboolean gst_zedsrc_unlock( GstBaseSrc * bsrc )
 {
     GstZedSrc *src = GST_ZED_SRC (bsrc);
 
@@ -531,7 +655,7 @@ static gboolean gst_zedsrc_unlock (GstBaseSrc * bsrc)
     return TRUE;
 }
 
-static gboolean gst_zedsrc_unlock_stop (GstBaseSrc * bsrc)
+static gboolean gst_zedsrc_unlock_stop( GstBaseSrc * bsrc )
 {
     GstZedSrc *src = GST_ZED_SRC (bsrc);
 
@@ -582,26 +706,79 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     // Memory mapping
     gst_buffer_map( buf, &minfo, GST_MAP_WRITE );
 
-    // ----> RGB frame: LEFT
-    sl::Mat rgb;
-    ret = src->zed.retrieveImage(rgb, sl::VIEW::LEFT, sl::MEM::CPU );
+    sl::Mat left_img;
+    sl::Mat right_img;
+    sl::Mat depth_data;
+
+    if(src->stream_type== GST_ZEDSRC_ONLY_LEFT)
+    {
+        ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU );
+    }
+    else if(src->stream_type== GST_ZEDSRC_ONLY_RIGHT)
+    {
+        ret = src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU );
+    }
+    else if(src->stream_type== GST_ZEDSRC_LEFT_RIGHT)
+    {
+        ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU );
+        ret = src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU );
+    }
+    else if(src->stream_type== GST_ZEDSRC_DEPTH_16)
+    {
+        ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU );
+    }
+    else if(src->stream_type== GST_ZEDSRC_LEFT_DEPTH)
+    {
+        ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU );
+        ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU );
+    }
+
     if( ret!=sl::ERROR_CODE::SUCCESS )
     {
         GST_ELEMENT_ERROR (src, RESOURCE, FAILED,
                            ("Grabbing failed with error '%s'", sl::toString(ret).c_str()), (NULL));
         return GST_FLOW_ERROR;
     }
-    // <---- RGB frame: LEFT
 
     // Memory copy
-    memcpy(minfo.data, rgb.getPtr<sl::uchar4>(), (int) minfo.size);
+    if(src->stream_type== GST_ZEDSRC_DEPTH_16)
+    {
+        uint16_t* gst_data = (uint16_t*)(&minfo.data[0]);
+        unsigned long dataSize = minfo.size;
+
+        sl::float1* depthDataPtr = depth_data.getPtr<sl::float1>();
+
+        for (unsigned long i = 0; i < dataSize/2; i++) {
+            *(gst_data++) = static_cast<uint16_t>(*(depthDataPtr++));
+        }
+    }
+    else if(src->stream_type== GST_ZEDSRC_LEFT_RIGHT)
+    {
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size/2);
+        memcpy((minfo.data+ minfo.size/2), right_img.getPtr<sl::uchar4>(), minfo.size/2);
+    }
+    else if(src->stream_type== GST_ZEDSRC_LEFT_DEPTH)
+    {
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size/2);
+
+        uint32_t* gst_data = (uint32_t*)(minfo.data + minfo.size/2);
+
+        sl::float1* depthDataPtr = depth_data.getPtr<sl::float1>();
+
+        for (unsigned long i = 0; i < minfo.size/8; i++) {
+            *(gst_data++) = static_cast<uint32_t>(*(depthDataPtr++));
+        }
+    }
+    else
+    {
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
+    }
 
     gst_buffer_unmap( buf, &minfo );
 
-    GST_BUFFER_TIMESTAMP (buf) =
-            GST_CLOCK_DIFF (gst_element_get_base_time (GST_ELEMENT (src)),
-                            clock_time);
-    GST_BUFFER_OFFSET (buf) = temp_ugly_buf_index++;
+    GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF (gst_element_get_base_time (GST_ELEMENT (src)),
+                                                clock_time);
+    GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
 
     if (src->stop_requested) {
         return GST_FLOW_FLUSHING;
@@ -611,13 +788,12 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
 }
 
 
-static gboolean
-plugin_init (GstPlugin * plugin)
+static gboolean plugin_init (GstPlugin * plugin)
 {
     GST_DEBUG_CATEGORY_INIT (gst_zedsrc_debug, "zedsrc", 0,
                              "debug category for zedsrc element");
     gst_element_register (plugin, "zedsrc", GST_RANK_NONE,
-                          gst_zedsrc_get_type ());
+                          gst_zedsrc_get_type());
 
     return TRUE;
 }
