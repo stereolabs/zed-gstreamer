@@ -188,8 +188,10 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                         gst_static_pad_template_get (&gst_zedsrc_src_template));
 
     gst_element_class_set_static_metadata (gstelement_class,
-                                           "ZED Video Source", "Source/Video",
-                                           "Stereolabs ZED video source", "Stereolabs <support@stereolabs.com>");
+                                           "ZED Video Source",
+                                           "Source/Video",
+                                           "Stereolabs ZED video source",
+                                           "Stereolabs <support@stereolabs.com>");
 
     gstbasesrc_class->start = GST_DEBUG_FUNCPTR (gst_zedsrc_start);
     gstbasesrc_class->stop = GST_DEBUG_FUNCPTR (gst_zedsrc_stop);
@@ -681,7 +683,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     if (!src->is_started) {
         /* TODO: check timestamps on buffers vs start time */
         src->acq_start_time =
-                gst_clock_get_time (gst_element_get_clock (GST_ELEMENT (src)));
+                gst_clock_get_time(gst_element_get_clock (GST_ELEMENT (src)));
 
         src->is_started = TRUE;
     }
@@ -802,5 +804,8 @@ GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
                    GST_VERSION_MINOR,
                    zed,
                    "Zed camera source",
-                   plugin_init, GST_PACKAGE_VERSION, GST_PACKAGE_LICENSE, GST_PACKAGE_NAME,
+                   plugin_init,
+                   GST_PACKAGE_VERSION,
+                   GST_PACKAGE_LICENSE,
+                   GST_PACKAGE_NAME,
                    GST_PACKAGE_ORIGIN)

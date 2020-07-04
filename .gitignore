@@ -13,4 +13,7 @@ missing
 stamp-*
 my-plugin-*.tar.*
 *~
+*.autosave
+*.user
+*.user.*
 

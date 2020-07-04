@@ -67,5 +67,6 @@ if (WIN32 AND NOT PDB_INSTALL_DIR)
 endif()
 
 add_subdirectory(gst-zed)
+add_subdirectory(gst-zed-demux)
 
 macro_display_feature_log()
