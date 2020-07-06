@@ -37,11 +37,11 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 * Install GCC compiler and build tools
 
-    $ sudo apt install build-essential
+     `$ sudo apt install build-essential`
 
 * Install CMake build system
 
-    $ sudo apt install cmake
+     `$ sudo apt install cmake`
 
 #### Clone the repository
 
@@ -65,12 +65,12 @@ Close the console
 ### Installation test
 
  * Check `ZED Video Source Plugin` installation inspecting its properties:
-
-    gst-inspect-1.0 zedsrc
+ 
+      `gst-inspect-1.0 zedsrc`
 
  * Check `ZED Video Demuxer` installation inspecting its properties:
 
-    gst-inspect-1.0 zeddemux
+      `gst-inspect-1.0 zeddemux`
 
 ## Plugins parameters
 
