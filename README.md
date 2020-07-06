@@ -56,7 +56,7 @@ the default might not be desired (e.g., system path). For finer grained control
 you can set `PLUGIN_INSTALL_DIR` and related variables to specify exactly where
 you want to install plugins
 
-     `cmake --build . --target INSTALL`
+    cmake --build . --target INSTALL
 
 ### Linux installation
 
