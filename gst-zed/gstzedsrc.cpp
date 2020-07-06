@@ -780,6 +780,8 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
 
     GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF (gst_element_get_base_time (GST_ELEMENT (src)),
                                                 clock_time);
+    GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
 
     if (src->stop_requested) {

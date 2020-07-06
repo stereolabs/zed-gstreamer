@@ -191,8 +191,6 @@ static void gst_zeddemux_init (GstZedDemux *filter)
     filter->is_depth = DEFAULT_PROP_IS_DEPTH;
     filter->caps_left = nullptr;
     filter->caps_aux = nullptr;
-    filter->buf_left = nullptr;
-    filter->buf_aux = nullptr;
 }
 
 static void
@@ -262,9 +260,6 @@ static gboolean set_out_caps( GstZedDemux* filter, GstCaps* sink_caps )
     {
         return false;
     }
-
-    //    filter->left_framesize = (guint) GST_VIDEO_INFO_SIZE (&vinfo_left);
-    //    filter->buf_left = gst_buffer_new_and_alloc(filter->left_framesize);
     // <---- Caps left source
 
     // ----> Caps aux source
@@ -294,14 +289,6 @@ static gboolean set_out_caps( GstZedDemux* filter, GstCaps* sink_caps )
     {
         return false;
     }
-
-    //    if(filter->buf_aux)
-    //    {
-    //        gst_buffer_unref(filter->buf_aux);
-    //    }
-
-    //    filter->aux_framesize = (guint) GST_VIDEO_INFO_SIZE (&vinfo_aux);
-    //    filter->buf_aux = gst_buffer_new_and_alloc(filter->aux_framesize);
     // <---- Caps aux source
 
     return TRUE;
@@ -367,76 +354,74 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
     GST_DEBUG_OBJECT( filter, "Processing ..." );
     if(gst_buffer_map(buf, &map_in, GST_MAP_READ))
     {
-        gsize left_buf_size = map_in.size/2;
-        gsize aux_buf_size = left_buf_size;
-        if(filter->is_depth==TRUE)
-        {
-            GST_DEBUG ("Depth mode!" );
-            aux_buf_size /=2; // RGBA -> GREY16 conversion required
-        }
+        GST_DEBUG ("Input buffer size %lu B", map_in.size );
 
-        GST_DEBUG ("Input buffer size %lu B", left_buf_size*2 );
+        // ----> Left buffer
+        gsize left_framesize = map_in.size;
+        left_framesize/=2;
 
-        if( !filter->buf_left)
-        {
-            //filter->buf_left = gst_buffer_new_and_alloc(LEFT_buf_size);
-            filter->buf_left = gst_buffer_new_allocate(NULL, left_buf_size, NULL ); // v1.0
-        }
+        GST_DEBUG ("Left buffer allocation - size %lu B", left_framesize );
+        GstBuffer* left_proc_buf = gst_buffer_new_allocate(NULL, left_framesize, NULL );
 
-        filter->buf_left = gst_buffer_make_writable( filter->buf_left );
+        GST_DEBUG ("Making writable the Left buffer");
+        left_proc_buf = gst_buffer_make_writable( left_proc_buf );
 
-        if( !GST_IS_BUFFER(filter->buf_left) )
+        if( !GST_IS_BUFFER(left_proc_buf) )
         {
             GST_DEBUG ("Left buffer not writable");
             return GST_FLOW_ERROR;
         }
 
-        if(filter->buf_left)
+        if( gst_buffer_map(left_proc_buf, &map_out_left, (GstMapFlags)(GST_MAP_READWRITE)) )
         {
-            if( gst_buffer_map(filter->buf_left, &map_out_left, GST_MAP_WRITE) )
+            GST_DEBUG ("Copying left buffer %lu B", map_out_left.size );
+            memcpy(map_out_left.data, map_in.data, map_out_left.size);
+
+            GST_DEBUG ("Left buffer set timestamp" );
+            GST_BUFFER_PTS(left_proc_buf) = GST_BUFFER_PTS (buf);
+            GST_BUFFER_DTS(left_proc_buf) = GST_BUFFER_DTS (buf);
+            GST_BUFFER_TIMESTAMP(left_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
+
+            GST_DEBUG ("Left buffer push" );
+            ret_left = gst_pad_push(filter->srcpad_left, left_proc_buf);
+
+            if( ret_left != GST_FLOW_OK )
             {
-                GST_DEBUG ("Copying left buffer %lu B", map_out_left.size );
-                memcpy(map_out_left.data, map_in.data, left_buf_size);
-
-                GST_DEBUG ("Left buffer set timestamp" );
-                GST_BUFFER_PTS(filter->buf_left) = GST_BUFFER_PTS (buf);
-                GST_BUFFER_DTS(filter->buf_left) = GST_BUFFER_DTS (buf);
-                GST_BUFFER_TIMESTAMP(filter->buf_left) = GST_BUFFER_TIMESTAMP (buf);
-
-                GST_DEBUG ("Left buffer push" );
-                ret_left = gst_pad_push(filter->srcpad_left, filter->buf_left);
-
-                if( ret_left != GST_FLOW_OK )
-                {
-                    GST_DEBUG_OBJECT( filter, "Error pushing left buffer: %s", gst_flow_get_name (ret_left));
-                    return ret_left;
-                }
-
-                GST_DEBUG ("Left buffer unmap" );
-                gst_buffer_unmap(filter->buf_left, &map_out_left);
+                GST_DEBUG_OBJECT( filter, "Error pushing left buffer: %s", gst_flow_get_name (ret_left));
+                return ret_left;
             }
+
+            GST_DEBUG ("Left buffer unmap" );
+            gst_buffer_unmap(left_proc_buf, &map_out_left);
+        }
+        // <---- Left buffer
+
+        // ----> Aux buffer
+        gsize aux_framesize = map_in.size;
+        aux_framesize/=2;
+        if(filter->is_depth)
+        {
+            aux_framesize/=2; // 16bit data
         }
 
-        if( !filter->buf_aux)
-        {
-            //filter->buf_aux = gst_buffer_new_and_alloc(aux_buf_size);
-            filter->buf_aux = gst_buffer_new_allocate(NULL, aux_buf_size, NULL ); // v1.0
-        }
+        GST_DEBUG ("Aux buffer allocation - size %lu B", aux_framesize );
+        GstBuffer* aux_proc_buf = gst_buffer_new_allocate(NULL, aux_framesize, NULL );
 
-        filter->buf_aux = gst_buffer_make_writable( filter->buf_aux );
+        GST_DEBUG ("Making writable the Aux buffer");
+        aux_proc_buf = gst_buffer_make_writable( aux_proc_buf );
 
-        if( !GST_IS_BUFFER(filter->buf_aux) )
+        if( !GST_IS_BUFFER(aux_proc_buf) )
         {
-            GST_DEBUG ("Aux buffer not writable");
+            GST_DEBUG ("Aux buffer not writable (2)");
             return GST_FLOW_ERROR;
         }
 
-        if( gst_buffer_map(filter->buf_aux, &map_out_aux, GST_MAP_WRITE) )
+        if( gst_buffer_map(aux_proc_buf, &map_out_aux, (GstMapFlags)(GST_MAP_READWRITE)) )
         {
             if( filter->is_depth == FALSE )
             {
                 GST_DEBUG ("Copying aux buffer %lu B", map_out_aux.size );
-                memcpy(map_out_aux.data, map_in.data+map_out_left.size, aux_buf_size);
+                memcpy(map_out_aux.data, map_in.data+map_out_left.size, map_out_aux.size);
             }
             else
             {
@@ -445,20 +430,20 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 guint32* gst_in_data = (guint32*)(map_in.data + map_out_left.size);
                 guint16* gst_out_data = (guint16*)(map_out_aux.data);
 
-                for (unsigned long i = 0; i < map_out_aux.size/2; i++)
+                for (unsigned long i = 0; i < map_out_aux.size/(sizeof(guint16)); i++)
                 {
                     *(gst_out_data++) = static_cast<guint16>(*(gst_in_data++));
                 }
             }
 
             GST_DEBUG ("Aux buffer set timestamp" );
-            GST_BUFFER_PTS(filter->buf_aux) = GST_BUFFER_PTS (buf);
-            GST_BUFFER_DTS(filter->buf_aux) = GST_BUFFER_DTS (buf);
-            GST_BUFFER_TIMESTAMP(filter->buf_aux) = GST_BUFFER_TIMESTAMP (buf);
+            GST_BUFFER_PTS(aux_proc_buf) = GST_BUFFER_PTS (buf);
+            GST_BUFFER_DTS(aux_proc_buf) = GST_BUFFER_DTS (buf);
+            GST_BUFFER_TIMESTAMP(aux_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
 
 
             GST_DEBUG ("Aux buffer push" );
-            ret_aux = gst_pad_push(filter->srcpad_aux, filter->buf_aux);
+            ret_aux = gst_pad_push(filter->srcpad_aux, aux_proc_buf);
 
             if( ret_aux != GST_FLOW_OK )
             {
@@ -467,14 +452,19 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             }
 
             GST_DEBUG ("Aux buffer unmap" );
-            gst_buffer_unmap(filter->buf_aux, &map_out_aux);
+            gst_buffer_unmap(aux_proc_buf, &map_out_aux);
         }
+        // <---- Aux buffer
+
+        gst_buffer_unmap( buf, &map_in );
+        gst_buffer_unref(buf);
     }
     GST_DEBUG ("... processed" );
 
     if(ret_left==GST_FLOW_OK && ret_aux==GST_FLOW_OK)
     {
         GST_DEBUG_OBJECT( filter, "Chain OK" );
+        GST_DEBUG_OBJECT( filter, "**************************" );
         return GST_FLOW_OK;
     }
 
