@@ -363,12 +363,15 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         GST_DEBUG ("Left buffer allocation - size %lu B", left_framesize );
         GstBuffer* left_proc_buf = gst_buffer_new_allocate(NULL, left_framesize, NULL );
 
-        GST_DEBUG ("Making writable the Left buffer");
-        left_proc_buf = gst_buffer_make_writable( left_proc_buf );
-
         if( !GST_IS_BUFFER(left_proc_buf) )
         {
-            GST_DEBUG ("Left buffer not writable");
+            GST_DEBUG ("Left buffer not allocated");
+
+            // ----> Release incoming buffer
+            gst_buffer_unmap( buf, &map_in );
+            gst_buffer_unref(buf);
+            // <---- Release incoming buffer
+
             return GST_FLOW_ERROR;
         }
 
@@ -407,12 +410,14 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         GST_DEBUG ("Aux buffer allocation - size %lu B", aux_framesize );
         GstBuffer* aux_proc_buf = gst_buffer_new_allocate(NULL, aux_framesize, NULL );
 
-        GST_DEBUG ("Making writable the Aux buffer");
-        aux_proc_buf = gst_buffer_make_writable( aux_proc_buf );
-
         if( !GST_IS_BUFFER(aux_proc_buf) )
         {
-            GST_DEBUG ("Aux buffer not writable (2)");
+            GST_DEBUG ("Aux buffer not allocated");
+
+            // ----> Release incoming buffer
+            gst_buffer_unmap( buf, &map_in );
+            gst_buffer_unref(buf);
+            // <---- Release incoming buffer
             return GST_FLOW_ERROR;
         }
 
@@ -448,6 +453,11 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             if( ret_aux != GST_FLOW_OK )
             {
                 GST_DEBUG_OBJECT( filter, "Error pushing aux buffer: %s", gst_flow_get_name (ret_aux));
+
+                // ----> Release incoming buffer
+                gst_buffer_unmap( buf, &map_in );
+                gst_buffer_unref(buf);
+                // <---- Release incoming buffer
                 return ret_aux;
             }
 
@@ -456,8 +466,10 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         }
         // <---- Aux buffer
 
+        // ----> Release incoming buffer
         gst_buffer_unmap( buf, &map_in );
         gst_buffer_unref(buf);
+        // <---- Release incoming buffer
     }
     GST_DEBUG ("... processed" );
 
