@@ -71,12 +71,6 @@ struct _GstZedDemux
   GstCaps* caps_left;
   GstCaps* caps_aux;
 
-  guint left_framesize;
-  guint aux_framesize;
-
-  GstBuffer* buf_left;
-  GstBuffer* buf_aux;
-
   gboolean is_depth;
 };
 
