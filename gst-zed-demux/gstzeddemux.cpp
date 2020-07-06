@@ -318,7 +318,7 @@ gst_zeddemux_sink_event(GstPad* pad, GstObject* parent, GstEvent* event)
         ret = set_out_caps( filter, caps );
 
         /* and forward */
-        //ret = gst_pad_event_default (pad, parent, event);
+        ret = gst_pad_event_default (pad, parent, event);
         break;
     }
     default:
@@ -391,6 +391,13 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             if( ret_left != GST_FLOW_OK )
             {
                 GST_DEBUG_OBJECT( filter, "Error pushing left buffer: %s", gst_flow_get_name (ret_left));
+
+                // ----> Release incoming buffer
+                gst_buffer_unmap( buf, &map_in );
+                gst_buffer_unref(buf);
+                GST_DEBUG ("Left buffer unmap" );
+                gst_buffer_unmap(left_proc_buf, &map_out_left);
+                // <---- Release incoming buffer
                 return ret_left;
             }
 
@@ -446,7 +453,6 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             GST_BUFFER_DTS(aux_proc_buf) = GST_BUFFER_DTS (buf);
             GST_BUFFER_TIMESTAMP(aux_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
 
-
             GST_DEBUG ("Aux buffer push" );
             ret_aux = gst_pad_push(filter->srcpad_aux, aux_proc_buf);
 
@@ -457,6 +463,8 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 // ----> Release incoming buffer
                 gst_buffer_unmap( buf, &map_in );
                 gst_buffer_unref(buf);
+                GST_DEBUG ("Aux buffer unmap" );
+                gst_buffer_unmap(aux_proc_buf, &map_out_aux);
                 // <---- Release incoming buffer
                 return ret_aux;
             }

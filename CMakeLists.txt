@@ -68,5 +68,6 @@ endif()
 
 add_subdirectory(gst-zed)
 add_subdirectory(gst-zed-demux)
+add_subdirectory(gst-zed-meta)
 
 macro_display_feature_log()

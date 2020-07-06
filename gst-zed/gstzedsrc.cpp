@@ -7,6 +7,7 @@
 #include <gst/video/video.h>
 
 #include "gstzedsrc.h"
+#include "gst-zed-meta/gstzedmeta.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_zedsrc_debug);
 #define GST_CAT_DEFAULT gst_zedsrc_debug
