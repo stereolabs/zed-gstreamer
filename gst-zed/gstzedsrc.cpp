@@ -775,15 +775,18 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     else
     {
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
-    }
-
-    gst_buffer_unmap( buf, &minfo );
+    }    
 
     GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF (gst_element_get_base_time (GST_ELEMENT (src)),
                                                 clock_time);
     GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
 
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
+
+    gst_buffer_add_zed_src_meta( buf, (gint) src->zed.getCameraInformation().camera_model,
+                                 src->stream_type, 0,0,0,0,0,0); // TODO Start pos tracking and add position
+
+    gst_buffer_unmap( buf, &minfo );
 
     if (src->stop_requested) {
         return GST_FLOW_FLUSHING;
