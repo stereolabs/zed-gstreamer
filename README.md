@@ -66,11 +66,11 @@ you want to install plugins
 
 * Install GCC compiler and build tools
 
-    `$ sudo apt install build-essential`
+     `$ sudo apt install build-essential`
 
 * Install CMake build system
 
-    `$ sudo apt install cmake`
+     `$ sudo apt install cmake`
 
 #### Clone the repository
 
@@ -87,19 +87,19 @@ you want to install plugins
 
 #### Add plugin library path
    
-    `echo "export GST_PLUGIN_PATH="/usr/lib/gstreamer-1.0/" >> ~/.bashrc`
+    $ echo "export GST_PLUGIN_PATH="/usr/lib/gstreamer-1.0/" >> ~/.bashrc
 
 Close the console
 
 ### Installation test
 
  * Check `ZED Video Source Plugin` installation inspecting its properties:
-
-    `gst-inspect-1.0 zedsrc`
+ 
+      `gst-inspect-1.0 zedsrc`
 
  * Check `ZED Video Demuxer` installation inspecting its properties:
 
-    `gst-inspect-1.0 zeddemux`
+      `gst-inspect-1.0 zeddemux`
 
 ## Plugins parameters
 
@@ -128,19 +128,19 @@ Close the console
 
 ### RGB stream + stream rendering
 
-    `gst-launch-1.0 zedsrc ! autovideoconvert ! fpsdisplaysink`
+    gst-launch-1.0 zedsrc ! autovideoconvert ! fpsdisplaysink
 
 ### 16 bit Depth stream + stream rendering
 
-    `gst-launch-1.0 zedsrc stream-type=1 ! autovideoconvert ! fpsdisplaysink`
+    gst-launch-1.0 zedsrc stream-type=1 ! autovideoconvert ! fpsdisplaysink
 
 ### Left/Right stream + demux + streams rendering
 
-    `gst-launch-1.0 zedsrc stream-type=2 ! queue ! zeddemux is-depth=false name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink`
+    gst-launch-1.0 zedsrc stream-type=2 ! queue ! zeddemux is-depth=false name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
 
 ### Left/Depth stream + demux + streams rendering
 
-    `gst-launch-1.0 zedsrc stream-type=4 ! queue ! zeddemux name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink`
+    gst-launch-1.0 zedsrc stream-type=4 ! queue ! zeddemux name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
 
 ## Related
 
