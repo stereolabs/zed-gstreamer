@@ -16,4 +16,5 @@ my-plugin-*.tar.*
 *.autosave
 *.user
 *.user.*
+*build*
 
