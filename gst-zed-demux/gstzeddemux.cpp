@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GStreamer
  * Copyright (C) 2005 Thomas Vander Stichele <thomas@apestaart.org>
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
@@ -66,6 +66,7 @@
 #include <gst/gstcaps.h>
 
 #include "gstzeddemux.h"
+#include "gst-zed-meta/gstzedmeta.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_zeddemux_debug);
 #define GST_CAT_DEFAULT gst_zeddemux_debug
@@ -154,9 +155,9 @@ gst_zeddemux_class_init (GstZedDemuxClass * klass)
                                                            DEFAULT_PROP_IS_DEPTH, G_PARAM_READWRITE));
 
     gst_element_class_set_static_metadata (gstelement_class,
-                                           "ZED Video Demuxer",
+                                           "ZED Composite Stream Demuxer",
                                            "Demuxer/Video",
-                                           "Stereolabs ZED video demuxer",
+                                           "Stereolabs ZED Stream Demuxer",
                                            "Stereolabs <support@stereolabs.com>");
 
     gst_element_class_add_pad_template (gstelement_class,
@@ -337,7 +338,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
     filter = GST_ZEDDEMUX (parent);
 
-    GST_DEBUG_OBJECT( filter, "Chain" );
+    GST_TRACE_OBJECT( filter, "Chain" );
 
     GstMapInfo map_in;
     GstMapInfo map_out_left;
@@ -349,18 +350,56 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
     GstClockTime timestamp = GST_CLOCK_TIME_NONE;
 
     timestamp = GST_BUFFER_TIMESTAMP (buf);
-    GST_DEBUG ("timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS (timestamp));
+    GST_LOG ("timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS (timestamp));
 
-    GST_DEBUG_OBJECT( filter, "Processing ..." );
+    GST_TRACE_OBJECT( filter, "Processing ..." );
     if(gst_buffer_map(buf, &map_in, GST_MAP_READ))
     {
-        GST_DEBUG ("Input buffer size %lu B", map_in.size );
+        GST_TRACE ("Input buffer size %lu B", map_in.size );
+
+        GstZedSrcMeta* meta = (GstZedSrcMeta*)gst_buffer_get_meta( buf, GST_ZED_SRC_META_API_TYPE );
+        GST_LOG (" * [META] Stream type: %d", meta->stream_type );
+        GST_LOG (" * [META] Camera model: %d", meta->cam_model );
+        if( meta->pose.pose_avail==TRUE )
+        {
+            GST_LOG (" * [META] Pos X: %g mm", meta->pose.pos[0] );
+            GST_LOG (" * [META] Pos Y: %g mm", meta->pose.pos[1] );
+            GST_LOG (" * [META] Pos Z: %g mm", meta->pose.pos[2] );
+            GST_LOG (" * [META] Orient X: %g rad", meta->pose.orient[0] );
+            GST_LOG (" * [META] Orient Y: %g rad", meta->pose.orient[1] );
+            GST_LOG (" * [META] Orient Z: %g rad", meta->pose.orient[2] );
+        }
+        else
+        {
+            GST_LOG (" * [META] Positional tracking disabled" );
+        }
+
+        if( meta->sens.sens_avail==TRUE )
+        {
+            GST_LOG (" * [META] IMU acc X: %g m/sec²", meta->sens.imu.acc[0] );
+            GST_LOG (" * [META] IMU acc Y: %g m/sec²", meta->sens.imu.acc[1] );
+            GST_LOG (" * [META] IMU acc Z: %g m/sec²", meta->sens.imu.acc[2] );
+            GST_LOG (" * [META] IMU gyro X: %g rad/sec", meta->sens.imu.gyro[0] );
+            GST_LOG (" * [META] IMU gyro Y: %g rad/sec", meta->sens.imu.gyro[1] );
+            GST_LOG (" * [META] IMU gyro Z: %g rad/sec", meta->sens.imu.gyro[2] );
+            GST_LOG (" * [META] MAG X: %g uT", meta->sens.mag.mag[0] );
+            GST_LOG (" * [META] MAG Y: %g uT", meta->sens.mag.mag[1] );
+            GST_LOG (" * [META] MAG Z: %g uT", meta->sens.mag.mag[2] );
+            GST_LOG (" * [META] Env Temp: %g °C", meta->sens.env.temp );
+            GST_LOG (" * [META] Pressure: %g hPa", meta->sens.env.press );
+            GST_LOG (" * [META] Temp left: %g °C", meta->sens.temp.temp_cam_left );
+            GST_LOG (" * [META] Temp right: %g °C", meta->sens.temp.temp_cam_right );
+        }
+        else
+        {
+            GST_LOG (" * [META] Sensors data not available" );
+        }
 
         // ----> Left buffer
         gsize left_framesize = map_in.size;
         left_framesize/=2;
 
-        GST_DEBUG ("Left buffer allocation - size %lu B", left_framesize );
+        GST_TRACE ("Left buffer allocation - size %lu B", left_framesize );
         GstBuffer* left_proc_buf = gst_buffer_new_allocate(NULL, left_framesize, NULL );
 
         if( !GST_IS_BUFFER(left_proc_buf) )
@@ -377,15 +416,15 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
         if( gst_buffer_map(left_proc_buf, &map_out_left, (GstMapFlags)(GST_MAP_READWRITE)) )
         {
-            GST_DEBUG ("Copying left buffer %lu B", map_out_left.size );
+            GST_TRACE ("Copying left buffer %lu B", map_out_left.size );
             memcpy(map_out_left.data, map_in.data, map_out_left.size);
 
-            GST_DEBUG ("Left buffer set timestamp" );
+            GST_TRACE ("Left buffer set timestamp" );
             GST_BUFFER_PTS(left_proc_buf) = GST_BUFFER_PTS (buf);
             GST_BUFFER_DTS(left_proc_buf) = GST_BUFFER_DTS (buf);
             GST_BUFFER_TIMESTAMP(left_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
 
-            GST_DEBUG ("Left buffer push" );
+            GST_TRACE ("Left buffer push" );
             ret_left = gst_pad_push(filter->srcpad_left, left_proc_buf);
 
             if( ret_left != GST_FLOW_OK )
@@ -395,13 +434,13 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 // ----> Release incoming buffer
                 gst_buffer_unmap( buf, &map_in );
                 gst_buffer_unref(buf);
-                GST_DEBUG ("Left buffer unmap" );
+                GST_TRACE ("Left buffer unmap" );
                 gst_buffer_unmap(left_proc_buf, &map_out_left);
                 // <---- Release incoming buffer
                 return ret_left;
             }
 
-            GST_DEBUG ("Left buffer unmap" );
+            GST_TRACE ("Left buffer unmap" );
             gst_buffer_unmap(left_proc_buf, &map_out_left);
         }
         // <---- Left buffer
@@ -414,7 +453,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             aux_framesize/=2; // 16bit data
         }
 
-        GST_DEBUG ("Aux buffer allocation - size %lu B", aux_framesize );
+        GST_TRACE ("Aux buffer allocation - size %lu B", aux_framesize );
         GstBuffer* aux_proc_buf = gst_buffer_new_allocate(NULL, aux_framesize, NULL );
 
         if( !GST_IS_BUFFER(aux_proc_buf) )
@@ -432,12 +471,12 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         {
             if( filter->is_depth == FALSE )
             {
-                GST_DEBUG ("Copying aux buffer %lu B", map_out_aux.size );
+                GST_TRACE ("Copying aux buffer %lu B", map_out_aux.size );
                 memcpy(map_out_aux.data, map_in.data+map_out_left.size, map_out_aux.size);
             }
             else
             {
-                GST_DEBUG ("Converting aux buffer %lu B", map_out_aux.size );
+                GST_TRACE ("Converting aux buffer %lu B", map_out_aux.size );
 
                 guint32* gst_in_data = (guint32*)(map_in.data + map_out_left.size);
                 guint16* gst_out_data = (guint16*)(map_out_aux.data);
@@ -448,12 +487,12 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 }
             }
 
-            GST_DEBUG ("Aux buffer set timestamp" );
+            GST_TRACE ("Aux buffer set timestamp" );
             GST_BUFFER_PTS(aux_proc_buf) = GST_BUFFER_PTS (buf);
             GST_BUFFER_DTS(aux_proc_buf) = GST_BUFFER_DTS (buf);
             GST_BUFFER_TIMESTAMP(aux_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
 
-            GST_DEBUG ("Aux buffer push" );
+            GST_TRACE ("Aux buffer push" );
             ret_aux = gst_pad_push(filter->srcpad_aux, aux_proc_buf);
 
             if( ret_aux != GST_FLOW_OK )
@@ -463,13 +502,13 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 // ----> Release incoming buffer
                 gst_buffer_unmap( buf, &map_in );
                 gst_buffer_unref(buf);
-                GST_DEBUG ("Aux buffer unmap" );
+                GST_TRACE ("Aux buffer unmap" );
                 gst_buffer_unmap(aux_proc_buf, &map_out_aux);
                 // <---- Release incoming buffer
                 return ret_aux;
             }
 
-            GST_DEBUG ("Aux buffer unmap" );
+            GST_TRACE ("Aux buffer unmap" );
             gst_buffer_unmap(aux_proc_buf, &map_out_aux);
         }
         // <---- Aux buffer
@@ -479,12 +518,12 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         gst_buffer_unref(buf);
         // <---- Release incoming buffer
     }
-    GST_DEBUG ("... processed" );
+    GST_TRACE ("... processed" );
 
     if(ret_left==GST_FLOW_OK && ret_aux==GST_FLOW_OK)
     {
-        GST_DEBUG_OBJECT( filter, "Chain OK" );
-        GST_DEBUG_OBJECT( filter, "**************************" );
+        GST_TRACE_OBJECT( filter, "Chain OK" );
+        GST_LOG( "**************************" );
         return GST_FLOW_OK;
     }
 
@@ -502,10 +541,10 @@ static gboolean plugin_init (GstPlugin * plugin)
    *
    * exchange the string 'Template plugin' with your description
    */
-    GST_DEBUG_CATEGORY_INIT (gst_zeddemux_debug, "zeddemux",
+    GST_DEBUG_CATEGORY_INIT( gst_zeddemux_debug, "zeddemux",
                              0, "debug category for zeddemux element");
 
-    gst_element_register (plugin, "zeddemux", GST_RANK_NONE,
+    gst_element_register( plugin, "zeddemux", GST_RANK_NONE,
                           gst_zeddemux_get_type());
 
     return TRUE;
@@ -518,7 +557,7 @@ static gboolean plugin_init (GstPlugin * plugin)
 GST_PLUGIN_DEFINE( GST_VERSION_MAJOR,
                    GST_VERSION_MINOR,
                    zeddemux,
-                   "ZED stream demuxer",
+                   "ZED composite stream demuxer",
                    plugin_init,
                    GST_PACKAGE_VERSION,
                    GST_PACKAGE_LICENSE,

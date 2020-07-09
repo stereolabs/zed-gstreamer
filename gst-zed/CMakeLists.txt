@@ -10,6 +10,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 link_directories(${ZED_LIBRARY_DIR})
 link_directories(${CUDA_LIBRARY_DIRS})
+link_directories(${LIBRARY_INSTALL_DIR})
 
 set(libname gstzed)
 
@@ -26,8 +27,9 @@ target_link_libraries (${libname}
   ${GOBJECT_LIBRARIES}  
   ${GSTREAMER_LIBRARY}
   ${GSTREAMER_BASE_LIBRARY}
-  ${GSTREAMER_VIDEO_LIBRARY}
-  ${ZED_LIBS}  )
+  ${GSTREAMER_VIDEO_LIBRARY}  
+  ${ZED_LIBS}
+  -lgstzedmeta)
 
 if (WIN32)
   install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)

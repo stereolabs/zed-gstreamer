@@ -85,12 +85,6 @@ you want to install plugins
     $ make
     $ sudo make install 
 
-#### Add plugin library path
-   
-    $ echo "export GST_PLUGIN_PATH="/usr/lib/gstreamer-1.0/" >> ~/.bashrc
-
-Close the console
-
 ### Installation test
 
  * Check `ZED Video Source Plugin` installation inspecting its properties:

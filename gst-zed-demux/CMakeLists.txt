@@ -6,6 +6,8 @@ set (HEADERS
 
 set(libname gstzeddemux)
 
+link_directories(${LIBRARY_INSTALL_DIR})
+
 add_library (${libname} MODULE
   ${SOURCES}
   ${HEADERS})
@@ -18,7 +20,8 @@ target_link_libraries (${libname}
   ${GOBJECT_LIBRARIES}
   ${GSTREAMER_LIBRARY}
   ${GSTREAMER_BASE_LIBRARY}
-  ${GSTREAMER_VIDEO_LIBRARY})
+  ${GSTREAMER_VIDEO_LIBRARY}
+  -lgstzedmeta)
 
 if (WIN32)
   install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)

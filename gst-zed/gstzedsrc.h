@@ -41,6 +41,8 @@ struct _GstZedSrc
     gfloat depth_max_dist;
     gboolean camera_disable_self_calib;
     gboolean depth_stabilization;
+    gboolean pos_tracking;
+    gint coord_sys;
     // <---- Properties
 
 

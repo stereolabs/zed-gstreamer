@@ -46,6 +46,8 @@ enum
     PROP_DEPTH_MAX,
     PROP_DIS_SELF_CALIB,
     PROP_DEPTH_STAB,
+    PROP_POS_TRACKING,
+    PROP_COORD_SYS,
     N_PROPERTIES
 };
 
@@ -64,6 +66,15 @@ typedef enum {
     GST_ZEDSRC_LEFT_DEPTH = 4
 } GstZedSrcStreamType;
 
+typedef enum {
+    GST_ZEDSRC_COORD_IMAGE = 0,
+    GST_ZEDSRC_COORD_LEFT_HANDED_Y_UP = 1,
+    GST_ZEDSRC_COORD_RIGHT_HANDED_Y_UP  = 2,
+    GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP = 3,
+    GST_ZEDSRC_COORD_LEFT_HANDED_Z_UP = 4,
+    GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP_X_FWD = 5
+} GstZedSrcCoordSys;
+
 #define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::HD1080)
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_30FPS
 #define DEFAULT_PROP_SDK_VERBOSE    FALSE
@@ -78,6 +89,8 @@ typedef enum {
 #define DEFAULT_PROP_DEPTH_MAX      20000.f
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
 #define DEFAULT_PROP_DEPTH_STAB     TRUE
+#define DEFAULT_PROP_POS_TRACKING   TRUE
+#define DEFAULT_PROP_COORD_SYS      static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
 
 
 #define GST_TYPE_ZED_RESOL (gst_zedtsrc_resol_get_type ())
@@ -140,11 +153,35 @@ static GType gst_zedtsrc_stream_type_get_type (void)
         };
 
         zedsrc_stream_type_type =
-                g_enum_register_static ("GstZedsrcStreamType",
+                g_enum_register_static ("GstZedSrcCoordSys",
                                         pattern_types);
     }
 
     return zedsrc_stream_type_type;
+}
+
+#define GST_TYPE_ZED_COORD_SYS (gst_zedtsrc_coord_sys_get_type ())
+static GType gst_zedtsrc_coord_sys_get_type (void)
+{
+    static GType zedsrc_coord_sys_type = 0;
+
+    if (!zedsrc_coord_sys_type) {
+        static GEnumValue pattern_types[] = {
+            { GST_ZEDSRC_COORD_IMAGE,                     "Standard coordinates system in computer vision. Used in OpenCV.", "Image" },
+            { GST_ZEDSRC_COORD_LEFT_HANDED_Y_UP,          "Left-Handed with Y up and Z forward. Used in Unity with DirectX.", "Left handed, Y up" },
+            { GST_ZEDSRC_COORD_RIGHT_HANDED_Y_UP,         "Right-Handed with Y pointing up and Z backward. Used in OpenGL.", "Right handed, Y up" },
+            { GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP,         "Right-Handed with Z pointing up and Y forward. Used in 3DSMax.", "Right handed, Z up" },
+            { GST_ZEDSRC_COORD_LEFT_HANDED_Z_UP,          "Left-Handed with Z axis pointing up and X forward. Used in Unreal Engine.", "Left handed, Z up" },
+            { GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP_X_FWD,   "Right-Handed with Z pointing up and X forward. Used in ROS (REP 103).", "Right handed, Z up, X fwd"  },
+            { 0, NULL, NULL },
+        };
+
+        zedsrc_coord_sys_type =
+                g_enum_register_static ("GstZedsrcStreamType",
+                                        pattern_types);
+    }
+
+    return zedsrc_coord_sys_type;
 }
 
 /* pad templates */
@@ -189,9 +226,9 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                         gst_static_pad_template_get (&gst_zedsrc_src_template));
 
     gst_element_class_set_static_metadata (gstelement_class,
-                                           "ZED Video Source",
+                                           "ZED Camera Source",
                                            "Source/Video",
-                                           "Stereolabs ZED video source",
+                                           "Stereolabs ZED Camera source",
                                            "Stereolabs <support@stereolabs.com>");
 
     gstbasesrc_class->start = GST_DEBUG_FUNCPTR (gst_zedsrc_start);
@@ -278,9 +315,27 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
     g_object_class_install_property( gobject_class, PROP_DEPTH_STAB,
                                      g_param_spec_boolean("depth-stability", "Depth stabilization",
-                                                          "Enable depth stabilization ",
+                                                          "Enable depth stabilization",
                                                           DEFAULT_PROP_DEPTH_STAB,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_TRACKING,
+                                     g_param_spec_boolean("pos-tracking", "Positional tracking",
+                                                          "Enable positional tracking",
+                                                          DEFAULT_PROP_POS_TRACKING,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_COORD_SYS,
+                                     g_param_spec_enum("coord-system", "3D Coordinate System",
+                                                       "3D Coordinate System", GST_TYPE_ZED_COORD_SYS,
+                                                       DEFAULT_PROP_COORD_SYS,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_STREAM_TYPE,
+                                     g_param_spec_enum("stream-type", "Image stream type",
+                                                       "Image stream type", GST_TYPE_ZED_STREAM_TYPE,
+                                                       DEFAULT_PROP_STREAM_TYPE,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_zedsrc_reset (GstZedSrc * src)
@@ -326,6 +381,9 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->depth_max_dist = DEFAULT_PROP_DEPTH_MAX;
     src->camera_disable_self_calib = DEFAULT_PROP_DIS_SELF_CALIB;
     src->depth_stabilization = DEFAULT_PROP_DEPTH_STAB;
+
+    src->pos_tracking = DEFAULT_PROP_POS_TRACKING;
+    src->coord_sys = DEFAULT_PROP_COORD_SYS;
     // <---- Parameters initialization
 
     src->stop_requested = FALSE;
@@ -387,6 +445,12 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_DEPTH_STAB:
         src->depth_stabilization = g_value_get_boolean(value);
         break;
+    case PROP_POS_TRACKING:
+        src->pos_tracking = g_value_get_boolean(value);
+        break;
+    case PROP_COORD_SYS:
+        src->coord_sys = g_value_get_enum(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
         break;
@@ -444,6 +508,12 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
         break;
     case PROP_DEPTH_STAB:
         g_value_set_boolean( value, src->depth_stabilization );
+        break;
+    case PROP_POS_TRACKING:
+        g_value_set_boolean( value, src->pos_tracking );
+        break;
+    case PROP_COORD_SYS:
+        g_value_set_enum( value, src->coord_sys );
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -529,7 +599,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     GstZedSrc *src = GST_ZED_SRC (bsrc);
     sl::ERROR_CODE ret;
 
-    GST_DEBUG_OBJECT (src, "start");
+    GST_DEBUG_OBJECT( src, "start" );
 
 
     // ----> Set parameters
@@ -544,6 +614,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     init_params.depth_maximum_distance = src->depth_max_dist;
     init_params.depth_stabilization = src->depth_stabilization;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib==TRUE;
+    init_params.coordinate_system = static_cast<sl::COORDINATE_SYSTEM>(src->coord_sys);
 
     if( src->svo_file.len != 0 )
     {
@@ -574,6 +645,18 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         return FALSE;
     }
     // <---- Open camera
+
+    if( src->pos_tracking )
+    {
+        sl::PositionalTrackingParameters pos_trk_params;
+        // TODO add parameters
+        ret = src->zed.enablePositionalTracking( pos_trk_params);
+        if (ret!=sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
+                               ("Failed to start positional tracking, '%s'", sl::toString(ret).c_str() ), (NULL));
+            return FALSE;
+        }
+    }
 
     if (!gst_zedsrc_calculate_caps(src) ) {
         return FALSE;
@@ -775,7 +858,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     else
     {
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
-    }    
+    }
 
     GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF (gst_element_get_base_time (GST_ELEMENT (src)),
                                                 clock_time);
@@ -783,8 +866,89 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
 
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
 
+    // ----> Positional Tracking
+    ZedPose pose;
+    if(src->pos_tracking)
+    {
+        sl::Pose cam_pose;
+        src->zed.getPosition( cam_pose );
+        sl::Translation pos = cam_pose.getTranslation();
+        pose.pose_avail = true;
+        pose.pos[0] = pos(0);
+        pose.pos[1] = pos(1);
+        pose.pos[2] = pos(2);
+
+        sl::Orientation orient = cam_pose.getOrientation();
+        sl::float3 euler = orient.getRotationMatrix().getEulerAngles();
+        pose.orient[0] = euler[0];
+        pose.orient[1] = euler[1];
+        pose.orient[2] = euler[2];
+    }
+    else
+    {
+        pose.pose_avail = FALSE;
+        pose.pos[0] = 0.0;
+        pose.pos[1] = 0.0;
+        pose.pos[2] = 0.0;
+        pose.orient[0] = 0.0;
+        pose.orient[1] = 0.0;
+        pose.orient[2] = 0.0;
+    }
+    // <---- Positional Tracking
+
+    ZedSensors sens;
+    if( src->zed.getCameraInformation().camera_model != sl::MODEL::ZED )
+    {
+        sens.sens_avail = TRUE;
+
+        sl::SensorsData sens_data;
+        src->zed.getSensorsData( sens_data, sl::TIME_REFERENCE::IMAGE );
+
+        sens.imu.acc[0] = sens_data.imu.linear_acceleration.x;
+        sens.imu.acc[1] = sens_data.imu.linear_acceleration.y;
+        sens.imu.acc[2] = sens_data.imu.linear_acceleration.z;
+        sens.imu.gyro[0] = sens_data.imu.angular_velocity.x;
+        sens.imu.gyro[1] = sens_data.imu.angular_velocity.y;
+        sens.imu.gyro[2] = sens_data.imu.angular_velocity.z;
+
+        if( src->zed.getCameraInformation().camera_model != sl::MODEL::ZED_M )
+        {
+            sens.mag.mag_avail = TRUE;
+            sens.mag.mag[0] = sens_data.magnetometer.magnetic_field_calibrated.x;
+            sens.mag.mag[1] = sens_data.magnetometer.magnetic_field_calibrated.y;
+            sens.mag.mag[2] = sens_data.magnetometer.magnetic_field_calibrated.z;
+            sens.env.env_avail = TRUE;
+
+            float temp;
+            sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::BAROMETER, temp);
+            sens.env.temp = (gdouble)temp;
+            sens.env.press = sens_data.barometer.pressure*1e-2;
+
+            float tempL,tempR;
+            sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_LEFT, tempL);
+            sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_RIGHT, tempR);
+            sens.temp.temp_avail = TRUE;
+            sens.temp.temp_cam_left = (gdouble)tempL;
+            sens.temp.temp_cam_right = (gdouble)tempR;
+        }
+        else
+        {
+            sens.mag.mag_avail = FALSE;
+            sens.env.env_avail = FALSE;
+            sens.temp.temp_avail = FALSE;
+        }
+    }
+    else
+    {
+        sens.sens_avail = FALSE;
+        sens.imu.imu_avail = FALSE;
+        sens.mag.mag_avail = FALSE;
+        sens.env.env_avail = FALSE;
+        sens.temp.temp_avail = FALSE;
+    }
+
     gst_buffer_add_zed_src_meta( buf, (gint) src->zed.getCameraInformation().camera_model,
-                                 src->stream_type, 0,0,0,0,0,0); // TODO Start pos tracking and add position
+                                 src->stream_type, pose, sens); // TODO Start pos tracking and add position
 
     gst_buffer_unmap( buf, &minfo );
 
@@ -798,9 +962,9 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
 
 static gboolean plugin_init (GstPlugin * plugin)
 {
-    GST_DEBUG_CATEGORY_INIT (gst_zedsrc_debug, "zedsrc", 0,
+    GST_DEBUG_CATEGORY_INIT( gst_zedsrc_debug, "zedsrc", 0,
                              "debug category for zedsrc element");
-    gst_element_register (plugin, "zedsrc", GST_RANK_NONE,
+    gst_element_register( plugin, "zedsrc", GST_RANK_NONE,
                           gst_zedsrc_get_type());
 
     return TRUE;

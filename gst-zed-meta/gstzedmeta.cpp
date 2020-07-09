@@ -7,18 +7,16 @@
 GType gst_zed_src_meta_api_get_type()
 {
     static volatile GType type;
-    static const gchar *tags[] = { "ZED", "bar", NULL };
+    static const gchar *tags[] = { "ZED", "source", "demux", NULL };
 
     if (g_once_init_enter (&type)) {
-        GType _type = gst_meta_api_type_register ("GstZedSrcMetaAPI", tags);
+        GType _type = gst_meta_api_type_register( "GstZedSrcMetaAPI", tags );
 
         g_once_init_leave (&type, _type);
     }
 
     return type;
 }
-
-
 
 static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer* buffer)
 {
@@ -27,12 +25,13 @@ static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer
     emeta->cam_model = 0;
     emeta->stream_type = 0;
 
-    emeta->pos_x = 0.0;
-    emeta->pos_y = 0.0;
-    emeta->pos_z = 0.0;
-    emeta->or_roll = 0.0;
-    emeta->or_pitch = 0.0;
-    emeta->or_yaw = 0.0;
+    emeta->pose.pose_avail = false;
+    emeta->pose.pos[0] = 0.1;
+    emeta->pose.pos[1] = 0.2;
+    emeta->pose.pos[2] = 0.3;
+    emeta->pose.orient[0] = 0.4;
+    emeta->pose.orient[1] = 0.5;
+    emeta->pose.orient[2] = 0.6;
 }
 
 static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
@@ -42,8 +41,8 @@ static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
 
     /* we always copy no matter what transform */
     gst_buffer_add_zed_src_meta(transbuf, emeta->cam_model, emeta->stream_type,
-                                emeta->pos_x, emeta->pos_y, emeta->pos_z,
-                                emeta->or_roll, emeta->or_pitch, emeta->or_yaw );
+                                emeta->pose,
+                                emeta->sens);
 
     return TRUE;
 }
@@ -73,33 +72,24 @@ const GstMetaInfo* gst_zed_src_meta_get_info (void)
     return meta_info;
 }
 
-GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
-                                                           gint cam_model,
-                                                           gint stream_type,
-                                                           gdouble pos_x,
-                                                           gdouble pos_y,
-                                                           gdouble pos_z,
-                                                           gdouble or_roll,
-                                                           gdouble or_pitch,
-                                                           gdouble or_yaw )
+GstZedSrcMeta* gst_buffer_add_zed_src_meta(GstBuffer* buffer,
+                                           gint cam_model,
+                                           gint stream_type,
+                                           ZedPose& pose,
+                                           ZedSensors &sens)
 {
     GstZedSrcMeta* meta;
 
     g_return_val_if_fail (GST_IS_BUFFER (buffer), NULL);
 
     meta = (GstZedSrcMeta *) gst_buffer_add_meta (buffer,
-    GST_ZED_SRC_META_INFO, NULL);
+                                                  GST_ZED_SRC_META_INFO, NULL);
 
     meta->cam_model = cam_model;
     meta->stream_type = stream_type;
 
-    meta->pos_x = pos_x;
-    meta->pos_y = pos_y;
-    meta->pos_z = pos_z;
-
-    meta->or_roll = or_roll;
-    meta->or_pitch = or_pitch;
-    meta->or_yaw = or_yaw;
+    memcpy( &meta->pose, &pose, sizeof(ZedPose));
+    memcpy( &meta->sens, &sens, sizeof(ZedSensors));
 
     return meta;
 }

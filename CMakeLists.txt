@@ -47,7 +47,8 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   if (WIN32)
     get_filename_component(_PREFIX "${GSTREAMER_PLUGIN_DIR}/../" REALPATH)
   else ()
-    set(_PREFIX "/usr/lib")
+    #set(_PREFIX "/usr/lib")
+    get_filename_component(_PREFIX "${GSTREAMER_PLUGIN_DIR}/../" REALPATH)
   endif ()
   set(CMAKE_INSTALL_PREFIX "${_PREFIX}"
       CACHE PATH "Common prefix for all installed files (e.g., plugins will be installed under CMAKE_INSTALL_PREFIX/gstreamer-1.0)" FORCE)
@@ -69,5 +70,11 @@ endif()
 add_subdirectory(gst-zed)
 add_subdirectory(gst-zed-demux)
 add_subdirectory(gst-zed-meta)
+
+message("Plugin install dir:")
+message(${PLUGIN_INSTALL_DIR})
+
+message("Library install dir:")
+message(${LIBRARY_INSTALL_DIR})
 
 macro_display_feature_log()
