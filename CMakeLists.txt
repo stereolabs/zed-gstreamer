@@ -67,7 +67,7 @@ if (WIN32 AND NOT PDB_INSTALL_DIR)
       CACHE PATH "Location to install PDB debug files (e.g., libgstpylon.pdb)")
 endif()
 
-add_subdirectory(gst-zed)
+add_subdirectory(gst-zed-src)
 add_subdirectory(gst-zed-demux)
 add_subdirectory(gst-zed-meta)
 

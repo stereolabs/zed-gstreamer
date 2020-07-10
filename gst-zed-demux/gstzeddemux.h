@@ -67,11 +67,13 @@ struct _GstZedDemux
   GstPad* sinkpad;
   GstPad* srcpad_left;
   GstPad* srcpad_aux;
+  GstPad* srcpad_data;
 
   GstCaps* caps_left;
   GstCaps* caps_aux;
 
   gboolean is_depth;
+  gboolean stream_data;
 };
 
 struct _GstZedDemuxClass

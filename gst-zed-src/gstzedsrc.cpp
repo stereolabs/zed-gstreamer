@@ -167,12 +167,24 @@ static GType gst_zedtsrc_coord_sys_get_type (void)
 
     if (!zedsrc_coord_sys_type) {
         static GEnumValue pattern_types[] = {
-            { GST_ZEDSRC_COORD_IMAGE,                     "Standard coordinates system in computer vision. Used in OpenCV.", "Image" },
-            { GST_ZEDSRC_COORD_LEFT_HANDED_Y_UP,          "Left-Handed with Y up and Z forward. Used in Unity with DirectX.", "Left handed, Y up" },
-            { GST_ZEDSRC_COORD_RIGHT_HANDED_Y_UP,         "Right-Handed with Y pointing up and Z backward. Used in OpenGL.", "Right handed, Y up" },
-            { GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP,         "Right-Handed with Z pointing up and Y forward. Used in 3DSMax.", "Right handed, Z up" },
-            { GST_ZEDSRC_COORD_LEFT_HANDED_Z_UP,          "Left-Handed with Z axis pointing up and X forward. Used in Unreal Engine.", "Left handed, Z up" },
-            { GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP_X_FWD,   "Right-Handed with Z pointing up and X forward. Used in ROS (REP 103).", "Right handed, Z up, X fwd"  },
+            { GST_ZEDSRC_COORD_IMAGE,
+              "Standard coordinates system in computer vision. Used in OpenCV.",
+              "Image" },
+            { GST_ZEDSRC_COORD_LEFT_HANDED_Y_UP,
+              "Left-Handed with Y up and Z forward. Used in Unity with DirectX.",
+              "Left handed, Y up" },
+            { GST_ZEDSRC_COORD_RIGHT_HANDED_Y_UP,
+              "Right-Handed with Y pointing up and Z backward. Used in OpenGL.",
+              "Right handed, Y up" },
+            { GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP,
+              "Right-Handed with Z pointing up and Y forward. Used in 3DSMax.",
+              "Right handed, Z up" },
+            { GST_ZEDSRC_COORD_LEFT_HANDED_Z_UP,
+              "Left-Handed with Z axis pointing up and X forward. Used in Unreal Engine.",
+              "Left handed, Z up" },
+            { GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP_X_FWD,
+              "Right-Handed with Z pointing up and X forward. Used in ROS (REP 103).",
+              "Right handed, Z up, X fwd"  },
             { 0, NULL, NULL },
         };
 
