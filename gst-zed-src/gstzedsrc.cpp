@@ -1,6 +1,3 @@
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 
 #include <gst/gst.h>
 #include <gst/base/gstpushsrc.h>
@@ -341,12 +338,6 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                      g_param_spec_enum("coord-system", "3D Coordinate System",
                                                        "3D Coordinate System", GST_TYPE_ZED_COORD_SYS,
                                                        DEFAULT_PROP_COORD_SYS,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property( gobject_class, PROP_STREAM_TYPE,
-                                     g_param_spec_enum("stream-type", "Image stream type",
-                                                       "Image stream type", GST_TYPE_ZED_STREAM_TYPE,
-                                                       DEFAULT_PROP_STREAM_TYPE,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 

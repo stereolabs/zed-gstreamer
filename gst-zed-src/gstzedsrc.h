@@ -61,7 +61,7 @@ struct _GstZedSrcClass
     GstPushSrcClass base_zedsrc_class;
 };
 
-GType gst_zedsrc_get_type (void);
+G_GNUC_INTERNAL GType gst_zedsrc_get_type (void);
 
 G_END_DECLS
 

@@ -69,6 +69,7 @@ endif()
 
 add_subdirectory(gst-zed-src)
 add_subdirectory(gst-zed-demux)
+add_subdirectory(gst-zed-data-csv-sink)
 add_subdirectory(gst-zed-meta)
 
 message("Plugin install dir:")

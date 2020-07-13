@@ -388,6 +388,8 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         if(filter->stream_data)
         {
             GstZedSrcMeta* meta = (GstZedSrcMeta*)gst_buffer_get_meta( buf, GST_ZED_SRC_META_API_TYPE );
+
+#if 0
             GST_LOG (" * [META] Stream type: %d", meta->stream_type );
             GST_LOG (" * [META] Camera model: %d", meta->cam_model );
             if( meta->pose.pose_avail==TRUE )
@@ -424,6 +426,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             {
                 GST_LOG (" * [META] Sensors data not available" );
             }
+#endif
 
             gsize data_size = sizeof(GstZedSrcMeta);
             GstBuffer* data_buf = gst_buffer_new_allocate(NULL, data_size, NULL );
