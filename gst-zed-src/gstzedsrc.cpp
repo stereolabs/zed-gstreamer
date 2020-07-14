@@ -31,6 +31,7 @@ enum
     PROP_0,
     PROP_CAM_RES,
     PROP_CAM_FPS,
+    PROP_STREAM_TYPE,
     PROP_SDK_VERBOSE,
     PROP_CAM_FLIP,
     PROP_CAM_ID,
@@ -38,7 +39,6 @@ enum
     PROP_SVO_FILE,
     PROP_STREAM_IP,
     PROP_STREAM_PORT,
-    PROP_STREAM_TYPE,
     PROP_DEPTH_MIN,
     PROP_DEPTH_MAX,
     PROP_DIS_SELF_CALIB,
@@ -122,9 +122,8 @@ static GType gst_zedtsrc_resol_get_type (void)
             { 0, NULL, NULL },
         };
 
-        zedsrc_resol_type =
-                g_enum_register_static ("GstZedsrcResolution",
-                                        pattern_types);
+        zedsrc_resol_type = g_enum_register_static( "GstZedsrcResolution",
+                                                    pattern_types);
     }
 
     return zedsrc_resol_type;
@@ -144,9 +143,8 @@ static GType gst_zedtsrc_fps_get_type (void)
             { 0, NULL, NULL },
         };
 
-        zedsrc_fps_type =
-                g_enum_register_static ("GstZedSrcFPS",
-                                        pattern_types);
+        zedsrc_fps_type = g_enum_register_static( "GstZedSrcFPS",
+                                                  pattern_types);
     }
 
     return zedsrc_fps_type;
@@ -167,9 +165,8 @@ static GType gst_zedtsrc_stream_type_get_type (void)
             { 0, NULL, NULL },
         };
 
-        zedsrc_stream_type_type =
-                g_enum_register_static ("GstZedSrcCoordSys",
-                                        pattern_types);
+        zedsrc_stream_type_type = g_enum_register_static( "GstZedSrcCoordSys",
+                                                          pattern_types);
     }
 
     return zedsrc_stream_type_type;
@@ -203,9 +200,8 @@ static GType gst_zedtsrc_coord_sys_get_type (void)
             { 0, NULL, NULL },
         };
 
-        zedsrc_coord_sys_type =
-                g_enum_register_static ("GstZedsrcStreamType",
-                                        pattern_types);
+        zedsrc_coord_sys_type = g_enum_register_static( "GstZedsrcStreamType",
+                                                        pattern_types);
     }
 
     return zedsrc_coord_sys_type;
@@ -230,9 +226,8 @@ static GType gst_zedtsrc_od_model_get_type (void)
             { 0, NULL, NULL },
         };
 
-        zedsrc_od_model_type =
-                g_enum_register_static ("GstZedSrcOdModel",
-                                        pattern_types);
+        zedsrc_od_model_type = g_enum_register_static( "GstZedSrcOdModel",
+                                                       pattern_types);
     }
 
     return zedsrc_od_model_type;
@@ -305,6 +300,12 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                        "Camera frame rate", GST_TYPE_ZED_FPS, DEFAULT_PROP_CAM_FPS,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property( gobject_class, PROP_STREAM_TYPE,
+                                     g_param_spec_enum("stream-type", "Image stream type",
+                                                       "Image stream type", GST_TYPE_ZED_STREAM_TYPE,
+                                                       DEFAULT_PROP_STREAM_TYPE,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property( gobject_class, PROP_SDK_VERBOSE,
                                      g_param_spec_boolean("verbose", "ZED SDK Verbose",
                                                           "ZED SDK Verbose", DEFAULT_PROP_SDK_VERBOSE,
@@ -334,22 +335,16 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_STREAM_IP,
-                                     g_param_spec_string("stream-ip-addr", "Stream IP",
-                                                         "Input from remote source",
+                                     g_param_spec_string("in-stream-ip-addr", "Input Stream IP",
+                                                         "Input from remote source: IP ADDRESS",
                                                          DEFAULT_PROP_SVO_FILE,
                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_STREAM_PORT,
-                                     g_param_spec_int("stream-port", "Stream IP",
-                                                      "Input from remote source",1,G_MAXINT16,
+                                     g_param_spec_int("in-stream-port", "Input Stream Port",
+                                                      "Input from remote source: PORT",1,G_MAXINT16,
                                                       DEFAULT_PROP_STREAM_PORT,
                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property( gobject_class, PROP_STREAM_TYPE,
-                                     g_param_spec_enum("stream-type", "Image stream type",
-                                                       "Image stream type", GST_TYPE_ZED_STREAM_TYPE,
-                                                       DEFAULT_PROP_STREAM_TYPE,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_DEPTH_MIN,
                                      g_param_spec_float("min-depth", "Minimum depth value",
@@ -555,7 +550,7 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_OD_TRACKING:
         src->od_enable_tracking = g_value_get_boolean(value);
         break;
-    /*case PROP_OD_MASK:
+        /*case PROP_OD_MASK:
         src->od_enable_mask_output = g_value_get_boolean(value);
         break;*/
     case PROP_OD_DET_MODEL:
@@ -637,7 +632,7 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_OD_TRACKING:
         g_value_set_boolean( value, src->od_enable_tracking );
         break;
-    /*case PROP_OD_MASK:
+        /*case PROP_OD_MASK:
         g_value_set_boolean( value, src->od_enable_mask_output );
         break;*/
     case PROP_OD_DET_MODEL:
@@ -729,8 +724,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 
     GST_DEBUG_OBJECT( src, "start" );
 
-
-    // ----> Set parameters
+    // ----> Set init parameters
     sl::InitParameters init_params;
     init_params.coordinate_units = sl::UNIT::MILLIMETER; // ready for 16bit depth image
     init_params.camera_resolution = static_cast<sl::RESOLUTION>(src->camera_resolution);
@@ -762,7 +756,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         sl::String ip( static_cast<char*>(src->stream_ip.str) );
         init_params.input.setFromStream(ip,src->stream_port);
     }
-    // <---- Set parameters
+    // <---- Set init parameters
 
     // ----> Open camera
     ret = src->zed.open( init_params );
@@ -788,6 +782,24 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         }
     }
     // <---- Positional tracking
+
+    // ----> Object Detection
+    if( src->object_detection )
+    {
+        sl::ObjectDetectionParameters od_params;
+        od_params.image_sync = (src->od_image_sync==TRUE);
+        od_params.enable_tracking = (src->od_enable_tracking==TRUE);
+        od_params.enable_mask_output = (src->od_enable_mask_output==TRUE);
+        od_params.detection_model = static_cast<sl::DETECTION_MODEL>(src->od_detection_model);
+
+        ret = src->zed.enableObjectDetection( od_params );
+        if (ret!=sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
+                               ("Failed to start Object Detection, '%s'", sl::toString(ret).c_str() ), (NULL));
+            return FALSE;
+        }
+    }
+    // <---- Object Detection
 
     if (!gst_zedsrc_calculate_caps(src) ) {
         return FALSE;

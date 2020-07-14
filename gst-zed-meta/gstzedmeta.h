@@ -121,6 +121,10 @@ struct _GstZedSrcMeta {
 
     ZedPose pose;
     ZedSensors sens;
+
+    gboolean od_enabled;
+    guint8 obj_count;
+    ZedObjectData objects[256];
 };
 GType gst_zed_src_meta_api_get_type (void);
 #define GST_ZED_SRC_META_API_TYPE (gst_zed_src_meta_api_get_type())
