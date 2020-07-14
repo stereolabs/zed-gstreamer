@@ -19,7 +19,14 @@ target_link_libraries (${libname}
   ${GSTREAMER_BASE_LIBRARY}
   ${GSTREAMER_VIDEO_LIBRARY})
 
+set_target_properties(${libname} PROPERTIES
+    PUBLIC_HEADER "${HEADERS}"
+)
+
 if (WIN32)
   install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)
 endif ()
-install(TARGETS ${libname} LIBRARY DESTINATION ${LIBRARY_INSTALL_DIR})
+install( TARGETS ${libname}
+    LIBRARY DESTINATION ${LIBRARY_INSTALL_DIR}
+    INCLUDES DESTINATION ${INCLUDE_INSTALL_DIR}
+    )

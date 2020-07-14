@@ -27,8 +27,8 @@ macro_log_feature(GOBJECT_FOUND "GObject" "Required to build ${proj_name}" "http
 find_package(ZED 3 REQUIRED)
 macro_log_feature(ZED_FOUND "ZED SDK" "Required to build ${proj_name}" "www.stereolabs.com" TRUE "3.0")
 
-find_package(CUDA ${ZED_CUDA_VERSION} EXACT REQUIRED)
-macro_log_feature(ZED_FOUND "Nvidia CUDA library" "Required to build ${proj_name}" "www.nvidia.com" TRUE "${ZED_CUDA_VERSION}")
+find_package(CUDA ${ZED_CUDA_VERSION} EXACT)
+macro_log_feature(CUDA_FOUND "Nvidia CUDA library" "Required to build ${proj_name}" "www.nvidia.com" TRUE "${ZED_CUDA_VERSION}")
 
 # Setup common environment
 include_directories(
@@ -57,6 +57,8 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 if (NOT LIBRARY_INSTALL_DIR)
   set(LIBRARY_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/"
       CACHE PATH "Location to install libraries (e.g., libgstklv-1.0-0.so/dll)")
+  set(INCLUDE_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/../../../include//gstreamer-1.0/zed/"
+      CACHE PATH "Location to install include headers" FORCE)
 endif ()
 if (NOT PLUGIN_INSTALL_DIR)
   set(PLUGIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/gstreamer-1.0/"
@@ -67,10 +69,22 @@ if (WIN32 AND NOT PDB_INSTALL_DIR)
       CACHE PATH "Location to install PDB debug files (e.g., libgstpylon.pdb)")
 endif()
 
-add_subdirectory(gst-zed-src)
-add_subdirectory(gst-zed-demux)
-add_subdirectory(gst-zed-data-csv-sink)
+if (NOT INCLUDE_INSTALL_DIR)
+  get_filename_component(INC_PREFIX "${GSTREAMER_PLUGIN_DIR}/../../../" REALPATH)
+  set(INCLUDE_INSTALL_DIR "${INC_PREFIX}/include//gstreamer-1.0/zed/"
+      CACHE PATH "Location to install include headers" FORCE)
+endif ()
+
 add_subdirectory(gst-zed-meta)
+if(ZED_FOUND)
+	add_subdirectory(gst-zed-src)
+else()
+    message( "ZED SDK not available. 'zedsrc' will not be installed")
+endif()
+add_subdirectory(gst-zed-data-csv-sink)
+add_subdirectory(gst-zed-demux)
+
+macro_display_feature_log()
 
 message("Plugin install dir:")
 message(${PLUGIN_INSTALL_DIR})
@@ -78,4 +92,8 @@ message(${PLUGIN_INSTALL_DIR})
 message("Library install dir:")
 message(${LIBRARY_INSTALL_DIR})
 
-macro_display_feature_log()
+message("Include install dir:")
+message(${INCLUDE_INSTALL_DIR})
+
+
+
