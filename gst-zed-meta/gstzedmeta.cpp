@@ -22,16 +22,16 @@ static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer
 {
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
-    emeta->cam_model = 0;
-    emeta->stream_type = 0;
+    emeta->info.cam_model = 0;
+    emeta->info.stream_type = 0;
 
-    emeta->pose.pose_avail = false;
-    emeta->pose.pos[0] = 0.1;
-    emeta->pose.pos[1] = 0.2;
-    emeta->pose.pos[2] = 0.3;
-    emeta->pose.orient[0] = 0.4;
-    emeta->pose.orient[1] = 0.5;
-    emeta->pose.orient[2] = 0.6;
+    emeta->pose.pose_avail = FALSE;
+    emeta->pose.pos[0] = 0.0;
+    emeta->pose.pos[1] = 0.0;
+    emeta->pose.pos[2] = 0.0;
+    emeta->pose.orient[0] = 0.0;
+    emeta->pose.orient[1] = 0.0;
+    emeta->pose.orient[2] = 0.0;
 }
 
 static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
@@ -40,7 +40,8 @@ static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
     /* we always copy no matter what transform */
-    gst_buffer_add_zed_src_meta(transbuf, emeta->cam_model, emeta->stream_type,
+    gst_buffer_add_zed_src_meta(transbuf,
+                                emeta->info,
                                 emeta->pose,
                                 emeta->sens);
 
@@ -65,7 +66,7 @@ const GstMetaInfo* gst_zed_src_meta_get_info (void)
                                                   gst_zed_src_meta_init,
                                                   gst_zed_src_meta_free,
                                                   gst_zed_src_meta_transform);
-        g_once_init_leave (&meta_info, mi);
+        g_once_init_leave( &meta_info, mi );
 
     }
 
@@ -73,8 +74,7 @@ const GstMetaInfo* gst_zed_src_meta_get_info (void)
 }
 
 GstZedSrcMeta* gst_buffer_add_zed_src_meta(GstBuffer* buffer,
-                                           gint cam_model,
-                                           gint stream_type,
+                                           ZedInfo& info,
                                            ZedPose& pose,
                                            ZedSensors &sens)
 {
@@ -82,12 +82,10 @@ GstZedSrcMeta* gst_buffer_add_zed_src_meta(GstBuffer* buffer,
 
     g_return_val_if_fail (GST_IS_BUFFER (buffer), NULL);
 
-    meta = (GstZedSrcMeta *) gst_buffer_add_meta (buffer,
+    meta = (GstZedSrcMeta *) gst_buffer_add_meta( buffer,
                                                   GST_ZED_SRC_META_INFO, NULL);
 
-    meta->cam_model = cam_model;
-    meta->stream_type = stream_type;
-
+    memcpy( &meta->info, &info, sizeof(ZedInfo));
     memcpy( &meta->pose, &pose, sizeof(ZedPose));
     memcpy( &meta->sens, &sens, sizeof(ZedSensors));
 

@@ -44,6 +44,12 @@ struct _GstZedSrc
     gboolean pos_tracking;
     gboolean camera_static;
     gint coord_sys;
+
+    gboolean object_detection;
+    gboolean od_image_sync;
+    gboolean od_enable_tracking;
+    gboolean od_enable_mask_output;
+    gint od_detection_model;
     // <---- Properties
 
 

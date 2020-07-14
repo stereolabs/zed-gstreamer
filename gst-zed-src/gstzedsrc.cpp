@@ -46,6 +46,11 @@ enum
     PROP_POS_TRACKING,
     PROP_CAMERA_STATIC,
     PROP_COORD_SYS,
+    PROP_OD_ENABLE,
+    PROP_OD_IMAGE_SYNC,
+    PROP_OD_TRACKING,
+    PROP_OD_MASK,
+    PROP_OD_DET_MODEL,
     N_PROPERTIES
 };
 
@@ -73,6 +78,12 @@ typedef enum {
     GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP_X_FWD = 5
 } GstZedSrcCoordSys;
 
+typedef enum {
+    GST_ZEDSRC_OD_MULTI_CLASS_BOX = 0,
+    GST_ZEDSRC_OD_HUMAN_BODY_FAST = 1,
+    GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE  = 2
+} GstZedSrcOdModel;
+
 #define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::HD1080)
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_30FPS
 #define DEFAULT_PROP_SDK_VERBOSE    FALSE
@@ -90,6 +101,11 @@ typedef enum {
 #define DEFAULT_PROP_POS_TRACKING   TRUE
 #define DEFAULT_PROP_CAMERA_STATIC  FALSE
 #define DEFAULT_PROP_COORD_SYS      static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
+#define DEFAULT_PROP_OD_ENABLE      FALSE
+#define DEFAULT_PROP_OD_SYNC        TRUE
+#define DEFAULT_PROP_OD_TRACKING    TRUE
+#define DEFAULT_PROP_OD_MASK        FALSE // NOTE for the future
+#define DEFAULT_PROP_OD_MODEL       GST_ZEDSRC_OD_MULTI_CLASS_BOX
 
 
 #define GST_TYPE_ZED_RESOL (gst_zedtsrc_resol_get_type ())
@@ -193,6 +209,33 @@ static GType gst_zedtsrc_coord_sys_get_type (void)
     }
 
     return zedsrc_coord_sys_type;
+}
+
+#define GST_TYPE_ZED_OD_MODEL_TYPE (gst_zedtsrc_od_model_get_type ())
+static GType gst_zedtsrc_od_model_get_type (void)
+{
+    static GType zedsrc_od_model_type = 0;
+
+    if (!zedsrc_od_model_type) {
+        static GEnumValue pattern_types[] = {
+            { GST_ZEDSRC_OD_MULTI_CLASS_BOX,
+              "Any objects, bounding box based",
+              "Object Detection Multi class" },
+            { GST_ZEDSRC_OD_HUMAN_BODY_FAST,
+              "Keypoints based, specific to human skeleton, real time performance even on Jetson or low end GPU cards",
+              "Skeleton tracking FAST" },
+            { GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE,
+              "Keypoints based, specific to human skeleton, state of the art accuracy, requires powerful GPU",
+              "Skeleton tracking ACCURATE"  },
+            { 0, NULL, NULL },
+        };
+
+        zedsrc_od_model_type =
+                g_enum_register_static ("GstZedSrcOdModel",
+                                        pattern_types);
+    }
+
+    return zedsrc_od_model_type;
 }
 
 /* pad templates */
@@ -347,6 +390,38 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                        "3D Coordinate System", GST_TYPE_ZED_COORD_SYS,
                                                        DEFAULT_PROP_COORD_SYS,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_OD_ENABLE,
+                                     g_param_spec_boolean("od-enabled", "Object Detection enable",
+                                                          "Set to TRUE to enable Object Detection",
+                                                          DEFAULT_PROP_OD_ENABLE,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_OD_IMAGE_SYNC,
+                                     g_param_spec_boolean("od-image-sync", "OD Image Sync",
+                                                          "Set to TRUE to enable Object Detection frame synchronization ",
+                                                          DEFAULT_PROP_OD_SYNC,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_OD_TRACKING,
+                                     g_param_spec_boolean("od-tracking", "OD tracking",
+                                                          "Set to TRUE to enable tracking for the detected objects",
+                                                          DEFAULT_PROP_OD_TRACKING,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    /*g_object_class_install_property( gobject_class, PROP_OD_MASK,
+                                     g_param_spec_boolean("od-mask", "OD Mask output",
+                                                          "Set to TRUE to enable mask output for the detected objects",
+                                                          DEFAULT_PROP_OD_MASK,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));*/
+
+
+    g_object_class_install_property( gobject_class, PROP_OD_DET_MODEL,
+                                     g_param_spec_enum("od-detection-model", "OD Detection Model",
+                                                       "Object Detection Model", GST_TYPE_ZED_OD_MODEL_TYPE,
+                                                       DEFAULT_PROP_OD_MODEL,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
 }
 
 static void gst_zedsrc_reset (GstZedSrc * src)
@@ -395,6 +470,12 @@ static void gst_zedsrc_init (GstZedSrc * src)
 
     src->pos_tracking = DEFAULT_PROP_POS_TRACKING;
     src->coord_sys = DEFAULT_PROP_COORD_SYS;
+
+    src->object_detection = DEFAULT_PROP_OD_ENABLE;
+    src->od_image_sync = DEFAULT_PROP_OD_SYNC;
+    src->od_enable_tracking = DEFAULT_PROP_OD_TRACKING;
+    src->od_enable_mask_output = DEFAULT_PROP_OD_MASK;
+    src->od_detection_model = DEFAULT_PROP_OD_MODEL;
     // <---- Parameters initialization
 
     src->stop_requested = FALSE;
@@ -465,6 +546,21 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_COORD_SYS:
         src->coord_sys = g_value_get_enum(value);
         break;
+    case PROP_OD_ENABLE:
+        src->object_detection = g_value_get_boolean(value);
+        break;
+    case PROP_OD_IMAGE_SYNC:
+        src->od_image_sync = g_value_get_boolean(value);
+        break;
+    case PROP_OD_TRACKING:
+        src->od_enable_tracking = g_value_get_boolean(value);
+        break;
+    /*case PROP_OD_MASK:
+        src->od_enable_mask_output = g_value_get_boolean(value);
+        break;*/
+    case PROP_OD_DET_MODEL:
+        src->od_detection_model = g_value_get_enum(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
         break;
@@ -531,6 +627,21 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
         break;
     case PROP_COORD_SYS:
         g_value_set_enum( value, src->coord_sys );
+        break;
+    case PROP_OD_ENABLE:
+        g_value_set_boolean( value, src->object_detection );
+        break;
+    case PROP_OD_IMAGE_SYNC:
+        g_value_set_boolean( value, src->od_image_sync );
+        break;
+    case PROP_OD_TRACKING:
+        g_value_set_boolean( value, src->od_enable_tracking );
+        break;
+    /*case PROP_OD_MASK:
+        g_value_set_boolean( value, src->od_enable_mask_output );
+        break;*/
+    case PROP_OD_DET_MODEL:
+        g_value_set_enum( value, src->od_detection_model );
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);

@@ -183,11 +183,11 @@ gboolean gst_zeddatacsvsink_open_file(GstZedDataCsvSink* sink)
         GST_TRACE_OBJECT( sink, "... open." );
 
         *sink->out_file_ptr << "TIMESTAMP,STREAM_TYPE,CAM_MODEL," <<
-                               "POSE_VAL,POS_X,POS_Y,POS_Z,OR_X,OR_Y,OR_Z," <<
-                               "IMU_VAL,ACC_X,ACC_Y,ACC_Z,GYRO_X,GYROY,GYRO_Z," <<
-                               "MAG_VAL,MAG_X,MAG_Y,MAG_Z," <<
-                               "ENV_VAL,TEMP,PRESS," <<
-                               "TEMP_VAL,TEMP_L,TEMP_R" <<
+                               "POSE_VAL,POS_X_[m],POS_Y_[m],POS_Z_[m],OR_X_[rad],OR_Y_[rad],OR_Z_[rad]," <<
+                               "IMU_VAL,ACC_X_[m/s²],ACC_Y_[m/s²],ACC_Z_[m/s²],GYRO_X_[rad/s],GYROY_[rad/s],GYRO_Z_[rad/s]," <<
+                               "MAG_VAL,MAG_X_[uT],MAG_Y_[uT],MAG_Z_[uT]," <<
+                               "ENV_VAL,TEMP_[°C],PRESS_[hPa]," <<
+                               "TEMP_VAL,TEMP_L_[°C],TEMP_R_[°C]" <<
                                std::endl;
     }
 
@@ -280,19 +280,19 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
         GstZedSrcMeta* meta = (GstZedSrcMeta*)map_in.data;
 
         // ----> Info
-        *filesink->out_file_ptr << meta->stream_type << CSV_SEP;
-        *filesink->out_file_ptr << meta->cam_model << CSV_SEP;
+        *filesink->out_file_ptr << meta->info.stream_type << CSV_SEP;
+        *filesink->out_file_ptr << meta->info.cam_model << CSV_SEP;
 
-        GST_LOG (" * [META] Stream type: %d", meta->stream_type );
-        GST_LOG (" * [META] Camera model: %d", meta->cam_model );
+        GST_LOG (" * [META] Stream type: %d", meta->info.stream_type );
+        GST_LOG (" * [META] Camera model: %d", meta->info.cam_model );
         // <---- Info
 
         // ----> Camera Pose
 
         *filesink->out_file_ptr << meta->pose.pose_avail << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[0]*1000. << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[1]*1000. << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[2]*1000. << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[0]/1000. << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[1]/1000. << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[2]/1000. << CSV_SEP;
         *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.orient[0] << CSV_SEP;
         *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.orient[1] << CSV_SEP;
         *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.orient[2] << CSV_SEP;
@@ -311,6 +311,28 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
             GST_LOG (" * [META] Positional tracking disabled" );
         }
         // <---- Camera Pose
+
+        // ----> Sensors
+        *filesink->out_file_ptr << meta->sens.imu.imu_avail << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.acc[0] << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.acc[1] << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.acc[2] << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.gyro[0] << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.gyro[1] << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.gyro[2] << CSV_SEP;
+
+        *filesink->out_file_ptr << meta->sens.mag.mag_avail << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.mag.mag[0] << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.mag.mag[1] << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.mag.mag[2] << CSV_SEP;
+
+        *filesink->out_file_ptr << meta->sens.env.env_avail << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.env.temp << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.env.press << CSV_SEP;
+
+        *filesink->out_file_ptr << meta->sens.temp.temp_avail << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.temp.temp_cam_left << CSV_SEP;
+        *filesink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.temp.temp_cam_right;
 
         if( meta->sens.sens_avail==TRUE )
         {
@@ -332,7 +354,7 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
         {
             GST_LOG (" * [META] Sensors data not available" );
         }
-
+        // <---- Sensors
 
         // endline
         *filesink->out_file_ptr << std::endl;
