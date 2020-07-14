@@ -42,6 +42,7 @@ struct _GstZedSrc
     gboolean camera_disable_self_calib;
     gboolean depth_stabilization;
     gboolean pos_tracking;
+    gboolean camera_static;
     gint coord_sys;
     // <---- Properties
 

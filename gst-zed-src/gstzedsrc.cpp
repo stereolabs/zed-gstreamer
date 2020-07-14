@@ -44,6 +44,7 @@ enum
     PROP_DIS_SELF_CALIB,
     PROP_DEPTH_STAB,
     PROP_POS_TRACKING,
+    PROP_CAMERA_STATIC,
     PROP_COORD_SYS,
     N_PROPERTIES
 };
@@ -87,6 +88,7 @@ typedef enum {
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
 #define DEFAULT_PROP_DEPTH_STAB     TRUE
 #define DEFAULT_PROP_POS_TRACKING   TRUE
+#define DEFAULT_PROP_CAMERA_STATIC  FALSE
 #define DEFAULT_PROP_COORD_SYS      static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
 
 
@@ -334,6 +336,12 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           DEFAULT_PROP_POS_TRACKING,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property( gobject_class, PROP_CAMERA_STATIC,
+                                     g_param_spec_boolean("cam-static", "Camera static",
+                                                          "Set to TRUE if the camera is static",
+                                                          DEFAULT_PROP_CAMERA_STATIC,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property( gobject_class, PROP_COORD_SYS,
                                      g_param_spec_enum("coord-system", "3D Coordinate System",
                                                        "3D Coordinate System", GST_TYPE_ZED_COORD_SYS,
@@ -451,6 +459,9 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_POS_TRACKING:
         src->pos_tracking = g_value_get_boolean(value);
         break;
+    case PROP_CAMERA_STATIC:
+        src->camera_static = g_value_get_boolean(value);
+        break;
     case PROP_COORD_SYS:
         src->coord_sys = g_value_get_enum(value);
         break;
@@ -514,6 +525,9 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
         break;
     case PROP_POS_TRACKING:
         g_value_set_boolean( value, src->pos_tracking );
+        break;
+    case PROP_CAMERA_STATIC:
+        g_value_set_boolean( value, src->camera_static );
         break;
     case PROP_COORD_SYS:
         g_value_set_enum( value, src->coord_sys );
@@ -649,10 +663,12 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     }
     // <---- Open camera
 
+    // ----> Positional tracking
     if( src->pos_tracking )
     {
         sl::PositionalTrackingParameters pos_trk_params;
-        // TODO add parameters
+        pos_trk_params.set_as_static = (src->camera_static==TRUE);
+        // TODO add other parameters
         ret = src->zed.enablePositionalTracking( pos_trk_params);
         if (ret!=sl::ERROR_CODE::SUCCESS) {
             GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
@@ -660,6 +676,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
             return FALSE;
         }
     }
+    // <---- Positional tracking
 
     if (!gst_zedsrc_calculate_caps(src) ) {
         return FALSE;
@@ -899,10 +916,12 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     }
     // <---- Positional Tracking
 
+    // ----> Sensors
     ZedSensors sens;
     if( src->zed.getCameraInformation().camera_model != sl::MODEL::ZED )
     {
         sens.sens_avail = TRUE;
+        sens.imu.imu_avail = TRUE;
 
         sl::SensorsData sens_data;
         src->zed.getSensorsData( sens_data, sl::TIME_REFERENCE::IMAGE );
@@ -949,9 +968,15 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         sens.env.env_avail = FALSE;
         sens.temp.temp_avail = FALSE;
     }
+    // <---- Sensors
 
-    gst_buffer_add_zed_src_meta( buf, (gint) src->zed.getCameraInformation().camera_model,
-                                 src->stream_type, pose, sens); // TODO Start pos tracking and add position
+    // ----> Info
+    ZedInfo info;
+    info.cam_model = (gint) src->zed.getCameraInformation().camera_model;
+    info.stream_type = src->stream_type;
+    // <---- Info
+
+    gst_buffer_add_zed_src_meta( buf, info, pose, sens);
 
     gst_buffer_unmap( buf, &minfo );
 
