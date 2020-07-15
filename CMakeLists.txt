@@ -57,8 +57,6 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 if (NOT LIBRARY_INSTALL_DIR)
   set(LIBRARY_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/"
       CACHE PATH "Location to install libraries (e.g., libgstklv-1.0-0.so/dll)")
-  set(INCLUDE_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/../../../include//gstreamer-1.0/zed/"
-      CACHE PATH "Location to install include headers" FORCE)
 endif ()
 if (NOT PLUGIN_INSTALL_DIR)
   set(PLUGIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/gstreamer-1.0/"
@@ -71,7 +69,7 @@ endif()
 
 if (NOT INCLUDE_INSTALL_DIR)
   get_filename_component(INC_PREFIX "${GSTREAMER_PLUGIN_DIR}/../../../" REALPATH)
-  set(INCLUDE_INSTALL_DIR "${INC_PREFIX}/include//gstreamer-1.0/zed/"
+  set(INCLUDE_INSTALL_DIR "${INC_PREFIX}/include//gstreamer-1.0/gst/zed/"
       CACHE PATH "Location to install include headers" FORCE)
 endif ()
 
@@ -86,14 +84,15 @@ add_subdirectory(gst-zed-demux)
 
 macro_display_feature_log()
 
+message("")
 message("Plugin install dir:")
 message(${PLUGIN_INSTALL_DIR})
-
+message("")
 message("Library install dir:")
 message(${LIBRARY_INSTALL_DIR})
-
+message("")
 message("Include install dir:")
 message(${INCLUDE_INSTALL_DIR})
-
+message("")
 
 

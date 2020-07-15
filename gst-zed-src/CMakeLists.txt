@@ -18,7 +18,7 @@ add_library (${libname} MODULE
   ${SOURCES}
   ${HEADERS})
 
-add_definitions(-std=c++11 -g -O2)
+add_definitions(-std=c++11 -g -O2 -Wno-deprecated-declarations)
 
 SET(ZED_LIBS ${ZED_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_CUDART_LIBRARY} ${CUDA_NPP_LIBRARIES_ZED})
 
