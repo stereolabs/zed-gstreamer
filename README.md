@@ -18,7 +18,10 @@
 GStreamer plugin package for ZED Cameras. The package is composed of two plugins:
 
 * `zedsrc`: acquires camera color image and depth map and pushes them in a GStreamer pipeline
-* `zeddemux`: receives a composite `zedsrc` stream (`color left + color right` data or `color left + depth map`), processes the eventual depth data and pushes them in two separated new streams named `src_left` and `src_aux`
+* `zedmeta`: GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data)
+* `zeddemux`: receives a composite `zedsrc` stream (`color left + color right` data or `color left + depth map` + metadata), 
+  processes the eventual depth data and pushes them in two separated new streams named `src_left` and `src_aux`. A third source pad is created for metadata to be externally processed.
+* `zeddatacsvsink`: example sink plugin that receives ZED metadata, extracts the Positional Tracking and the Sensors Data and save them in a CSV file.
 
 ## Build
 
@@ -95,6 +98,10 @@ you want to install plugins
 
       `gst-inspect-1.0 zeddemux`
 
+ * Check `ZED CSV Sink Plugin` installation inspecting its properties:
+
+      `gst-inspect-1.0 zeddatacsvsink`
+
 ## Plugins parameters
 
 ### `ZED Video Source Plugin` parameters
@@ -108,33 +115,45 @@ you want to install plugins
  * `svo-file-path`: SVO file path for SVO input
  * `stream-ip-addr`: device IP address for remote input
  * `stream-port`: IP port for remote input
- * `stream-type`: type of video stream - {Left image (0), Right image (1), Stereo couple (2), 16 bit depth (3), Left+Depth (4) }
+ * `stream-type`: type of video stream - {Left image (0), Right image (1), Stereo couple (2), 16 bit depth (3), Left+Depth (4)}
  * `min-depth`: Minimum depth value
  * `max-depth `: Maximum depth value
  * `disable-self-calib`: Disable the self calibration processing when the camera is opened - {TRUE, FALSE}
- * `depth-stability`: Enable depth stabilization - {TRUE, FALSE}
+ * `depth-stability`: Enable depth stabilization - {TRUE, FALSE} 
+ * `pos-tracking`: Enable positional tracking - {TRUE, FALSE}
+ * `cam-static`: Set to TRUE if the camera is static - {TRUE, FALSE}
+ * `coord-system`: 3D Coordinate System - {Image (0) - Left handed, Y up (1) - Right handed, Y up (2) - Right handed, Z up (3) - Left handed, Z up (4) - Right handed, Z up, X fwd (5)}
+ * `od-enabled `: Enable Object Detection - {TRUE, FALSE}
+ * `od-tracking `: Enable tracking for the detected objects - {TRUE, FALSE} 
+ * `od-detection-model`: Object Detection Model - {Multi class (0), Skeleton tracking FAST (1), Skeleton tracking ACCURATE (2)}
+ * `od-confidence`: Minimum Detection Confidence - [0,100]
 
 ### `ZED Video Demuxer Plugin` parameters
 
  * `is-depth`: indicates if the bottom stream of a composite `stream-type` of the `ZED Video Source Plugin` is a color image (Right image) or a depth map.
+ * `stream-data`: Enable binary data streaming on `src_data` pad - {TRUE, FALSE} 
 
 ## Example pipelines
 
-### RGB stream + stream rendering
+### Local RGB stream + RGB rendering
 
     gst-launch-1.0 zedsrc ! autovideoconvert ! fpsdisplaysink
 
-### 16 bit Depth stream + stream rendering
+### Local 16 bit Depth stream + Depth rendering
 
     gst-launch-1.0 zedsrc stream-type=1 ! autovideoconvert ! fpsdisplaysink
 
-### Left/Right stream + demux + streams rendering
+### Local Left/Right stream + demux + double RGB rendering
 
     gst-launch-1.0 zedsrc stream-type=2 ! queue ! zeddemux is-depth=false name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
 
-### Left/Depth stream + demux + streams rendering
+### Local Left/Depth stream + demux + double streams rendering
 
     gst-launch-1.0 zedsrc stream-type=4 ! queue ! zeddemux name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+
+### Local Left/Depth stream + demux + double streams rendering + data saving on CSV file
+
+    gst-launch-1.0 zedsrc stream-type=4 ! zeddemux stream-data=TRUE name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink demux.src_data ! queue ! zeddatacsvsink location="${HOME}/test_csv.csv" append=FALSE
 
 ## Related
 
