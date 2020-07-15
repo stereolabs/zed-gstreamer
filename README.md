@@ -7,8 +7,8 @@
 <p align="center">
   <a href="#key-features">Key Features</a> •
   <a href="#build">Build</a> •
-  <a href="#plugins-parameters">Plugins parameters</a> • 
-  <a href="#example-pipelines">Example pipelines</a> • 
+  <a href="#plugins-parameters">Plugins parameters</a> •
+  <a href="#example-pipelines">Example pipelines</a> •
   <a href="#related">Related</a> •
   <a href="#license">License</a>
 </p>
@@ -28,6 +28,11 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
  * CMake (v3.1+)
  * GStreamer
 
+### GStreamer Installation
+ * Follow the installation guide for GStreamer [here](https://gstreamer.freedesktop.org/documentation/installing/index.html?gi-language=c)
+ To build on Linux, you also need to install the dev package with :
+ `$ sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev`
+
 ### Windows installation
 
  * Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/)
@@ -42,7 +47,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
   build. Check `cmake/modules` for any paths you may need to set.
  * Run the following commands from a terminal or command prompt, assuming CMake
   and Git are in your `PATH`.
-	    
+
      ```
      git clone https://github.com/stereolabs/zed-gstreamer.git
      cd zed-gstreamer
@@ -83,18 +88,20 @@ you want to install plugins
     $ cd build
     $ cmake -DCMAKE_BUILD_TYPE=Release ..
     $ make
-    $ sudo make install 
+    $ sudo make install
 
 #### Add plugin library path
-   
-    $ echo "export GST_PLUGIN_PATH="/usr/lib/gstreamer-1.0/" >> ~/.bashrc
+    * Locate the installation of GStreamer. It is the path where libgstzed.so and libgstzeddemux.so are installed.
+      It can be for example /usr/local/gstreamer-1.0/ or /usr/lib/gstreamer-1.0/
+    * Export GST_PLUGIN_PATH with the GStreamer installation path :
+    $ echo "export GST_PLUGIN_PATH=/usr/lib/gstreamer-1.0/" >> ~/.bashrc
 
 Close the console
 
 ### Installation test
 
  * Check `ZED Video Source Plugin` installation inspecting its properties:
- 
+
       `gst-inspect-1.0 zedsrc`
 
  * Check `ZED Video Demuxer` installation inspecting its properties:
