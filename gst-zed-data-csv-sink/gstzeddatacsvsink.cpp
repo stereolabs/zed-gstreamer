@@ -79,16 +79,16 @@ static void gst_zeddatacsvsink_class_init (GstZedDataCsvSinkClass * klass)
     gstbasesink_class->event = GST_DEBUG_FUNCPTR (gst_zeddatacsvsink_event);
 }
 
-static void gst_zeddatacsvsink_init(GstZedDataCsvSink * filesink)
+static void gst_zeddatacsvsink_init(GstZedDataCsvSink * csvsink)
 {
-    GST_TRACE_OBJECT( filesink, "Init" );
+    GST_TRACE_OBJECT( csvsink, "Init" );
 
-    filesink->filename = *g_string_new( DEFAULT_PROP_LOCATION );
-    filesink->append = DEFAULT_PROP_APPEND;
+    csvsink->filename = *g_string_new( DEFAULT_PROP_LOCATION );
+    csvsink->append = DEFAULT_PROP_APPEND;
 
-    filesink->out_file_ptr = NULL;
+    csvsink->out_file_ptr = NULL;
 
-    gst_base_sink_set_sync(GST_BASE_SINK (filesink), FALSE);
+    gst_base_sink_set_sync(GST_BASE_SINK(csvsink), FALSE);
 }
 
 static void gst_zeddatacsvsink_dispose (GObject * object)
@@ -104,16 +104,6 @@ static void gst_zeddatacsvsink_dispose (GObject * object)
     }
 
     G_OBJECT_CLASS(gst_zeddatacsvsink_parent_class)->dispose(object);
-}
-
-static gboolean plugin_init (GstPlugin * plugin)
-{
-    GST_DEBUG_CATEGORY_INIT( gst_zeddatacsvsink_debug, "zeddatacsvsink", 0,
-                             "debug category for zeddatacsvsink element");
-    gst_element_register( plugin, "zeddatacsvsink", GST_RANK_NONE,
-                          gst_zeddatacsvsink_get_type());
-
-    return TRUE;
 }
 
 void gst_zeddatacsvsink_set_property (GObject * object, guint prop_id,
@@ -217,20 +207,20 @@ void gst_zeddatacsvsink_close_file(GstZedDataCsvSink* sink)
 
 gboolean gst_zeddatacsvsink_start(GstBaseSink* sink)
 {
-    GstZedDataCsvSink* filesink = GST_DATA_CSV_SINK(sink);
+    GstZedDataCsvSink* csvsink = GST_DATA_CSV_SINK(sink);
 
-    GST_TRACE_OBJECT( filesink, "Start" );
+    GST_TRACE_OBJECT( csvsink, "Start" );
 
-    return gst_zeddatacsvsink_open_file(filesink);
+    return gst_zeddatacsvsink_open_file(csvsink);
 }
 
 gboolean gst_zeddatacsvsink_stop (GstBaseSink * sink)
 {
-    GstZedDataCsvSink* filesink = GST_DATA_CSV_SINK(sink);
+    GstZedDataCsvSink* csvsink = GST_DATA_CSV_SINK(sink);
 
-    GST_TRACE_OBJECT( filesink, "Stop" );
+    GST_TRACE_OBJECT( csvsink, "Stop" );
 
-    gst_zeddatacsvsink_close_file(filesink);
+    gst_zeddatacsvsink_close_file(csvsink);
 
     return TRUE;
 }
@@ -238,17 +228,17 @@ gboolean gst_zeddatacsvsink_stop (GstBaseSink * sink)
 gboolean gst_zeddatacsvsink_event (GstBaseSink * sink, GstEvent * event)
 {
     GstEventType type;
-    GstZedDataCsvSink* filesink = GST_DATA_CSV_SINK(sink);
+    GstZedDataCsvSink* csvsink = GST_DATA_CSV_SINK(sink);
 
     type = GST_EVENT_TYPE (event);
 
-    GST_TRACE_OBJECT( filesink, "Event " );
+    GST_TRACE_OBJECT( csvsink, "Event " );
 
     switch (type) {
     case GST_EVENT_EOS:
-        if(filesink->out_file_ptr && filesink->out_file_ptr->is_open())
+        if(csvsink->out_file_ptr && csvsink->out_file_ptr->is_open())
         {
-            filesink->out_file_ptr->flush();
+            csvsink->out_file_ptr->flush();
         }
         break;
     default:
@@ -261,27 +251,27 @@ gboolean gst_zeddatacsvsink_event (GstBaseSink * sink, GstEvent * event)
 
 GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
 {
-    GstZedDataCsvSink* filesink = GST_DATA_CSV_SINK(sink);
+    GstZedDataCsvSink* csvsink = GST_DATA_CSV_SINK(sink);
 
     GstMapInfo map_in;
 
-    GST_TRACE_OBJECT( filesink, "Render" );
+    GST_TRACE_OBJECT( csvsink, "Render" );
 
     if(gst_buffer_map(buf, &map_in, GST_MAP_READ))
     {
         // ----> Timestamp
         GstClockTime timestamp = GST_BUFFER_TIMESTAMP (buf);
-        *filesink->out_file_ptr << timestamp << CSV_SEP;
+        *csvsink->out_file_ptr << timestamp << CSV_SEP;
         // <---  Timestamp
 
-        GST_TRACE_OBJECT( filesink, "Input buffer size %lu B", map_in.size );
-        GST_TRACE_OBJECT( filesink, "GstZedSrcMeta size %lu B", sizeof(GstZedSrcMeta) );
+        GST_TRACE_OBJECT( csvsink, "Input buffer size %lu B", map_in.size );
+        GST_TRACE_OBJECT( csvsink, "GstZedSrcMeta size %lu B", sizeof(GstZedSrcMeta) );
 
         GstZedSrcMeta* meta = (GstZedSrcMeta*)map_in.data;
 
         // ----> Info
-        *filesink->out_file_ptr << meta->info.stream_type << CSV_SEP;
-        *filesink->out_file_ptr << meta->info.cam_model << CSV_SEP;
+        *csvsink->out_file_ptr << meta->info.stream_type << CSV_SEP;
+        *csvsink->out_file_ptr << meta->info.cam_model << CSV_SEP;
 
         GST_LOG (" * [META] Stream type: %d", meta->info.stream_type );
         GST_LOG (" * [META] Camera model: %d", meta->info.cam_model );
@@ -289,14 +279,14 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
 
         // ----> Camera Pose
 
-        *filesink->out_file_ptr << meta->pose.pose_avail << CSV_SEP;
-        *filesink->out_file_ptr << meta->pose.pos_tracking_state << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[0]/1000. << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[1]/1000. << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[2]/1000. << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.orient[0] << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.orient[1] << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.orient[2] << CSV_SEP;
+        *csvsink->out_file_ptr << meta->pose.pose_avail << CSV_SEP;
+        *csvsink->out_file_ptr << meta->pose.pos_tracking_state << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[0]/1000. << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[1]/1000. << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[2]/1000. << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.orient[0] << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.orient[1] << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.orient[2] << CSV_SEP;
 
         if( meta->pose.pose_avail==TRUE )
         {
@@ -314,26 +304,26 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
         // <---- Camera Pose
 
         // ----> Sensors
-        *filesink->out_file_ptr << meta->sens.imu.imu_avail << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.acc[0] << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.acc[1] << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.acc[2] << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.gyro[0] << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.gyro[1] << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.gyro[2] << CSV_SEP;
+        *csvsink->out_file_ptr << meta->sens.imu.imu_avail << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.acc[0] << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.acc[1] << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.acc[2] << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.gyro[0] << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.gyro[1] << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.imu.gyro[2] << CSV_SEP;
 
-        *filesink->out_file_ptr << meta->sens.mag.mag_avail << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.mag.mag[0] << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.mag.mag[1] << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.mag.mag[2] << CSV_SEP;
+        *csvsink->out_file_ptr << meta->sens.mag.mag_avail << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.mag.mag[0] << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.mag.mag[1] << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(6) << meta->sens.mag.mag[2] << CSV_SEP;
 
-        *filesink->out_file_ptr << meta->sens.env.env_avail << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.env.temp << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.env.press << CSV_SEP;
+        *csvsink->out_file_ptr << meta->sens.env.env_avail << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.env.temp << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.env.press << CSV_SEP;
 
-        *filesink->out_file_ptr << meta->sens.temp.temp_avail << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.temp.temp_cam_left << CSV_SEP;
-        *filesink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.temp.temp_cam_right;
+        *csvsink->out_file_ptr << meta->sens.temp.temp_avail << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.temp.temp_cam_left << CSV_SEP;
+        *csvsink->out_file_ptr << std::fixed << std::setprecision(2) << meta->sens.temp.temp_cam_right;
 
         if( meta->sens.sens_avail==TRUE )
         {
@@ -358,13 +348,23 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
         // <---- Sensors
 
         // endline
-        *filesink->out_file_ptr << std::endl;
+        *csvsink->out_file_ptr << std::endl;
 
         // Release incoming buffer
         gst_buffer_unmap( buf, &map_in );
     }
 
     return GST_FLOW_OK;
+}
+
+static gboolean plugin_init (GstPlugin * plugin)
+{
+    GST_DEBUG_CATEGORY_INIT( gst_zeddatacsvsink_debug, "zeddatacsvsink", 0,
+                             "debug category for zeddatacsvsink element");
+    gst_element_register( plugin, "zeddatacsvsink", GST_RANK_NONE,
+                          gst_zeddatacsvsink_get_type());
+
+    return TRUE;
 }
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,

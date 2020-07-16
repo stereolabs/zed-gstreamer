@@ -14,6 +14,8 @@ link_directories(${LIBRARY_INSTALL_DIR})
 
 set(libname gstzed)
 
+message( " * ${libname} plugin added")
+
 add_library (${libname} MODULE
   ${SOURCES}
   ${HEADERS})

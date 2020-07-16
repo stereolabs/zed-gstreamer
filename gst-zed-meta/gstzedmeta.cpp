@@ -98,7 +98,7 @@ GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
     meta->od_enabled = od_enabled;
     meta->obj_count = obj_count;
 
-    memcpy( &meta->objects, &objects, obj_count*sizeof(ZedObjectData));
+    memcpy( &meta->objects, objects, obj_count*sizeof(ZedObjectData));
 
     return meta;
 }

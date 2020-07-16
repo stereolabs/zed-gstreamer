@@ -6,6 +6,8 @@ set (HEADERS
 
 set(libname gstzeddatacsvsink)
 
+message( " * ${libname} plugin added")
+
 link_directories(${LIBRARY_INSTALL_DIR})
 
 add_library (${libname} MODULE

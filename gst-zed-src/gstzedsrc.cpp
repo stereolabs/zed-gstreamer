@@ -754,6 +754,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     {
         sl::String svo( static_cast<char*>(src->svo_file.str) );
         init_params.input.setFromSVOFile(svo);
+        init_params.svo_real_time_mode = true;
     }
     else if( src->camera_id != DEFAULT_PROP_CAM_ID )
     {
@@ -1162,11 +1163,17 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
                     memcpy( obj_data[idx].velocity, (void*)obj.velocity.ptr(), 3*sizeof(float) );
                     GST_TRACE_OBJECT( src, " * [%d] Copied velocity", idx );
 
-                    memcpy( obj_data[idx].bounding_box_2d, (void*)obj.bounding_box_2d.data(), 8*sizeof(unsigned int) );
-                    GST_TRACE_OBJECT( src, " * [%d] Copied bbox 2D - %lu", idx, obj.bounding_box_2d.size() );
+                    memcpy( (uint8_t*)obj_data[idx].bounding_box_2d, (uint8_t*)obj.bounding_box_2d.data(),
+                            obj.bounding_box_2d.size()*2*sizeof(unsigned int) );
+                    GST_TRACE_OBJECT( src, " * [%d] Copied bbox 2D - %lu", idx, 8*sizeof(unsigned int) );
+                    for( int i=0; i<4; i++ )
+                    {
+                        GST_TRACE_OBJECT( src, "\t* [%d] x_cp: %u, y_cp: %u", i, obj_data[idx].bounding_box_2d[i][0], obj_data[idx].bounding_box_2d[i][1] );
+                        GST_TRACE_OBJECT( src, "\t* [%d] x_or: %u, y_or: %u", i, obj.bounding_box_2d[i].x, obj.bounding_box_2d[i].y );
+                    }
 
                     memcpy( obj_data[idx].bounding_box_3d, (void*)obj.bounding_box.data(), 24*sizeof(float) );
-                    GST_TRACE_OBJECT( src, " * [%d] Copied bbox 3D - %lu", idx, obj.bounding_box.size());
+                    GST_TRACE_OBJECT( src, " * [%d] Copied bbox 3D - %lu", idx, 24*sizeof(float));
 
                     memcpy( obj_data[idx].dimensions, (void*)obj.dimensions.ptr(), 3*sizeof(float) );
                     GST_TRACE_OBJECT( src, " * [%d] Copied dimensions", idx );

@@ -6,6 +6,8 @@ set (HEADERS
 
 set(libname gstzedmeta)
 
+message( " * ${libname} library added")
+
 add_library (${libname} SHARED
   ${SOURCES}
   ${HEADERS})
