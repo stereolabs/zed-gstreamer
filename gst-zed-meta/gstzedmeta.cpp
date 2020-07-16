@@ -40,10 +40,13 @@ static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
     /* we always copy no matter what transform */
-    gst_buffer_add_zed_src_meta(transbuf,
-                                emeta->info,
-                                emeta->pose,
-                                emeta->sens);
+    gst_buffer_add_zed_src_meta( transbuf,
+                                 emeta->info,
+                                 emeta->pose,
+                                 emeta->sens,
+                                 emeta->od_enabled,
+                                 emeta->obj_count,
+                                 emeta->objects );
 
     return TRUE;
 }
@@ -73,10 +76,13 @@ const GstMetaInfo* gst_zed_src_meta_get_info (void)
     return meta_info;
 }
 
-GstZedSrcMeta* gst_buffer_add_zed_src_meta(GstBuffer* buffer,
-                                           ZedInfo& info,
-                                           ZedPose& pose,
-                                           ZedSensors &sens)
+GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
+                                            ZedInfo &info,
+                                            ZedPose &pose,
+                                            ZedSensors& sens,
+                                            gboolean od_enabled,
+                                            guint8 obj_count,
+                                            ZedObjectData* objects)
 {
     GstZedSrcMeta* meta;
 
@@ -88,6 +94,11 @@ GstZedSrcMeta* gst_buffer_add_zed_src_meta(GstBuffer* buffer,
     memcpy( &meta->info, &info, sizeof(ZedInfo));
     memcpy( &meta->pose, &pose, sizeof(ZedPose));
     memcpy( &meta->sens, &sens, sizeof(ZedSensors));
+
+    meta->od_enabled = od_enabled;
+    meta->obj_count = obj_count;
+
+    memcpy( &meta->objects, &objects, obj_count*sizeof(ZedObjectData));
 
     return meta;
 }

@@ -20,32 +20,33 @@ struct _ZedInfo {
 
 struct _ZedPose {
     gboolean pose_avail;
-    gdouble pos[3];
-    gdouble orient[3];
+    gint pos_tracking_state;
+    gfloat pos[3];
+    gfloat orient[3];
 };
 
 struct _ZedImu {
     gboolean imu_avail;
-    gdouble acc[3];
-    gdouble gyro[3];
-    gdouble temp;
+    gfloat acc[3];
+    gfloat gyro[3];
+    gfloat temp;
 };
 
 struct _ZedMag {
     gboolean mag_avail;
-    gdouble mag[3];
+    gfloat mag[3];
 };
 
 struct _ZedEnv {
     gboolean env_avail;
-    gdouble press;
-    gdouble temp;
+    gfloat press;
+    gfloat temp;
 };
 
 struct _ZedCamTemp {
     gboolean temp_avail;
-    gdouble temp_cam_left;
-    gdouble temp_cam_right;
+    gfloat temp_cam_left;
+    gfloat temp_cam_right;
 };
 
 struct _ZedSensors {
@@ -90,7 +91,7 @@ struct _ZedObjectData {
 
     gfloat velocity[3];
 
-    gfloat bounding_box_2d[4][2];
+    unsigned int bounding_box_2d[4][2];
 
     // TODO mask?
 
@@ -104,13 +105,13 @@ struct _ZedObjectData {
     */
     gfloat bounding_box_3d[8][3];
 
-    gfloat dimensions; // 3D object dimensions: width, height, length
+    gfloat dimensions[3]; // 3D object dimensions: width, height, length
 
     gfloat keypoint_2d[18][2]; // Negative coordinates -> point not valid
     gfloat keypoint_3d[18][3]; // Nan coordinates -> point not valid
 
     gfloat head_bounding_box_2d[4][2];
-    gfloat head_bounding_box_3d[4][2];
+    gfloat head_bounding_box_3d[8][3];
     gfloat head_position[3];
 };
 
@@ -141,6 +142,9 @@ GST_EXPORT
 GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
                                             ZedInfo &info,
                                             ZedPose &pose,
-                                            ZedSensors& sens);
+                                            ZedSensors& sens,
+                                            gboolean od_enabled,
+                                            guint8 obj_count,
+                                            ZedObjectData* objects);
 
 #endif

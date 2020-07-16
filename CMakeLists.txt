@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION "2.8.0")
+cmake_minimum_required(VERSION "3.6")
 
 set(proj_name gst-plugins-zed)
 project(${proj_name})
@@ -79,8 +79,10 @@ if(ZED_FOUND)
 else()
     message( "ZED SDK not available. 'zedsrc' will not be installed")
 endif()
-add_subdirectory(gst-zed-data-csv-sink)
 add_subdirectory(gst-zed-demux)
+add_subdirectory(gst-zed-data-csv-sink)
+add_subdirectory(gst-zed-obj-det-sink)
+
 
 macro_display_feature_log()
 
@@ -94,5 +96,7 @@ message("")
 message("Include install dir:")
 message(${INCLUDE_INSTALL_DIR})
 message("")
+
+#message(${LIBRARY_OUTPUT_PATH})
 
 

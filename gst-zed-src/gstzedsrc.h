@@ -50,6 +50,7 @@ struct _GstZedSrc
     gboolean od_enable_tracking;
     gboolean od_enable_mask_output;
     gint od_detection_model;
+    gfloat od_det_conf;
     // <---- Properties
 
 

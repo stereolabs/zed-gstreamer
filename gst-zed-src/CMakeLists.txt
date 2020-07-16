@@ -22,14 +22,15 @@ add_definitions(-std=c++11 -g -O2 -Wno-deprecated-declarations)
 
 SET(ZED_LIBS ${ZED_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_CUDART_LIBRARY} ${CUDA_NPP_LIBRARIES_ZED})
 
-target_link_libraries (${libname}
+target_link_libraries (${libname} LINK_PUBLIC  
   ${GLIB2_LIBRARIES}
   ${GOBJECT_LIBRARIES}  
   ${GSTREAMER_LIBRARY}
   ${GSTREAMER_BASE_LIBRARY}
   ${GSTREAMER_VIDEO_LIBRARY}  
   ${ZED_LIBS}
-  -lgstzedmeta)
+  ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
+)
 
 if (WIN32)
   install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)

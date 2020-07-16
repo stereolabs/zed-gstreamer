@@ -183,7 +183,7 @@ gboolean gst_zeddatacsvsink_open_file(GstZedDataCsvSink* sink)
         GST_TRACE_OBJECT( sink, "... open." );
 
         *sink->out_file_ptr << "TIMESTAMP,STREAM_TYPE,CAM_MODEL," <<
-                               "POSE_VAL,POS_X_[m],POS_Y_[m],POS_Z_[m],OR_X_[rad],OR_Y_[rad],OR_Z_[rad]," <<
+                               "POSE_VAL,POS_TRK_STATE,POS_X_[m],POS_Y_[m],POS_Z_[m],OR_X_[rad],OR_Y_[rad],OR_Z_[rad]," <<
                                "IMU_VAL,ACC_X_[m/s²],ACC_Y_[m/s²],ACC_Z_[m/s²],GYRO_X_[rad/s],GYROY_[rad/s],GYRO_Z_[rad/s]," <<
                                "MAG_VAL,MAG_X_[uT],MAG_Y_[uT],MAG_Z_[uT]," <<
                                "ENV_VAL,TEMP_[°C],PRESS_[hPa]," <<
@@ -290,6 +290,7 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
         // ----> Camera Pose
 
         *filesink->out_file_ptr << meta->pose.pose_avail << CSV_SEP;
+        *filesink->out_file_ptr << meta->pose.pos_tracking_state << CSV_SEP;
         *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[0]/1000. << CSV_SEP;
         *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[1]/1000. << CSV_SEP;
         *filesink->out_file_ptr << std::fixed << std::setprecision(6) << meta->pose.pos[2]/1000. << CSV_SEP;
