@@ -102,6 +102,10 @@ you want to install plugins
 
       `gst-inspect-1.0 zeddatacsvsink`
 
+ * Check `ZED Object Detection Display Sink Plugin` installation inspecting its properties:
+
+      `gst-inspect-1.0 zedoddisplaysink`
+
 ## Plugins parameters
 
 ### `ZED Video Source Plugin` parameters
@@ -154,6 +158,19 @@ you want to install plugins
 ### Local Left/Depth stream + demux + double streams rendering + data saving on CSV file
 
     gst-launch-1.0 zedsrc stream-type=4 ! zeddemux stream-data=TRUE name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink demux.src_data ! queue ! zeddatacsvsink location="${HOME}/test_csv.csv" append=FALSE
+
+### Local Left/Right stream + Multiclass Object Detection result displaying
+    
+    gst-launch-1.0 zedsrc stream-type=2 od-enabled=true od-detection-model=0 resolution=2 ! zedoddisplaysink
+
+### Local Left/Right stream + Skeleton Tracking result displaying
+    
+    gst-launch-1.0 zedsrc stream-type=2 od-enabled=true od-detection-model=1 resolution=2 ! zedoddisplaysink
+
+### Local Left/Right stream + Accurate Skeleton Tracking result displaying
+    
+    gst-launch-1.0 zedsrc stream-type=2 od-enabled=true od-detection-model=2 resolution=2 ! zedoddisplaysink
+
 
 ## Related
 

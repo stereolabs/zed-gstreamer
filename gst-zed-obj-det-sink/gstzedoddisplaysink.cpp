@@ -55,11 +55,12 @@ static void gst_zedoddisplaysink_class_init (GstZedOdDisplaySinkClass * klass)
     gobject_class->set_property = gst_zedoddisplaysink_set_property;
     gobject_class->get_property = gst_zedoddisplaysink_get_property;
 
-    g_object_class_install_property( gobject_class, PROP_DISPLAY3D,
-                                     g_param_spec_boolean("display-3d", "Display results in 3D  ",
-                                                          "Creates a 3D OpenGL View to display bounding boxes and skeletons",
-                                                          DEFAULT_PROP_DISPLAY_3D,
-                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    // TODO UNCOMMENT WHEN 3D DISPLAY SINK IS READY
+//    g_object_class_install_property( gobject_class, PROP_DISPLAY3D,
+//                                     g_param_spec_boolean("display-3d", "Display results in 3D  ",
+//                                                          "Creates a 3D OpenGL View to display bounding boxes and skeletons",
+//                                                          DEFAULT_PROP_DISPLAY_3D,
+//                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     gst_element_class_set_static_metadata (gstelement_class,
                                            "ZED Object Detection Display Sink",
@@ -192,27 +193,114 @@ gboolean gst_zedoddisplaysink_event (GstBaseSink * sink, GstEvent * event)
     return GST_BASE_SINK_CLASS(gst_zedoddisplaysink_parent_class)->event (sink, event);
 }
 
-void draw_objects( cv::Mat& image, guint8 count, ZedObjectData* objs )
+void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs )
 {
-    for( int i=0; i<count; i++ )
+    for( int i=0; i<obj_count; i++ )
     {
-        cv::Scalar color = cv::Scalar(i*232+232, i*176+176, i*59+59);
+        cv::Scalar color = cv::Scalar::all(125);
+        if(objs[i].id>=0)
+        {
+            color = cv::Scalar((objs[i].id*232+232)%255, (objs[i].id*176+176)%255, (objs[i].id*59+59)%255);
+        }
+
+        cv::Rect roi_render(0, 0, image.size().width, image.size().height);
 
         GST_TRACE( "Object: %d", i );
         GST_TRACE( " * Id: %d", (int)objs[i].label );
         GST_TRACE( " * Pos: %g,%g,%g", objs[i].position[0],objs[i].position[1],objs[i].position[2] );
 
-        // ----> Bounding box
-        cv::Point tl;
-        tl.x = objs[i].bounding_box_2d[0][0];
-        tl.y = objs[i].bounding_box_2d[0][1];
-        //GST_TRACE( "Rect tl: %d,%d", tl.x,tl.y );
-        cv::Point br;
-        br.x = objs[i].bounding_box_2d[2][0];
-        br.y = objs[i].bounding_box_2d[2][1];
-        //GST_TRACE( "Rect br: %d,%d", br.x,br.y );
-        cv::rectangle( image, tl, br, color, 2 );
-        // <---- Bounding box
+        if(objs[i].skeletons_avail==FALSE)
+        {
+
+            // ----> Bounding box
+            cv::Point tl;
+            tl.x = objs[i].bounding_box_2d[0][0];
+            tl.y = objs[i].bounding_box_2d[0][1];
+            cv::Point br;
+            br.x = objs[i].bounding_box_2d[2][0];
+            br.y = objs[i].bounding_box_2d[2][1];
+            cv::rectangle( image, tl, br, color, 3 );
+            // <---- Bounding box
+
+            // ----> Text info
+            int baseline=0;
+            int font_face = cv::FONT_HERSHEY_COMPLEX_SMALL;
+            double font_scale = 0.75;
+
+            std::stringstream txt_info;
+            txt_info << "Id: " << objs[i].id << " - " << ((objs[i].label==OBJECT_CLASS::PERSON)?"PERSON":"VEHICLE");
+
+            cv::Size txt_size = cv::getTextSize( txt_info.str(), font_face, font_scale, 1, &baseline );
+
+            int offset = 5;
+
+            cv::Point txt_tl;
+            cv::Point txt_br;
+            cv::Point txt_pos;
+
+            txt_tl.x = tl.x;
+            txt_tl.y = tl.y - (txt_size.height+2*offset);
+
+            txt_br.x = tl.x + (txt_size.width+2*offset);
+            txt_br.y = tl.y;
+
+            txt_pos.x = txt_tl.x + offset;
+            txt_pos.y = txt_br.y - offset;
+
+            if( !roi_render.contains(txt_tl) )
+            {
+                txt_tl.y = tl.y + (txt_size.height+2*baseline);
+                txt_pos.y = txt_tl.y - offset;
+            }
+
+            cv::rectangle( image, txt_tl, txt_br, color, 1 );
+            cv::putText( image, txt_info.str(), txt_pos, font_face, font_scale, color, 1, cv::LINE_AA );
+
+            if( !std::isnan(objs[i].position[0]) && !std::isnan(objs[i].position[1]) && !std::isnan(objs[i].position[2]) )
+            {
+                float dist = sqrtf( objs[i].position[0]*objs[i].position[0] +
+                        objs[i].position[1]*objs[i].position[1] +
+                        objs[i].position[2]*objs[i].position[2]);
+                char text[64];
+                sprintf(text, "%.2fm", abs(dist / 1000.0f));
+                putText( image, text, cv::Point2i(tl.x+(br.x-tl.x)/2 - 20, tl.y+(br.y-tl.y)/2 - 12),
+                         cv::FONT_HERSHEY_COMPLEX_SMALL, 0.75, color, 1 );
+            }
+            // <---- Text info
+        }
+        else
+        {
+            // ----> Skeletons
+            {
+                // ----> Bones
+                for (const auto& parts : skeleton::BODY_BONES)
+                {
+                    cv::Point2f kp_a;
+                    kp_a.x = objs[i].keypoint_2d[skeleton::getIdx(parts.first)][0];
+                    kp_a.y = objs[i].keypoint_2d[skeleton::getIdx(parts.first)][1];
+                    cv::Point2f kp_b;
+                    kp_b.x = objs[i].keypoint_2d[skeleton::getIdx(parts.second)][0];
+                    kp_b.y = objs[i].keypoint_2d[skeleton::getIdx(parts.second)][1];
+                    if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
+                        cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
+                }
+                // <---- Bones
+                // ----> Joints
+                for(int j=0; j<18; j++)
+                {
+                    cv::Point2f cv_kp;
+                    cv_kp.x = objs[i].keypoint_2d[j][0];
+                    cv_kp.y = objs[i].keypoint_2d[j][1];
+                    if (roi_render.contains(cv_kp))
+                    {
+                        cv::circle(image, cv_kp, 3, color+cv::Scalar(50,50,50), -1, cv::LINE_AA);
+                    }
+                }
+                // <---- Joints
+            }
+            // <---- Skeletons
+        }
+
     }
 }
 

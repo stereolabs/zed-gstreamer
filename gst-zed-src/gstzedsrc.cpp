@@ -1196,6 +1196,8 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
                     if( src->od_detection_model==GST_ZEDSRC_OD_HUMAN_BODY_FAST ||
                             src->od_detection_model==GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE )
                     {
+                        obj_data[idx].skeletons_avail = TRUE;
+
                         if(obj.keypoint_2d.size()>0)
                         {
                             memcpy( obj_data[idx].keypoint_2d, (void*)obj.keypoint_2d.data(), 36*sizeof(float) );
@@ -1235,6 +1237,10 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
                         }
                         memcpy( obj_data[idx].head_position, (void*)obj.head_position.ptr(), 3*sizeof(float) );
                         GST_TRACE_OBJECT( src, " * [%d] Copied head position", idx );
+                    }
+                    else
+                    {
+                        obj_data[idx].skeletons_avail = FALSE;
                     }
 
                     idx++;

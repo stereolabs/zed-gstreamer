@@ -2,6 +2,7 @@
 #define GSTZEDMETA_H
 
 #include <gst/gst.h>
+#include <vector>
 
 typedef struct _GstZedSrcMeta GstZedSrcMeta;
 typedef struct _ZedInfo ZedInfo;
@@ -107,6 +108,8 @@ struct _ZedObjectData {
 
     gfloat dimensions[3]; // 3D object dimensions: width, height, length
 
+    gboolean skeletons_avail;
+
     gfloat keypoint_2d[18][2]; // Negative coordinates -> point not valid
     gfloat keypoint_3d[18][3]; // Nan coordinates -> point not valid
 
@@ -127,10 +130,62 @@ struct _GstZedSrcMeta {
     guint8 obj_count;
     ZedObjectData objects[256];
 };
+
+namespace skeleton {
+
+enum class BODY_PARTS {
+    NOSE = 0,
+    NECK = 1,
+    RIGHT_SHOULDER = 2,
+    RIGHT_ELBOW= 3,
+    RIGHT_WRIST = 4,
+    LEFT_SHOULDER = 5,
+    LEFT_ELBOW = 6,
+    LEFT_WRIST = 7,
+    RIGHT_HIP = 8,
+    RIGHT_KNEE = 9,
+    RIGHT_ANKLE = 10,
+    LEFT_HIP = 11,
+    LEFT_KNEE = 12,
+    LEFT_ANKLE = 13,
+    RIGHT_EYE = 14,
+    LEFT_EYE = 15,
+    RIGHT_EAR = 16,
+    LEFT_EAR = 17,
+    LAST = 18
+};
+
+inline int getIdx(BODY_PARTS part) {
+    return static_cast<int>(part);
+}
+
+static const std::vector<std::pair< BODY_PARTS, BODY_PARTS>> BODY_BONES{
+    {BODY_PARTS::NOSE, BODY_PARTS::NECK},
+    {BODY_PARTS::NECK, BODY_PARTS::RIGHT_SHOULDER},
+    {BODY_PARTS::RIGHT_SHOULDER, BODY_PARTS::RIGHT_ELBOW},
+    {BODY_PARTS::RIGHT_ELBOW, BODY_PARTS::RIGHT_WRIST},
+    {BODY_PARTS::NECK, BODY_PARTS::LEFT_SHOULDER},
+    {BODY_PARTS::LEFT_SHOULDER, BODY_PARTS::LEFT_ELBOW},
+    {BODY_PARTS::LEFT_ELBOW, BODY_PARTS::LEFT_WRIST},
+    {BODY_PARTS::RIGHT_SHOULDER, BODY_PARTS::RIGHT_HIP},
+    {BODY_PARTS::RIGHT_HIP, BODY_PARTS::RIGHT_KNEE},
+    {BODY_PARTS::RIGHT_KNEE, BODY_PARTS::RIGHT_ANKLE},
+    {BODY_PARTS::LEFT_SHOULDER, BODY_PARTS::LEFT_HIP},
+    {BODY_PARTS::LEFT_HIP, BODY_PARTS::LEFT_KNEE},
+    {BODY_PARTS::LEFT_KNEE, BODY_PARTS::LEFT_ANKLE},
+    {BODY_PARTS::RIGHT_SHOULDER, BODY_PARTS::LEFT_SHOULDER},
+    {BODY_PARTS::RIGHT_HIP, BODY_PARTS::LEFT_HIP},
+    {BODY_PARTS::NOSE, BODY_PARTS::RIGHT_EYE},
+    {BODY_PARTS::RIGHT_EYE, BODY_PARTS::RIGHT_EAR},
+    {BODY_PARTS::NOSE, BODY_PARTS::LEFT_EYE},
+    {BODY_PARTS::LEFT_EYE, BODY_PARTS::LEFT_EAR}
+};
+}
+
 GType gst_zed_src_meta_api_get_type (void);
 #define GST_ZED_SRC_META_API_TYPE (gst_zed_src_meta_api_get_type())
 #define gst_buffer_get_zed_src_meta(b) \
-((GstZedSrcMeta*)gst_buffer_get_meta((b),GST_ZED_SRC_META_API_TYPE))
+    ((GstZedSrcMeta*)gst_buffer_get_meta((b),GST_ZED_SRC_META_API_TYPE))
 
 /* implementation */
 
