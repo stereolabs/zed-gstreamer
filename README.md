@@ -17,11 +17,12 @@
 # Key Features
 GStreamer plugin package for ZED Cameras. The package is composed of two plugins:
 
-* `zedsrc`: acquires camera color image and depth map and pushes them in a GStreamer pipeline
-* `zedmeta`: GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data)
+* `zedsrc`: acquires camera color image and depth map and pushes them in a GStreamer pipeline.
+* `zedmeta`: GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data).
 * `zeddemux`: receives a composite `zedsrc` stream (`color left + color right` data or `color left + depth map` + metadata), 
   processes the eventual depth data and pushes them in two separated new streams named `src_left` and `src_aux`. A third source pad is created for metadata to be externally processed.
 * `zeddatacsvsink`: example sink plugin that receives ZED metadata, extracts the Positional Tracking and the Sensors Data and save them in a CSV file.
+* `zedoddisplaysink`: example sink plugin that receives ZED combined stream with metadata, extracts Object Detection process result and displays it in a 2D window.
 
 ## Build
 
@@ -142,6 +143,10 @@ you want to install plugins
 
  * `is-depth`: indicates if the bottom stream of a composite `stream-type` of the `ZED Video Source Plugin` is a color image (Right image) or a depth map.
  * `stream-data`: Enable binary data streaming on `src_data` pad - {TRUE, FALSE} 
+ 
+ ### `ZED Data CSV sink Plugin` parameters
+ * `location`: Location of the CSV file to write
+ * `append`: Append data to an already existing CSV file
 
 ## Example pipelines
 
