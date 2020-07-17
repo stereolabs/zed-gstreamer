@@ -88,6 +88,7 @@ enum
 #define DEFAULT_PROP_IS_DEPTH       TRUE
 #define DEFAULT_PROP_STREAM_DATA   FALSE
 
+
 /* the capabilities of the inputs and outputs.
  *
  * describe the real formats here.
@@ -374,7 +375,6 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
     GstFlowReturn ret_left = GST_FLOW_ERROR;
     GstFlowReturn ret_aux = GST_FLOW_ERROR;
 
-
     GstClockTime timestamp = GST_CLOCK_TIME_NONE;
 
     timestamp = GST_BUFFER_TIMESTAMP (buf);
@@ -467,6 +467,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         left_framesize/=2;
 
         GST_TRACE ("Left buffer allocation - size %lu B", left_framesize );
+
         GstBuffer* left_proc_buf = gst_buffer_new_allocate(NULL, left_framesize, NULL );
 
         if( !GST_IS_BUFFER(left_proc_buf) )
@@ -560,6 +561,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             GST_BUFFER_TIMESTAMP(aux_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
 
             GST_TRACE ("Aux buffer push" );
+
             ret_aux = gst_pad_push(filter->srcpad_aux, aux_proc_buf);
 
             if( ret_aux != GST_FLOW_OK )

@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION "3.6")
 
+
 set(proj_name gst-plugins-zed)
 project(${proj_name})
 
@@ -42,6 +43,7 @@ macro_log_feature(OPENGL_FOUND "OpenGL library" "Required to build 'gstzedoddisp
 find_package(OpenCV)
 macro_log_feature(OpenCV_FOUND "OpenCV library" "Required to build 'gstzedoddisplaysink'" FALSE)
 
+
 # Setup common environment
 include_directories(
     .
@@ -59,8 +61,9 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   if (WIN32)
     get_filename_component(_PREFIX "${GSTREAMER_PLUGIN_DIR}/../" REALPATH)
   else ()
-    #set(_PREFIX "/usr/lib")
+    # set(_PREFIX "/usr/lib")
     get_filename_component(_PREFIX "${GSTREAMER_PLUGIN_DIR}/../" REALPATH)
+
   endif ()
   set(CMAKE_INSTALL_PREFIX "${_PREFIX}"
       CACHE PATH "Common prefix for all installed files (e.g., plugins will be installed under CMAKE_INSTALL_PREFIX/gstreamer-1.0)" FORCE)
@@ -112,7 +115,5 @@ else()
 endif()
 
 macro_display_feature_log()
-
-
 
 

@@ -1,14 +1,17 @@
 set (SOURCES
-  gstzeddemux.cpp)
+  gstzedsrc.cpp)
     
 set (HEADERS
-  gstzeddemux.h)
+  gstzedsrc.h)
 
-set(libname gstzeddemux)
+include_directories(${CUDA_INCLUDE_DIRS})
+include_directories(${ZED_INCLUDE_DIRS})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-message( " * ${libname} plugin added")
+link_directories(${ZED_LIBRARY_DIR})
+link_directories(${CUDA_LIBRARY_DIRS})
 
-link_directories(${LIBRARY_INSTALL_DIR})
+set(libname gstzed)
 
 add_library (${libname} MODULE
   ${SOURCES}
@@ -16,16 +19,15 @@ add_library (${libname} MODULE
 
 add_definitions(-std=c++11 -g -O2)
 
-target_link_libraries (${libname} LINK_PUBLIC
+SET(ZED_LIBS ${ZED_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_CUDART_LIBRARY} ${CUDA_NPP_LIBRARIES_ZED})
 
+target_link_libraries (${libname}
   ${GLIB2_LIBRARIES}
   ${GOBJECT_LIBRARIES}
   ${GSTREAMER_LIBRARY}
   ${GSTREAMER_BASE_LIBRARY}
   ${GSTREAMER_VIDEO_LIBRARY}
-  ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
-)
-
+  ${ZED_LIBS})
 
 if (WIN32)
   install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)
