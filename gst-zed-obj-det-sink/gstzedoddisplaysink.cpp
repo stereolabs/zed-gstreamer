@@ -134,7 +134,7 @@ gboolean gst_zedoddisplaysink_start(GstBaseSink* sink)
 
     GST_TRACE_OBJECT( displaysink, "Start" );
 
-    cv::namedWindow(displaysink->ocv_wnd_name, cv::WINDOW_NORMAL|cv::WINDOW_FREERATIO);
+    cv::namedWindow(displaysink->ocv_wnd_name, cv::WINDOW_AUTOSIZE);
 
     return TRUE;
 }
@@ -206,11 +206,11 @@ void draw_objects( cv::Mat& image, guint8 count, ZedObjectData* objs )
         cv::Point tl;
         tl.x = objs[i].bounding_box_2d[0][0];
         tl.y = objs[i].bounding_box_2d[0][1];
-        GST_TRACE( "Rect tl: %d,%d", tl.x,tl.y );
+        //GST_TRACE( "Rect tl: %d,%d", tl.x,tl.y );
         cv::Point br;
         br.x = objs[i].bounding_box_2d[2][0];
         br.y = objs[i].bounding_box_2d[2][1];
-        GST_TRACE( "Rect br: %d,%d", br.x,br.y );
+        //GST_TRACE( "Rect br: %d,%d", br.x,br.y );
         cv::rectangle( image, tl, br, color, 2 );
         // <---- Bounding box
     }
@@ -227,7 +227,7 @@ GstFlowReturn gst_zedoddisplaysink_render( GstBaseSink * sink, GstBuffer* buf )
     if(gst_buffer_map(buf, &map_in, GST_MAP_READ))
     {
         // Get left image (upper half memory buffer)
-        cv::Mat ocv_left( displaysink->img_left_h, displaysink->img_left_w, CV_8UC4, map_in.data );
+        cv::Mat ocv_left = cv::Mat( displaysink->img_left_h, displaysink->img_left_w, CV_8UC4, map_in.data ).clone();
 
         // Metadata
         GstZedSrcMeta* meta = (GstZedSrcMeta*)gst_buffer_get_meta( buf, GST_ZED_SRC_META_API_TYPE );

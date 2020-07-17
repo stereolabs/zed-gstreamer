@@ -14,6 +14,8 @@
 
 #include <opencv2/opencv.hpp>
 
+#include <atomic>
+
 G_BEGIN_DECLS
 
 #define GST_TYPE_ZED_OD_DISPLAY_SINK  (gst_zedoddisplaysink_get_type())
@@ -36,6 +38,7 @@ struct _GstZedOdDisplaySink
     guint img_left_h;
 
     std::string ocv_wnd_name;
+    std::atomic<cv::Mat*> atomic_frame;
 
     // Properties
     gboolean display3d;

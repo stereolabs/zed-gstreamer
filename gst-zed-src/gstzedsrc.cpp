@@ -477,6 +477,7 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->od_enable_tracking = DEFAULT_PROP_OD_TRACKING;
     src->od_enable_mask_output = DEFAULT_PROP_OD_MASK;
     src->od_detection_model = DEFAULT_PROP_OD_MODEL;
+    src->od_det_conf = DEFAULT_PROP_OD_CONFIDENCE;
     // <---- Parameters initialization
 
     src->stop_requested = FALSE;
@@ -1163,17 +1164,31 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
                     memcpy( obj_data[idx].velocity, (void*)obj.velocity.ptr(), 3*sizeof(float) );
                     GST_TRACE_OBJECT( src, " * [%d] Copied velocity", idx );
 
-                    memcpy( (uint8_t*)obj_data[idx].bounding_box_2d, (uint8_t*)obj.bounding_box_2d.data(),
-                            obj.bounding_box_2d.size()*2*sizeof(unsigned int) );
-                    GST_TRACE_OBJECT( src, " * [%d] Copied bbox 2D - %lu", idx, 8*sizeof(unsigned int) );
-                    for( int i=0; i<4; i++ )
+                    if(obj.bounding_box_2d.size()>0)
+                    {
+                        memcpy( (uint8_t*)obj_data[idx].bounding_box_2d, (uint8_t*)obj.bounding_box_2d.data(),
+                                obj.bounding_box_2d.size()*2*sizeof(unsigned int) );
+                        GST_TRACE_OBJECT( src, " * [%d] Copied bbox 2D - %lu", idx, 8*sizeof(unsigned int) );
+                    }
+                    else
+                    {
+                        GST_TRACE_OBJECT( src, " * [%d] bounding_box_2d empty", idx );
+                    }
+                    /*for( int i=0; i<4; i++ )
                     {
                         GST_TRACE_OBJECT( src, "\t* [%d] x_cp: %u, y_cp: %u", i, obj_data[idx].bounding_box_2d[i][0], obj_data[idx].bounding_box_2d[i][1] );
                         GST_TRACE_OBJECT( src, "\t* [%d] x_or: %u, y_or: %u", i, obj.bounding_box_2d[i].x, obj.bounding_box_2d[i].y );
-                    }
+                    }*/
 
-                    memcpy( obj_data[idx].bounding_box_3d, (void*)obj.bounding_box.data(), 24*sizeof(float) );
-                    GST_TRACE_OBJECT( src, " * [%d] Copied bbox 3D - %lu", idx, 24*sizeof(float));
+                    if(obj.bounding_box.size()>0)
+                    {
+                        memcpy( obj_data[idx].bounding_box_3d, (void*)obj.bounding_box.data(), 24*sizeof(float) );
+                        GST_TRACE_OBJECT( src, " * [%d] Copied bbox 3D - %lu", idx, 24*sizeof(float));
+                    }
+                    else
+                    {
+                        GST_TRACE_OBJECT( src, " * [%d] bounding_box empty", idx );
+                    }
 
                     memcpy( obj_data[idx].dimensions, (void*)obj.dimensions.ptr(), 3*sizeof(float) );
                     GST_TRACE_OBJECT( src, " * [%d] Copied dimensions", idx );
@@ -1181,15 +1196,43 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
                     if( src->od_detection_model==GST_ZEDSRC_OD_HUMAN_BODY_FAST ||
                             src->od_detection_model==GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE )
                     {
-                        memcpy( obj_data[idx].keypoint_2d, (void*)obj.keypoint_2d.data(), 36*sizeof(float) );
-                        GST_TRACE_OBJECT( src, " * [%d] Copied skeleton 2d - %lu", idx, obj.keypoint_2d.size());
-                        memcpy( obj_data[idx].keypoint_3d, (void*)obj.keypoint.data(), 54*sizeof(float) );
-                        GST_TRACE_OBJECT( src, " * [%d] Copied skeleton 3d - %lu", idx, obj.keypoint.size());
+                        if(obj.keypoint_2d.size()>0)
+                        {
+                            memcpy( obj_data[idx].keypoint_2d, (void*)obj.keypoint_2d.data(), 36*sizeof(float) );
+                            GST_TRACE_OBJECT( src, " * [%d] Copied skeleton 2d - %lu", idx, obj.keypoint_2d.size());
+                        }
+                        else
+                        {
+                            GST_TRACE_OBJECT( src, " * [%d] keypoint_2d empty", idx );
+                        }
+                        if(obj.keypoint.size()>0)
+                        {
+                            memcpy( obj_data[idx].keypoint_3d, (void*)obj.keypoint.data(), 54*sizeof(float) );
+                            GST_TRACE_OBJECT( src, " * [%d] Copied skeleton 3d - %lu", idx, obj.keypoint.size());
+                        }
+                        else
+                        {
+                            GST_TRACE_OBJECT( src, " * [%d] keypoint empty", idx );
+                        }
 
-                        memcpy( obj_data[idx].head_bounding_box_2d, (void*)obj.head_bounding_box_2d.data(), 8*sizeof(unsigned int) );
-                        GST_TRACE_OBJECT( src, " * [%d] Copied head bbox 2d - %lu", idx, obj.head_bounding_box_2d.size());
-                        memcpy( obj_data[idx].head_bounding_box_3d, (void*)obj.head_bounding_box.data(), 24*sizeof(float) );
-                        GST_TRACE_OBJECT( src, " * [%d] Copied head bbox 3d - %lu", idx, obj.head_bounding_box.size());
+                        if(obj.head_bounding_box_2d.size()>0)
+                        {
+                            memcpy( obj_data[idx].head_bounding_box_2d, (void*)obj.head_bounding_box_2d.data(), 8*sizeof(unsigned int) );
+                            GST_TRACE_OBJECT( src, " * [%d] Copied head bbox 2d - %lu", idx, obj.head_bounding_box_2d.size());
+                        }
+                        else
+                        {
+                            GST_TRACE_OBJECT( src, " * [%d] head_bounding_box_2d empty", idx );
+                        }
+                        if(obj.head_bounding_box.size()>0)
+                        {
+                            memcpy( obj_data[idx].head_bounding_box_3d, (void*)obj.head_bounding_box.data(), 24*sizeof(float) );
+                            GST_TRACE_OBJECT( src, " * [%d] Copied head bbox 3d - %lu", idx, obj.head_bounding_box.size());
+                        }
+                        else
+                        {
+                            GST_TRACE_OBJECT( src, " * [%d] head_bounding_box empty", idx );
+                        }
                         memcpy( obj_data[idx].head_position, (void*)obj.head_position.ptr(), 3*sizeof(float) );
                         GST_TRACE_OBJECT( src, " * [%d] Copied head position", idx );
                     }
