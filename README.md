@@ -182,6 +182,11 @@ you want to install plugins
     
     gst-launch-1.0 zedsrc stream-type=2 od-enabled=true od-detection-model=2 resolution=2 ! zedoddisplaysink
 
+### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + Skeleton Tracking result displaying + Depth displaying with FPS
+
+    gst-launch-1.0 zedsrc stream-type=4 resolution=2 od-detection-model=1 od-enabled=true ! zeddemux name=demux demux.src_left ! queue ! zedoddisplaysink demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+
+
 ## Related
 
 - [Stereolabs](https://www.stereolabs.com)

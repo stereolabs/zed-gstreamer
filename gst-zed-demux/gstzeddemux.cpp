@@ -372,6 +372,8 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
     GstMapInfo map_out_aux;
     GstMapInfo map_out_data;
 
+    GstZedSrcMeta* meta = nullptr;
+
     GstFlowReturn ret_left = GST_FLOW_ERROR;
     GstFlowReturn ret_aux = GST_FLOW_ERROR;
 
@@ -385,9 +387,12 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
     {
         GST_TRACE ("Input buffer size %lu B", map_in.size );
 
+        // Get metadata
+        meta = (GstZedSrcMeta*)gst_buffer_get_meta( buf, GST_ZED_SRC_META_API_TYPE );
+
+        // ----> Data buffer
         if(filter->stream_data)
         {
-            GstZedSrcMeta* meta = (GstZedSrcMeta*)gst_buffer_get_meta( buf, GST_ZED_SRC_META_API_TYPE );
 
 #if 0
             GST_LOG (" * [META] Stream type: %d", meta->stream_type );
@@ -441,6 +446,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 GST_BUFFER_DTS(data_buf) = GST_BUFFER_DTS (buf);
                 GST_BUFFER_TIMESTAMP(data_buf) = GST_BUFFER_TIMESTAMP (buf);
 
+
                 GST_TRACE ("Data buffer push" );
                 GstFlowReturn ret_data = gst_pad_push(filter->srcpad_data, data_buf);
 
@@ -461,6 +467,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 gst_buffer_unmap(data_buf, &map_out_data);
             }
         }
+        // <---- Data buffer
 
         // ----> Left buffer
         gsize left_framesize = map_in.size;
@@ -486,6 +493,18 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         {
             GST_TRACE ("Copying left buffer %lu B", map_out_left.size );
             memcpy(map_out_left.data, map_in.data, map_out_left.size);
+
+            if(meta)
+            {
+                // Add metadata
+                gst_buffer_add_zed_src_meta( left_proc_buf,
+                                             meta->info,
+                                             meta->pose,
+                                             meta->sens,
+                                             meta->od_enabled,
+                                             meta->obj_count,
+                                             meta->objects );
+            }
 
             GST_TRACE ("Left buffer set timestamp" );
             GST_BUFFER_PTS(left_proc_buf) = GST_BUFFER_PTS (buf);
@@ -553,6 +572,18 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 {
                     *(gst_out_data++) = static_cast<guint16>(*(gst_in_data++));
                 }
+            }
+
+            if(meta)
+            {
+                // Add metadata
+                gst_buffer_add_zed_src_meta( aux_proc_buf,
+                                             meta->info,
+                                             meta->pose,
+                                             meta->sens,
+                                             meta->od_enabled,
+                                             meta->obj_count,
+                                             meta->objects );
             }
 
             GST_TRACE ("Aux buffer set timestamp" );

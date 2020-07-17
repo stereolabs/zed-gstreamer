@@ -15,7 +15,13 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
                                                                                       "format = (string) { BGRA }, "
                                                                                       "width = (int) { 672, 1280, 1920, 2208 } , "
                                                                                       "height =  (int) { 752, 1440, 2160, 2484 } , "
-                                                                                      "framerate =  (fraction) { 15, 30, 60, 100 }") ) );
+                                                                                      "framerate =  (fraction) { 15, 30, 60, 100 }"
+                                                                                      ";"
+                                                                                      "video/x-raw, " // Single stream
+                                                                                      "format = (string) { BGRA }, "
+                                                                                      "width = (int) { 672, 1280, 1920, 2208 } , "
+                                                                                      "height =  (int) { 376, 720, 1080, 1242 } , "
+                                                                                      "framerate =  (fraction) { 15, 30, 60, 100 }")  ) );
 
 GST_DEBUG_CATEGORY_STATIC (gst_zedoddisplaysink_debug);
 #define GST_CAT_DEFAULT gst_zedoddisplaysink_debug
@@ -56,11 +62,11 @@ static void gst_zedoddisplaysink_class_init (GstZedOdDisplaySinkClass * klass)
     gobject_class->get_property = gst_zedoddisplaysink_get_property;
 
     // TODO UNCOMMENT WHEN 3D DISPLAY SINK IS READY
-//    g_object_class_install_property( gobject_class, PROP_DISPLAY3D,
-//                                     g_param_spec_boolean("display-3d", "Display results in 3D  ",
-//                                                          "Creates a 3D OpenGL View to display bounding boxes and skeletons",
-//                                                          DEFAULT_PROP_DISPLAY_3D,
-//                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    //    g_object_class_install_property( gobject_class, PROP_DISPLAY3D,
+    //                                     g_param_spec_boolean("display-3d", "Display results in 3D  ",
+    //                                                          "Creates a 3D OpenGL View to display bounding boxes and skeletons",
+    //                                                          DEFAULT_PROP_DISPLAY_3D,
+    //                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     gst_element_class_set_static_metadata (gstelement_class,
                                            "ZED Object Detection Display Sink",
@@ -157,7 +163,12 @@ static gboolean parse_sink_caps( GstZedOdDisplaySink* sink, GstCaps* sink_caps )
 
     gst_video_info_from_caps(&vinfo_in, sink_caps);
     sink->img_left_w = vinfo_in.width;
-    sink->img_left_h = vinfo_in.height/2; // The pad gets only composite stream inputs
+    sink->img_left_h = vinfo_in.height;
+    if(vinfo_in.height==752 || vinfo_in.height==1440 || vinfo_in.height==2160 || vinfo_in.height==2484)
+    {
+        sink->img_left_h/=2; // Only half buffer size if the stream is composite
+    }
+
 
     return TRUE;
 }

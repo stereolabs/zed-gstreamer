@@ -1241,6 +1241,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
                     else
                     {
                         obj_data[idx].skeletons_avail = FALSE;
+                        GST_TRACE_OBJECT( src, " * [%d] No Skeletons", idx );
                     }
 
                     idx++;
