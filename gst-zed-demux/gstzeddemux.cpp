@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GStreamer
  * Copyright (C) 2005 Thomas Vander Stichele <thomas@apestaart.org>
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
@@ -66,6 +66,7 @@
 #include <gst/gstcaps.h>
 
 #include "gstzeddemux.h"
+#include "gst-zed-meta/gstzedmeta.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_zeddemux_debug);
 #define GST_CAT_DEFAULT gst_zeddemux_debug
@@ -80,10 +81,13 @@ enum
 enum
 {
     PROP_0,
-    PROP_IS_DEPTH
+    PROP_IS_DEPTH,
+    PROP_STREAM_DATA
 };
 
-#define DEFAULT_PROP_IS_DEPTH    TRUE
+#define DEFAULT_PROP_IS_DEPTH       TRUE
+#define DEFAULT_PROP_STREAM_DATA   FALSE
+
 
 /* the capabilities of the inputs and outputs.
  *
@@ -123,6 +127,10 @@ static GstStaticPadTemplate src_aux_factory = GST_STATIC_PAD_TEMPLATE ("src_aux"
                                                                                          "height =  (int) { 376, 720, 1080, 1242 } , "
                                                                                          "framerate =  (fraction) { 15, 30, 60, 100 }") ) );
 
+static GstStaticPadTemplate src_data_factory = GST_STATIC_PAD_TEMPLATE ("src_data",
+                                                                        GST_PAD_SRC,
+                                                                        GST_PAD_ALWAYS,
+                                                                        GST_STATIC_CAPS ("application/data"));
 
 /* class initialization */
 G_DEFINE_TYPE(GstZedDemux, gst_zeddemux, GST_TYPE_ELEMENT);
@@ -153,16 +161,24 @@ gst_zeddemux_class_init (GstZedDemuxClass * klass)
                                      g_param_spec_boolean ("is-depth", "Depth", "Aux source is GRAY16 depth",
                                                            DEFAULT_PROP_IS_DEPTH, G_PARAM_READWRITE));
 
+    g_object_class_install_property (gobject_class, PROP_STREAM_DATA,
+                                     g_param_spec_boolean ("stream-data", "Stream Data",
+                                                           "Enable binary data streaming on `src_data` pad",
+                                                           DEFAULT_PROP_STREAM_DATA, G_PARAM_READWRITE));
+
     gst_element_class_set_static_metadata (gstelement_class,
-                                           "ZED Video Demuxer",
+                                           "ZED Composite Stream Demuxer",
                                            "Demuxer/Video",
-                                           "Stereolabs ZED video demuxer",
+                                           "Stereolabs ZED Stream Demuxer",
                                            "Stereolabs <support@stereolabs.com>");
 
     gst_element_class_add_pad_template (gstelement_class,
                                         gst_static_pad_template_get (&src_left_factory));
     gst_element_class_add_pad_template (gstelement_class,
                                         gst_static_pad_template_get (&src_aux_factory));
+    gst_element_class_add_pad_template (gstelement_class,
+                                        gst_static_pad_template_get (&src_data_factory));
+
     gst_element_class_add_pad_template (gstelement_class,
                                         gst_static_pad_template_get (&sink_factory));
 }
@@ -185,10 +201,14 @@ static void gst_zeddemux_init (GstZedDemux *filter)
     filter->srcpad_aux = gst_pad_new_from_static_template( &src_aux_factory, "src_aux" );
     gst_element_add_pad(GST_ELEMENT (filter), filter->srcpad_aux);
 
+    filter->srcpad_data = gst_pad_new_from_static_template( &src_data_factory, "src_data" );
+    gst_element_add_pad(GST_ELEMENT (filter), filter->srcpad_data);
+
     gst_pad_set_event_function( filter->sinkpad, GST_DEBUG_FUNCPTR(gst_zeddemux_sink_event) );
     gst_pad_set_chain_function( filter->sinkpad, GST_DEBUG_FUNCPTR(gst_zeddemux_chain) );
 
     filter->is_depth = DEFAULT_PROP_IS_DEPTH;
+    filter->stream_data = DEFAULT_PROP_STREAM_DATA;
     filter->caps_left = nullptr;
     filter->caps_aux = nullptr;
 }
@@ -205,6 +225,10 @@ gst_zeddemux_set_property (GObject * object, guint prop_id,
     case PROP_IS_DEPTH:
         filter->is_depth = g_value_get_boolean (value);
         GST_DEBUG( "Depth mode: %d", filter->is_depth );
+        break;
+    case PROP_STREAM_DATA:
+        filter->stream_data = g_value_get_boolean (value);
+        GST_DEBUG( "Data stream: %d", filter->stream_data );
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -224,6 +248,10 @@ gst_zeddemux_get_property (GObject * object, guint prop_id,
     case PROP_IS_DEPTH:
         g_value_set_boolean (value, filter->is_depth);
         GST_DEBUG( "Depth mode: %d", filter->is_depth );
+        break;
+    case PROP_STREAM_DATA:
+        g_value_set_boolean (value, filter->stream_data);
+        GST_DEBUG( "Data Stream: %d", filter->stream_data );
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -318,7 +346,7 @@ gst_zeddemux_sink_event(GstPad* pad, GstObject* parent, GstEvent* event)
         ret = set_out_caps( filter, caps );
 
         /* and forward */
-        //ret = gst_pad_event_default (pad, parent, event);
+        ret = gst_pad_event_default (pad, parent, event);
         break;
     }
     default:
@@ -337,11 +365,12 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
     filter = GST_ZEDDEMUX (parent);
 
-    GST_DEBUG_OBJECT( filter, "Chain" );
+    GST_TRACE_OBJECT( filter, "Chain" );
 
     GstMapInfo map_in;
     GstMapInfo map_out_left;
     GstMapInfo map_out_aux;
+    GstMapInfo map_out_data;
 
     GstFlowReturn ret_left = GST_FLOW_ERROR;
     GstFlowReturn ret_aux = GST_FLOW_ERROR;
@@ -349,18 +378,96 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
     GstClockTime timestamp = GST_CLOCK_TIME_NONE;
 
     timestamp = GST_BUFFER_TIMESTAMP (buf);
-    GST_DEBUG ("timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS (timestamp));
+    GST_LOG ("timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS (timestamp));
 
-    GST_DEBUG_OBJECT( filter, "Processing ..." );
+    GST_TRACE_OBJECT( filter, "Processing ..." );
     if(gst_buffer_map(buf, &map_in, GST_MAP_READ))
     {
-        GST_DEBUG ("Input buffer size %lu B", map_in.size );
+        GST_TRACE ("Input buffer size %lu B", map_in.size );
+
+        if(filter->stream_data)
+        {
+            GstZedSrcMeta* meta = (GstZedSrcMeta*)gst_buffer_get_meta( buf, GST_ZED_SRC_META_API_TYPE );
+
+#if 0
+            GST_LOG (" * [META] Stream type: %d", meta->stream_type );
+            GST_LOG (" * [META] Camera model: %d", meta->cam_model );
+            if( meta->pose.pose_avail==TRUE )
+            {
+                GST_LOG (" * [META] Pos X: %g mm", meta->pose.pos[0] );
+                GST_LOG (" * [META] Pos Y: %g mm", meta->pose.pos[1] );
+                GST_LOG (" * [META] Pos Z: %g mm", meta->pose.pos[2] );
+                GST_LOG (" * [META] Orient X: %g rad", meta->pose.orient[0] );
+                GST_LOG (" * [META] Orient Y: %g rad", meta->pose.orient[1] );
+                GST_LOG (" * [META] Orient Z: %g rad", meta->pose.orient[2] );
+            }
+            else
+            {
+                GST_LOG (" * [META] Positional tracking disabled" );
+            }
+
+            if( meta->sens.sens_avail==TRUE )
+            {
+                GST_LOG (" * [META] IMU acc X: %g m/sec²", meta->sens.imu.acc[0] );
+                GST_LOG (" * [META] IMU acc Y: %g m/sec²", meta->sens.imu.acc[1] );
+                GST_LOG (" * [META] IMU acc Z: %g m/sec²", meta->sens.imu.acc[2] );
+                GST_LOG (" * [META] IMU gyro X: %g rad/sec", meta->sens.imu.gyro[0] );
+                GST_LOG (" * [META] IMU gyro Y: %g rad/sec", meta->sens.imu.gyro[1] );
+                GST_LOG (" * [META] IMU gyro Z: %g rad/sec", meta->sens.imu.gyro[2] );
+                GST_LOG (" * [META] MAG X: %g uT", meta->sens.mag.mag[0] );
+                GST_LOG (" * [META] MAG Y: %g uT", meta->sens.mag.mag[1] );
+                GST_LOG (" * [META] MAG Z: %g uT", meta->sens.mag.mag[2] );
+                GST_LOG (" * [META] Env Temp: %g °C", meta->sens.env.temp );
+                GST_LOG (" * [META] Pressure: %g hPa", meta->sens.env.press );
+                GST_LOG (" * [META] Temp left: %g °C", meta->sens.temp.temp_cam_left );
+                GST_LOG (" * [META] Temp right: %g °C", meta->sens.temp.temp_cam_right );
+            }
+            else
+            {
+                GST_LOG (" * [META] Sensors data not available" );
+            }
+#endif
+
+            gsize data_size = sizeof(GstZedSrcMeta);
+            GstBuffer* data_buf = gst_buffer_new_allocate(NULL, data_size, NULL );
+
+            if( gst_buffer_map(data_buf, &map_out_data, (GstMapFlags)(GST_MAP_READWRITE)) )
+            {
+                GST_TRACE ("Copying data buffer %lu B", map_out_data.size );
+                memcpy(map_out_data.data, meta, map_out_data.size);
+
+                GST_TRACE ("Data buffer set timestamp" );
+                GST_BUFFER_PTS(data_buf) = GST_BUFFER_PTS (buf);
+                GST_BUFFER_DTS(data_buf) = GST_BUFFER_DTS (buf);
+                GST_BUFFER_TIMESTAMP(data_buf) = GST_BUFFER_TIMESTAMP (buf);
+
+                GST_TRACE ("Data buffer push" );
+                GstFlowReturn ret_data = gst_pad_push(filter->srcpad_data, data_buf);
+
+                if( ret_data != GST_FLOW_OK )
+                {
+                    GST_DEBUG_OBJECT( filter, "Error pushing data buffer: %s", gst_flow_get_name (ret_data));
+
+                    // ----> Release incoming buffer
+                    gst_buffer_unmap( buf, &map_in );
+                    gst_buffer_unref(buf);
+                    GST_TRACE ("Data buffer unmap" );
+                    gst_buffer_unmap(data_buf, &map_out_data);
+                    // <---- Release incoming buffer
+                    return ret_data;
+                }
+
+                GST_TRACE ("Data buffer unmap" );
+                gst_buffer_unmap(data_buf, &map_out_data);
+            }
+        }
 
         // ----> Left buffer
         gsize left_framesize = map_in.size;
         left_framesize/=2;
 
-        GST_DEBUG ("Left buffer allocation - size %lu B", left_framesize );
+        GST_TRACE ("Left buffer allocation - size %lu B", left_framesize );
+
         GstBuffer* left_proc_buf = gst_buffer_new_allocate(NULL, left_framesize, NULL );
 
         if( !GST_IS_BUFFER(left_proc_buf) )
@@ -377,24 +484,31 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
         if( gst_buffer_map(left_proc_buf, &map_out_left, (GstMapFlags)(GST_MAP_READWRITE)) )
         {
-            GST_DEBUG ("Copying left buffer %lu B", map_out_left.size );
+            GST_TRACE ("Copying left buffer %lu B", map_out_left.size );
             memcpy(map_out_left.data, map_in.data, map_out_left.size);
 
-            GST_DEBUG ("Left buffer set timestamp" );
+            GST_TRACE ("Left buffer set timestamp" );
             GST_BUFFER_PTS(left_proc_buf) = GST_BUFFER_PTS (buf);
             GST_BUFFER_DTS(left_proc_buf) = GST_BUFFER_DTS (buf);
             GST_BUFFER_TIMESTAMP(left_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
 
-            GST_DEBUG ("Left buffer push" );
+            GST_TRACE ("Left buffer push" );
             ret_left = gst_pad_push(filter->srcpad_left, left_proc_buf);
 
             if( ret_left != GST_FLOW_OK )
             {
                 GST_DEBUG_OBJECT( filter, "Error pushing left buffer: %s", gst_flow_get_name (ret_left));
+
+                // ----> Release incoming buffer
+                gst_buffer_unmap( buf, &map_in );
+                gst_buffer_unref(buf);
+                GST_TRACE ("Left buffer unmap" );
+                gst_buffer_unmap(left_proc_buf, &map_out_left);
+                // <---- Release incoming buffer
                 return ret_left;
             }
 
-            GST_DEBUG ("Left buffer unmap" );
+            GST_TRACE ("Left buffer unmap" );
             gst_buffer_unmap(left_proc_buf, &map_out_left);
         }
         // <---- Left buffer
@@ -407,7 +521,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             aux_framesize/=2; // 16bit data
         }
 
-        GST_DEBUG ("Aux buffer allocation - size %lu B", aux_framesize );
+        GST_TRACE ("Aux buffer allocation - size %lu B", aux_framesize );
         GstBuffer* aux_proc_buf = gst_buffer_new_allocate(NULL, aux_framesize, NULL );
 
         if( !GST_IS_BUFFER(aux_proc_buf) )
@@ -425,12 +539,12 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         {
             if( filter->is_depth == FALSE )
             {
-                GST_DEBUG ("Copying aux buffer %lu B", map_out_aux.size );
+                GST_TRACE ("Copying aux buffer %lu B", map_out_aux.size );
                 memcpy(map_out_aux.data, map_in.data+map_out_left.size, map_out_aux.size);
             }
             else
             {
-                GST_DEBUG ("Converting aux buffer %lu B", map_out_aux.size );
+                GST_TRACE ("Converting aux buffer %lu B", map_out_aux.size );
 
                 guint32* gst_in_data = (guint32*)(map_in.data + map_out_left.size);
                 guint16* gst_out_data = (guint16*)(map_out_aux.data);
@@ -441,13 +555,13 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 }
             }
 
-            GST_DEBUG ("Aux buffer set timestamp" );
+            GST_TRACE ("Aux buffer set timestamp" );
             GST_BUFFER_PTS(aux_proc_buf) = GST_BUFFER_PTS (buf);
             GST_BUFFER_DTS(aux_proc_buf) = GST_BUFFER_DTS (buf);
             GST_BUFFER_TIMESTAMP(aux_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
 
+            GST_TRACE ("Aux buffer push" );
 
-            GST_DEBUG ("Aux buffer push" );
             ret_aux = gst_pad_push(filter->srcpad_aux, aux_proc_buf);
 
             if( ret_aux != GST_FLOW_OK )
@@ -457,11 +571,13 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 // ----> Release incoming buffer
                 gst_buffer_unmap( buf, &map_in );
                 gst_buffer_unref(buf);
+                GST_TRACE ("Aux buffer unmap" );
+                gst_buffer_unmap(aux_proc_buf, &map_out_aux);
                 // <---- Release incoming buffer
                 return ret_aux;
             }
 
-            GST_DEBUG ("Aux buffer unmap" );
+            GST_TRACE ("Aux buffer unmap" );
             gst_buffer_unmap(aux_proc_buf, &map_out_aux);
         }
         // <---- Aux buffer
@@ -471,12 +587,12 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         gst_buffer_unref(buf);
         // <---- Release incoming buffer
     }
-    GST_DEBUG ("... processed" );
+    GST_TRACE ("... processed" );
 
     if(ret_left==GST_FLOW_OK && ret_aux==GST_FLOW_OK)
     {
-        GST_DEBUG_OBJECT( filter, "Chain OK" );
-        GST_DEBUG_OBJECT( filter, "**************************" );
+        GST_TRACE_OBJECT( filter, "Chain OK" );
+        GST_LOG( "**************************" );
         return GST_FLOW_OK;
     }
 
@@ -494,10 +610,10 @@ static gboolean plugin_init (GstPlugin * plugin)
    *
    * exchange the string 'Template plugin' with your description
    */
-    GST_DEBUG_CATEGORY_INIT (gst_zeddemux_debug, "zeddemux",
+    GST_DEBUG_CATEGORY_INIT( gst_zeddemux_debug, "zeddemux",
                              0, "debug category for zeddemux element");
 
-    gst_element_register (plugin, "zeddemux", GST_RANK_NONE,
+    gst_element_register( plugin, "zeddemux", GST_RANK_NONE,
                           gst_zeddemux_get_type());
 
     return TRUE;
@@ -510,7 +626,7 @@ static gboolean plugin_init (GstPlugin * plugin)
 GST_PLUGIN_DEFINE( GST_VERSION_MAJOR,
                    GST_VERSION_MINOR,
                    zeddemux,
-                   "ZED stream demuxer",
+                   "ZED composite stream demuxer",
                    plugin_init,
                    GST_PACKAGE_VERSION,
                    GST_PACKAGE_LICENSE,

@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION "2.8.0")
+cmake_minimum_required(VERSION "3.6")
+
 
 set(proj_name gst-plugins-zed)
 project(${proj_name})
@@ -25,10 +26,23 @@ find_package(GObject REQUIRED)
 macro_log_feature(GOBJECT_FOUND "GObject" "Required to build ${proj_name}" "http://www.gtk.org/" TRUE)
 
 find_package(ZED 3 REQUIRED)
-macro_log_feature(ZED_FOUND "ZED SDK" "Required to build ${proj_name}" "www.stereolabs.com" TRUE "3.0")
+macro_log_feature(ZED_FOUND "ZED SDK" "Required to build 'gstzed' and 'gstzedoddisplaysink'" "www.stereolabs.com" TRUE "3.0")
 
-find_package(CUDA ${ZED_CUDA_VERSION} EXACT REQUIRED)
-macro_log_feature(ZED_FOUND "Nvidia CUDA library" "Required to build ${proj_name}" "www.nvidia.com" TRUE "${ZED_CUDA_VERSION}")
+find_package(CUDA ${ZED_CUDA_VERSION} EXACT)
+macro_log_feature(CUDA_FOUND "Nvidia CUDA library" "Required to build 'gstzed'" "www.nvidia.com" TRUE "${ZED_CUDA_VERSION}")
+
+find_package(GLUT)
+macro_log_feature(GLUT_FOUND "GLUT library" "Required to build 'gstzedoddisplaysink'" FALSE)
+
+find_package(GLEW)
+macro_log_feature(GLEW_FOUND "GLEW library" "Required to build 'gstzedoddisplaysink'" FALSE)
+
+find_package(OpenGL)
+macro_log_feature(OPENGL_FOUND "OpenGL library" "Required to build 'gstzedoddisplaysink'" FALSE)
+
+find_package(OpenCV)
+macro_log_feature(OpenCV_FOUND "OpenCV library" "Required to build 'gstzedoddisplaysink'" FALSE)
+
 
 # Setup common environment
 include_directories(
@@ -47,7 +61,9 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   if (WIN32)
     get_filename_component(_PREFIX "${GSTREAMER_PLUGIN_DIR}/../" REALPATH)
   else ()
-    set(_PREFIX "/usr/lib")
+    # set(_PREFIX "/usr/lib")
+    get_filename_component(_PREFIX "${GSTREAMER_PLUGIN_DIR}/../" REALPATH)
+
   endif ()
   set(CMAKE_INSTALL_PREFIX "${_PREFIX}"
       CACHE PATH "Common prefix for all installed files (e.g., plugins will be installed under CMAKE_INSTALL_PREFIX/gstreamer-1.0)" FORCE)
@@ -66,7 +82,38 @@ if (WIN32 AND NOT PDB_INSTALL_DIR)
       CACHE PATH "Location to install PDB debug files (e.g., libgstpylon.pdb)")
 endif()
 
-add_subdirectory(gst-zed)
+if (NOT INCLUDE_INSTALL_DIR)
+  get_filename_component(INC_PREFIX "${GSTREAMER_PLUGIN_DIR}/../../../" REALPATH)
+  set(INCLUDE_INSTALL_DIR "${INC_PREFIX}/include//gstreamer-1.0/gst/zed/"
+      CACHE PATH "Location to install include headers" FORCE)
+endif ()
+
+message("")
+message("Plugin install dir:")
+message(${PLUGIN_INSTALL_DIR})
+message("")
+message("Library install dir:")
+message(${LIBRARY_INSTALL_DIR})
+message("")
+message("Include install dir:")
+message(${INCLUDE_INSTALL_DIR})
+message("")
+
+add_subdirectory(gst-zed-meta)
+if(ZED_FOUND)
+	add_subdirectory(gst-zed-src)
+else()
+    message( "ZED SDK not available. 'zedsrc' will not be installed")
+endif()
 add_subdirectory(gst-zed-demux)
+add_subdirectory(gst-zed-data-csv-sink)
+
+if(ZED_FOUND AND GLUT_FOUND AND GLEW_FOUND AND OPENGL_FOUND AND OpenCV_FOUND)
+    add_subdirectory(gst-zed-obj-det-sink)
+else()
+    message( "Missing one or more libraries. 'gstzedoddisplaysink' will not be installed")
+endif()
 
 macro_display_feature_log()
+
+

@@ -16,4 +16,8 @@ my-plugin-*.tar.*
 *.autosave
 *.user
 *.user.*
+<<<<<<< HEAD
+*build*
+=======
+>>>>>>> master
 

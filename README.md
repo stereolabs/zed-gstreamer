@@ -7,8 +7,13 @@
 <p align="center">
   <a href="#key-features">Key Features</a> •
   <a href="#build">Build</a> •
+<<<<<<< HEAD
+  <a href="#plugins-parameters">Plugins parameters</a> • 
+  <a href="#example-pipelines">Example pipelines</a> • 
+=======
   <a href="#plugins-parameters">Plugins parameters</a> •
   <a href="#example-pipelines">Example pipelines</a> •
+>>>>>>> master
   <a href="#related">Related</a> •
   <a href="#license">License</a>
 </p>
@@ -18,7 +23,14 @@
 GStreamer plugin package for ZED Cameras. The package is composed of two plugins:
 
 * `zedsrc`: acquires camera color image and depth map and pushes them in a GStreamer pipeline
+<<<<<<< HEAD
+* `zedmeta`: GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data)
+* `zeddemux`: receives a composite `zedsrc` stream (`color left + color right` data or `color left + depth map` + metadata), 
+  processes the eventual depth data and pushes them in two separated new streams named `src_left` and `src_aux`. A third source pad is created for metadata to be externally processed.
+* `zeddatacsvsink`: example sink plugin that receives ZED metadata, extracts the Positional Tracking and the Sensors Data and save them in a CSV file.
+=======
 * `zeddemux`: receives a composite `zedsrc` stream (`color left + color right` data or `color left + depth map`), processes the eventual depth data and pushes them in two separated new streams named `src_left` and `src_aux`
+>>>>>>> master
 
 ## Build
 
@@ -28,11 +40,14 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
  * CMake (v3.1+)
  * GStreamer
 
+<<<<<<< HEAD
+=======
 ### GStreamer Installation
  * Follow the installation guide for GStreamer [here](https://gstreamer.freedesktop.org/documentation/installing/index.html?gi-language=c)
  To build on Linux, you also need to install the dev package with :
  `$ sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev`
 
+>>>>>>> master
 ### Windows installation
 
  * Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/)
@@ -47,7 +62,11 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
   build. Check `cmake/modules` for any paths you may need to set.
  * Run the following commands from a terminal or command prompt, assuming CMake
   and Git are in your `PATH`.
+<<<<<<< HEAD
+	    
+=======
 
+>>>>>>> master
      ```
      git clone https://github.com/stereolabs/zed-gstreamer.git
      cd zed-gstreamer
@@ -88,6 +107,9 @@ you want to install plugins
     $ cd build
     $ cmake -DCMAKE_BUILD_TYPE=Release ..
     $ make
+<<<<<<< HEAD
+    $ sudo make install 
+=======
     $ sudo make install
 
 #### Add plugin library path
@@ -97,17 +119,33 @@ you want to install plugins
     $ echo "export GST_PLUGIN_PATH=/usr/lib/gstreamer-1.0/" >> ~/.bashrc
 
 Close the console
+>>>>>>> master
 
 ### Installation test
 
  * Check `ZED Video Source Plugin` installation inspecting its properties:
+<<<<<<< HEAD
+ 
+=======
 
+>>>>>>> master
       `gst-inspect-1.0 zedsrc`
 
  * Check `ZED Video Demuxer` installation inspecting its properties:
 
       `gst-inspect-1.0 zeddemux`
 
+<<<<<<< HEAD
+ * Check `ZED CSV Sink Plugin` installation inspecting its properties:
+
+      `gst-inspect-1.0 zeddatacsvsink`
+
+ * Check `ZED Object Detection Display Sink Plugin` installation inspecting its properties:
+
+      `gst-inspect-1.0 zedoddisplaysink`
+
+=======
+>>>>>>> master
 ## Plugins parameters
 
 ### `ZED Video Source Plugin` parameters
@@ -121,15 +159,69 @@ Close the console
  * `svo-file-path`: SVO file path for SVO input
  * `stream-ip-addr`: device IP address for remote input
  * `stream-port`: IP port for remote input
+<<<<<<< HEAD
+ * `stream-type`: type of video stream - {Left image (0), Right image (1), Stereo couple (2), 16 bit depth (3), Left+Depth (4)}
+ * `min-depth`: Minimum depth value
+ * `max-depth `: Maximum depth value
+ * `disable-self-calib`: Disable the self calibration processing when the camera is opened - {TRUE, FALSE}
+ * `depth-stability`: Enable depth stabilization - {TRUE, FALSE} 
+ * `pos-tracking`: Enable positional tracking - {TRUE, FALSE}
+ * `cam-static`: Set to TRUE if the camera is static - {TRUE, FALSE}
+ * `coord-system`: 3D Coordinate System - {Image (0) - Left handed, Y up (1) - Right handed, Y up (2) - Right handed, Z up (3) - Left handed, Z up (4) - Right handed, Z up, X fwd (5)}
+ * `od-enabled `: Enable Object Detection - {TRUE, FALSE}
+ * `od-tracking `: Enable tracking for the detected objects - {TRUE, FALSE} 
+ * `od-detection-model`: Object Detection Model - {Multi class (0), Skeleton tracking FAST (1), Skeleton tracking ACCURATE (2)}
+ * `od-confidence`: Minimum Detection Confidence - [0,100]
+=======
  * `stream-type`: type of video stream - {Left image (0), Right image (1), Stereo couple (2), 16 bit depth (3), Left+Depth (4) }
  * `min-depth`: Minimum depth value
  * `max-depth `: Maximum depth value
  * `disable-self-calib`: Disable the self calibration processing when the camera is opened - {TRUE, FALSE}
  * `depth-stability`: Enable depth stabilization - {TRUE, FALSE}
+>>>>>>> master
 
 ### `ZED Video Demuxer Plugin` parameters
 
  * `is-depth`: indicates if the bottom stream of a composite `stream-type` of the `ZED Video Source Plugin` is a color image (Right image) or a depth map.
+<<<<<<< HEAD
+ * `stream-data`: Enable binary data streaming on `src_data` pad - {TRUE, FALSE} 
+
+## Example pipelines
+
+### Local RGB stream + RGB rendering
+
+    gst-launch-1.0 zedsrc ! autovideoconvert ! fpsdisplaysink
+
+### Local 16 bit Depth stream + Depth rendering
+
+    gst-launch-1.0 zedsrc stream-type=1 ! autovideoconvert ! fpsdisplaysink
+
+### Local Left/Right stream + demux + double RGB rendering
+
+    gst-launch-1.0 zedsrc stream-type=2 ! queue ! zeddemux is-depth=false name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+
+### Local Left/Depth stream + demux + double streams rendering
+
+    gst-launch-1.0 zedsrc stream-type=4 ! queue ! zeddemux name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+
+### Local Left/Depth stream + demux + double streams rendering + data saving on CSV file
+
+    gst-launch-1.0 zedsrc stream-type=4 ! zeddemux stream-data=TRUE name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink demux.src_data ! queue ! zeddatacsvsink location="${HOME}/test_csv.csv" append=FALSE
+
+### Local Left/Right stream + Multiclass Object Detection result displaying
+    
+    gst-launch-1.0 zedsrc stream-type=2 od-enabled=true od-detection-model=0 resolution=2 ! zedoddisplaysink
+
+### Local Left/Right stream + Skeleton Tracking result displaying
+    
+    gst-launch-1.0 zedsrc stream-type=2 od-enabled=true od-detection-model=1 resolution=2 ! zedoddisplaysink
+
+### Local Left/Right stream + Accurate Skeleton Tracking result displaying
+    
+    gst-launch-1.0 zedsrc stream-type=2 od-enabled=true od-detection-model=2 resolution=2 ! zedoddisplaysink
+
+
+=======
 
 ## Example pipelines
 
@@ -149,6 +241,7 @@ Close the console
 
     gst-launch-1.0 zedsrc stream-type=4 ! queue ! zeddemux name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
 
+>>>>>>> master
 ## Related
 
 - [Stereolabs](https://www.stereolabs.com)
