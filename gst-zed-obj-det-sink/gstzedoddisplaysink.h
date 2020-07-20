@@ -9,9 +9,6 @@
 #include <string.h>
 #include <fstream>
 
-#include "GLViewer.hpp"
-#include "TrackingViewer.hpp"
-
 #include <opencv2/opencv.hpp>
 
 #include <atomic>

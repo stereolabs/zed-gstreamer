@@ -31,18 +31,8 @@ macro_log_feature(ZED_FOUND "ZED SDK" "Required to build 'gstzed' and 'gstzedodd
 find_package(CUDA ${ZED_CUDA_VERSION} EXACT)
 macro_log_feature(CUDA_FOUND "Nvidia CUDA library" "Required to build 'gstzed'" "www.nvidia.com" TRUE "${ZED_CUDA_VERSION}")
 
-find_package(GLUT)
-macro_log_feature(GLUT_FOUND "GLUT library" "Required to build 'gstzedoddisplaysink'" FALSE)
-
-find_package(GLEW)
-macro_log_feature(GLEW_FOUND "GLEW library" "Required to build 'gstzedoddisplaysink'" FALSE)
-
-find_package(OpenGL)
-macro_log_feature(OPENGL_FOUND "OpenGL library" "Required to build 'gstzedoddisplaysink'" FALSE)
-
 find_package(OpenCV)
 macro_log_feature(OpenCV_FOUND "OpenCV library" "Required to build 'gstzedoddisplaysink'" FALSE)
-
 
 # Setup common environment
 include_directories(
@@ -108,10 +98,10 @@ endif()
 add_subdirectory(gst-zed-demux)
 add_subdirectory(gst-zed-data-csv-sink)
 
-if(ZED_FOUND AND GLUT_FOUND AND GLEW_FOUND AND OPENGL_FOUND AND OpenCV_FOUND)
+if(OpenCV_FOUND)
     add_subdirectory(gst-zed-obj-det-sink)
 else()
-    message( "Missing one or more libraries. 'gstzedoddisplaysink' will not be installed")
+    message( "OpenCV not available. 'gstzedoddisplaysink' will not be installed")
 endif()
 
 macro_display_feature_log()

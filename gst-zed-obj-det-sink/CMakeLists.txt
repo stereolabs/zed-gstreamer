@@ -1,30 +1,18 @@
 set (SOURCES
   gstzedoddisplaysink.cpp
-  TrackingViewer.cpp
-  GLViewer.cpp)
+)
     
 set (HEADERS
   gstzedoddisplaysink.h
-  utils.hpp
-  TrackingViewer.hpp
-  GLViewer.hpp)
+)
 
 set(libname gstzedoddisplaysink)
 
 message( " * ${libname} plugin added")
 
 include_directories(${OpenCV_INCLUDE_DIRS})
-include_directories(${GLEW_INCLUDE_DIRS})
-include_directories(${GLUT_INCLUDE_DIR})
-include_directories(${CUDA_INCLUDE_DIRS})
-include_directories(${ZED_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-link_directories(${ZED_LIBRARY_DIR})
-link_directories(${GLEW_LIBRARY_DIRS})
-link_directories(${GLUT_LIBRARY_DIRS})
-link_directories(${OpenGL_LIBRARY_DIRS})
-link_directories(${CUDA_LIBRARY_DIRS})
 link_directories(${OpenCV_LIBRARY_DIRS})
 link_directories(${LIBRARY_INSTALL_DIR})
 
@@ -42,11 +30,7 @@ target_link_libraries (${libname} LINK_PUBLIC
   ${GSTREAMER_LIBRARY}
   ${GSTREAMER_BASE_LIBRARY}
   ${GSTREAMER_VIDEO_LIBRARY}
-  ${ZED_LIBS}
-  ${OPENGL_LIBRARIES}
   ${OpenCV_LIBRARIES}
-  ${GLUT_LIBRARY}
-  ${GLEW_LIBRARIES}
   ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
 )
 
