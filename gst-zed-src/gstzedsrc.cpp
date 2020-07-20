@@ -947,7 +947,12 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     // <---- Clock update
 
     // Memory mapping
-    gst_buffer_map( buf, &minfo, GST_MAP_WRITE );
+    if( FALSE==gst_buffer_map( buf, &minfo, GST_MAP_WRITE ) )
+    {
+        GST_ELEMENT_ERROR (src, RESOURCE, FAILED,
+                           ("Failed to map buffer for writing" ), (NULL));
+        return GST_FLOW_ERROR;
+    }
 
     // ZED Mats
     sl::Mat left_img;
@@ -1022,9 +1027,12 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     // <---- Memory copy
 
     // ----> Info metadata
+    sl::CameraInformation cam_info = src->zed.getCameraInformation();
     ZedInfo info;
-    info.cam_model = (gint) src->zed.getCameraInformation().camera_model;
+    info.cam_model = (gint) cam_info.camera_model;
     info.stream_type = src->stream_type;
+    info.grab_frame_width = cam_info.camera_configuration.resolution.width;
+    info.grab_frame_height = cam_info.camera_configuration.resolution.height;
     // <---- Info metadat
 
     // ----> Positional Tracking metadata
@@ -1265,12 +1273,12 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF (gst_element_get_base_time (GST_ELEMENT (src)),
                                                 clock_time);
     GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
-
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
     // <---- Timestamp meta-data
 
     // Buffer release
     gst_buffer_unmap( buf, &minfo );
+    // gst_buffer_unref(buf); // NOTE: do not uncomment to not crash
 
     if (src->stop_requested) {
         return GST_FLOW_FLUSHING;

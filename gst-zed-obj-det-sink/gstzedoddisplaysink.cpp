@@ -169,7 +169,6 @@ static gboolean parse_sink_caps( GstZedOdDisplaySink* sink, GstCaps* sink_caps )
         sink->img_left_h/=2; // Only half buffer size if the stream is composite
     }
 
-
     return TRUE;
 }
 
@@ -201,7 +200,7 @@ gboolean gst_zedoddisplaysink_event (GstBaseSink * sink, GstEvent * event)
         break;
     }
 
-    return GST_BASE_SINK_CLASS(gst_zedoddisplaysink_parent_class)->event (sink, event);
+    return GST_BASE_SINK_CLASS(gst_zedoddisplaysink_parent_class)->event(sink, event);
 }
 
 void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs )
@@ -311,7 +310,6 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs )
             }
             // <---- Skeletons
         }
-
     }
 }
 
@@ -331,8 +329,16 @@ GstFlowReturn gst_zedoddisplaysink_render( GstBaseSink * sink, GstBuffer* buf )
         // Metadata
         GstZedSrcMeta* meta = (GstZedSrcMeta*)gst_buffer_get_meta( buf, GST_ZED_SRC_META_API_TYPE );
 
+        if( meta==NULL ) // Metadata not found
+        {
+            GST_ELEMENT_ERROR (sink, RESOURCE, FAILED,
+                               ("No ZED metadata [GstZedSrcMeta] found in the stream'" ), (NULL));
+            return GST_FLOW_ERROR;
+        }
+
         GST_TRACE_OBJECT( displaysink, "Cam. Model: %d",meta->info.cam_model );
         GST_TRACE_OBJECT( displaysink, "Stream type: %d",meta->info.stream_type );
+        GST_TRACE_OBJECT( displaysink, "Grab frame Size: %d x %d",meta->info.grab_frame_width,meta->info.grab_frame_height );
 
         if(meta->od_enabled)
         {
@@ -346,6 +352,13 @@ GstFlowReturn gst_zedoddisplaysink_render( GstBaseSink * sink, GstBuffer* buf )
 
         // Release incoming buffer
         gst_buffer_unmap( buf, &map_in );
+        //gst_buffer_unref(buf); // NOTE: do not uncomment to not crash
+    }
+    else
+    {
+        GST_ELEMENT_ERROR (sink, RESOURCE, FAILED,
+                           ("Failed to map buffer for reading" ), (NULL));
+        return GST_FLOW_ERROR;
     }
 
     return GST_FLOW_OK;

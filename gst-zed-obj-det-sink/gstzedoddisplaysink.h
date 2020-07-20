@@ -10,7 +10,6 @@
 #include <fstream>
 
 #include <opencv2/opencv.hpp>
-
 #include <atomic>
 
 G_BEGIN_DECLS

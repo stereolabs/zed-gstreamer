@@ -323,8 +323,7 @@ static gboolean set_out_caps( GstZedDemux* filter, GstCaps* sink_caps )
 }
 
 /* this function handles sink events */
-static gboolean
-gst_zeddemux_sink_event(GstPad* pad, GstObject* parent, GstEvent* event)
+static gboolean gst_zeddemux_sink_event(GstPad* pad, GstObject* parent, GstEvent* event)
 {
     GstZedDemux *filter;
     gboolean ret;
@@ -353,6 +352,7 @@ gst_zeddemux_sink_event(GstPad* pad, GstObject* parent, GstEvent* event)
         ret = gst_pad_event_default (pad, parent, event);
         break;
     }
+
     return ret;
 }
 
@@ -390,10 +390,14 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
         // Get metadata
         meta = (GstZedSrcMeta*)gst_buffer_get_meta( buf, GST_ZED_SRC_META_API_TYPE );
 
-        // ----> Data buffer
-        if(filter->stream_data)
+        if(meta==NULL)
         {
+            GST_WARNING( "The ZED Stream does not contain ZED metadata" );
+        }
 
+        // ----> Data buffer
+        if(filter->stream_data && meta!=NULL)
+        {
 #if 0
             GST_LOG (" * [META] Stream type: %d", meta->stream_type );
             GST_LOG (" * [META] Camera model: %d", meta->cam_model );
@@ -436,7 +440,19 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             gsize data_size = sizeof(GstZedSrcMeta);
             GstBuffer* data_buf = gst_buffer_new_allocate(NULL, data_size, NULL );
 
-            if( gst_buffer_map(data_buf, &map_out_data, (GstMapFlags)(GST_MAP_READWRITE)) )
+            if( !GST_IS_BUFFER(data_buf) )
+            {
+                GST_DEBUG ("Data buffer not allocated");
+
+                // ----> Release incoming buffer
+                gst_buffer_unmap( buf, &map_in );
+                gst_buffer_unref(buf);
+                // <---- Release incoming buffer
+
+                return GST_FLOW_ERROR;
+            }
+
+            if( gst_buffer_map(data_buf, &map_out_data, (GstMapFlags)(GST_MAP_WRITE)) )
             {
                 GST_TRACE ("Copying data buffer %lu B", map_out_data.size );
                 memcpy(map_out_data.data, meta, map_out_data.size);
@@ -459,12 +475,20 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                     gst_buffer_unref(buf);
                     GST_TRACE ("Data buffer unmap" );
                     gst_buffer_unmap(data_buf, &map_out_data);
+                    gst_buffer_unref(data_buf);
                     // <---- Release incoming buffer
                     return ret_data;
                 }
 
                 GST_TRACE ("Data buffer unmap" );
                 gst_buffer_unmap(data_buf, &map_out_data);
+                //gst_buffer_unref(data_buf);
+            }
+            else
+            {
+                GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
+                                   ("Failed to map buffer for writing" ), (NULL));
+                return GST_FLOW_ERROR;
             }
         }
         // <---- Data buffer
@@ -489,7 +513,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             return GST_FLOW_ERROR;
         }
 
-        if( gst_buffer_map(left_proc_buf, &map_out_left, (GstMapFlags)(GST_MAP_READWRITE)) )
+        if( gst_buffer_map(left_proc_buf, &map_out_left, (GstMapFlags)(GST_MAP_WRITE)) )
         {
             GST_TRACE ("Copying left buffer %lu B", map_out_left.size );
             memcpy(map_out_left.data, map_in.data, map_out_left.size);
@@ -523,12 +547,20 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 gst_buffer_unref(buf);
                 GST_TRACE ("Left buffer unmap" );
                 gst_buffer_unmap(left_proc_buf, &map_out_left);
+                gst_buffer_unref(left_proc_buf);
                 // <---- Release incoming buffer
                 return ret_left;
             }
 
             GST_TRACE ("Left buffer unmap" );
             gst_buffer_unmap(left_proc_buf, &map_out_left);
+            //gst_buffer_unref(left_proc_buf);
+        }
+        else
+        {
+            GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
+                               ("Failed to map buffer for writing" ), (NULL));
+            return GST_FLOW_ERROR;
         }
         // <---- Left buffer
 
@@ -554,7 +586,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
             return GST_FLOW_ERROR;
         }
 
-        if( gst_buffer_map(aux_proc_buf, &map_out_aux, (GstMapFlags)(GST_MAP_READWRITE)) )
+        if( gst_buffer_map(aux_proc_buf, &map_out_aux, (GstMapFlags)(GST_MAP_WRITE)) )
         {
             if( filter->is_depth == FALSE )
             {
@@ -604,19 +636,33 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                 gst_buffer_unref(buf);
                 GST_TRACE ("Aux buffer unmap" );
                 gst_buffer_unmap(aux_proc_buf, &map_out_aux);
+                gst_buffer_unref(aux_proc_buf);
                 // <---- Release incoming buffer
                 return ret_aux;
             }
 
             GST_TRACE ("Aux buffer unmap" );
             gst_buffer_unmap(aux_proc_buf, &map_out_aux);
+            //gst_buffer_unref(aux_proc_buf);
+        }
+        else
+        {
+            GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
+                               ("Failed to map buffer for writing" ), (NULL));
+            return GST_FLOW_ERROR;
         }
         // <---- Aux buffer
 
         // ----> Release incoming buffer
         gst_buffer_unmap( buf, &map_in );
-        gst_buffer_unref(buf);
+        gst_buffer_unref(buf); // NOTE: required to not increase memory consumption exponentially
         // <---- Release incoming buffer
+    }
+    else
+    {
+        GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
+                           ("Failed to map buffer for reading" ), (NULL));
+        return GST_FLOW_ERROR;
     }
     GST_TRACE ("... processed" );
 
