@@ -96,6 +96,7 @@ else()
     message( "ZED SDK not available. 'zedsrc' will not be installed")
 endif()
 add_subdirectory(gst-zed-demux)
+add_subdirectory(gst-zed-data-mux)
 add_subdirectory(gst-zed-data-csv-sink)
 
 if(OpenCV_FOUND)

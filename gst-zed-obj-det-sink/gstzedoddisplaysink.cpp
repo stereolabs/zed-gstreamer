@@ -203,7 +203,7 @@ gboolean gst_zedoddisplaysink_event (GstBaseSink * sink, GstEvent * event)
     return GST_BASE_SINK_CLASS(gst_zedoddisplaysink_parent_class)->event(sink, event);
 }
 
-void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs )
+void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat scaleW, gfloat scaleH )
 {
     for( int i=0; i<obj_count; i++ )
     {
@@ -221,14 +221,13 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs )
 
         if(objs[i].skeletons_avail==FALSE)
         {
-
             // ----> Bounding box
             cv::Point tl;
-            tl.x = objs[i].bounding_box_2d[0][0];
-            tl.y = objs[i].bounding_box_2d[0][1];
+            tl.x = objs[i].bounding_box_2d[0][0]*scaleW;
+            tl.y = objs[i].bounding_box_2d[0][1]*scaleH;
             cv::Point br;
-            br.x = objs[i].bounding_box_2d[2][0];
-            br.y = objs[i].bounding_box_2d[2][1];
+            br.x = objs[i].bounding_box_2d[2][0]*scaleW;
+            br.y = objs[i].bounding_box_2d[2][1]*scaleH;
             cv::rectangle( image, tl, br, color, 3 );
             // <---- Bounding box
 
@@ -286,11 +285,11 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs )
                 for (const auto& parts : skeleton::BODY_BONES)
                 {
                     cv::Point2f kp_a;
-                    kp_a.x = objs[i].keypoint_2d[skeleton::getIdx(parts.first)][0];
-                    kp_a.y = objs[i].keypoint_2d[skeleton::getIdx(parts.first)][1];
+                    kp_a.x = objs[i].keypoint_2d[skeleton::getIdx(parts.first)][0]*scaleW;
+                    kp_a.y = objs[i].keypoint_2d[skeleton::getIdx(parts.first)][1]*scaleH;
                     cv::Point2f kp_b;
-                    kp_b.x = objs[i].keypoint_2d[skeleton::getIdx(parts.second)][0];
-                    kp_b.y = objs[i].keypoint_2d[skeleton::getIdx(parts.second)][1];
+                    kp_b.x = objs[i].keypoint_2d[skeleton::getIdx(parts.second)][0]*scaleW;
+                    kp_b.y = objs[i].keypoint_2d[skeleton::getIdx(parts.second)][1]*scaleH;
                     if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
                         cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
                 }
@@ -299,8 +298,8 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs )
                 for(int j=0; j<18; j++)
                 {
                     cv::Point2f cv_kp;
-                    cv_kp.x = objs[i].keypoint_2d[j][0];
-                    cv_kp.y = objs[i].keypoint_2d[j][1];
+                    cv_kp.x = objs[i].keypoint_2d[j][0]*scaleW;
+                    cv_kp.y = objs[i].keypoint_2d[j][1]*scaleH;
                     if (roi_render.contains(cv_kp))
                     {
                         cv::circle(image, cv_kp, 3, color+cv::Scalar(50,50,50), -1, cv::LINE_AA);
@@ -340,11 +339,20 @@ GstFlowReturn gst_zedoddisplaysink_render( GstBaseSink * sink, GstBuffer* buf )
         GST_TRACE_OBJECT( displaysink, "Stream type: %d",meta->info.stream_type );
         GST_TRACE_OBJECT( displaysink, "Grab frame Size: %d x %d",meta->info.grab_frame_width,meta->info.grab_frame_height );
 
+        gboolean rescaled = FALSE;
+        gfloat scaleW = 1.0f;
+        gfloat scaleH = 1.0f;
+        if(meta->info.grab_frame_width != displaysink->img_left_w ||
+                meta->info.grab_frame_height != displaysink->img_left_h)
+        {
+
+        }
+
         if(meta->od_enabled)
         {
             GST_TRACE_OBJECT( displaysink, "Detected %d objects",meta->obj_count );
             // Draw 2D detections
-            draw_objects( ocv_left, meta->obj_count, meta->objects );
+            draw_objects( ocv_left, meta->obj_count, meta->objects, scaleW, scaleH );
         }
 
         // rendering
