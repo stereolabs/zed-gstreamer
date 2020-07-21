@@ -335,7 +335,10 @@ void render_thread(GstZedOdDisplaySink* displaysink)
         cv::Mat* frame = displaysink->atomicFrame.load();
         if(frame)
         {
-            cv::imshow(displaysink->ocv_wnd_name, *frame);
+            if(frame->size().area() > 0)
+            {
+                cv::imshow(displaysink->ocv_wnd_name, *frame);
+            }
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
