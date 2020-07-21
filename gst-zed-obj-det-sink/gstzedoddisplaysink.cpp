@@ -335,9 +335,14 @@ void render_thread(GstZedOdDisplaySink* displaysink)
         cv::Mat* frame = displaysink->atomicFrame.load();
         if(frame)
         {
-            if(frame->size().area() > 0)
+            try
             {
-                cv::imshow(displaysink->ocv_wnd_name, *frame);
+                if(frame->size().width>0 && frame->size().height>0)
+                {
+                    cv::imshow(displaysink->ocv_wnd_name, displaysink->atomicFrame.load()[0]);
+                }
+            } catch (cv::Exception& e) {
+                GST_DEBUG( "OpenCV exception: %s", e.err.c_str());
             }
         }
 
