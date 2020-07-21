@@ -11,6 +11,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <atomic>
+#include <thread>
 
 G_BEGIN_DECLS
 
@@ -34,7 +35,10 @@ struct _GstZedOdDisplaySink
     guint img_left_h;
 
     std::string ocv_wnd_name;
-    std::atomic<cv::Mat*> atomic_frame;
+    std::atomic<cv::Mat*> atomicFrame;
+
+    gboolean stop;
+    std::thread render_thread;
 
     // Properties
     gboolean display3d;

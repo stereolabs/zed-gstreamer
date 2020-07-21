@@ -5,6 +5,7 @@
 #include <gst/gstbuffer.h>
 #include <gst/gstcaps.h>
 #include <gst/gstformat.h>
+#include <chrono>
 
 #include "gst-zed-meta/gstzedmeta.h"
 
@@ -48,6 +49,8 @@ static gboolean gst_zedoddisplaysink_stop (GstBaseSink * sink);
 static gboolean gst_zedoddisplaysink_event (GstBaseSink * sink, GstEvent * event);
 static GstFlowReturn gst_zedoddisplaysink_render (GstBaseSink * sink, GstBuffer * buffer);
 
+void render_thread(GstZedOdDisplaySink *displaysink);
+
 G_DEFINE_TYPE( GstZedOdDisplaySink, gst_zedoddisplaysink, GST_TYPE_BASE_SINK );
 
 static void gst_zedoddisplaysink_class_init (GstZedOdDisplaySinkClass * klass)
@@ -88,6 +91,7 @@ static void gst_zedoddisplaysink_init(GstZedOdDisplaySink * displaysink)
     displaysink->ocv_wnd_name = "Detections";
 
     gst_base_sink_set_sync(GST_BASE_SINK(displaysink), FALSE);
+
 }
 
 static void gst_zedoddisplaysink_dispose (GObject * object)
@@ -143,6 +147,8 @@ gboolean gst_zedoddisplaysink_start(GstBaseSink* sink)
 
     cv::namedWindow(displaysink->ocv_wnd_name, cv::WINDOW_AUTOSIZE);
 
+    displaysink->render_thread = std::thread(render_thread, displaysink);
+
     return TRUE;
 }
 
@@ -151,6 +157,8 @@ gboolean gst_zedoddisplaysink_stop (GstBaseSink * sink)
     GstZedOdDisplaySink* displaysink = GST_OD_DISPLAY_SINK(sink);
 
     GST_TRACE_OBJECT( displaysink, "Stop" );
+    displaysink->stop = TRUE;
+    displaysink->render_thread.join();
 
     return TRUE;
 }
@@ -221,11 +229,13 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat
 
         if(objs[i].skeletons_avail==FALSE)
         {
+            GST_TRACE( "Scale: %g, %g",scaleW,scaleH );
+
             // ----> Bounding box
-            cv::Point tl;
+            cv::Point2f tl;
             tl.x = objs[i].bounding_box_2d[0][0]*scaleW;
             tl.y = objs[i].bounding_box_2d[0][1]*scaleH;
-            cv::Point br;
+            cv::Point2f br;
             br.x = objs[i].bounding_box_2d[2][0]*scaleW;
             br.y = objs[i].bounding_box_2d[2][1]*scaleH;
             cv::rectangle( image, tl, br, color, 3 );
@@ -279,6 +289,7 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat
         }
         else
         {
+            GST_TRACE( "Scale: %g, %g",scaleW,scaleH );
             // ----> Skeletons
             {
                 // ----> Bones
@@ -312,6 +323,26 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat
     }
 }
 
+void render_thread(GstZedOdDisplaySink* displaysink)
+{
+    GST_TRACE( "Render thread starting...");
+    displaysink->stop = FALSE;
+    while(1)
+    {
+        if(displaysink->stop==TRUE)
+            break;
+
+        cv::Mat* frame = displaysink->atomicFrame.load();
+        if(frame)
+        {
+            cv::imshow(displaysink->ocv_wnd_name, *frame);
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    GST_TRACE( "... render thread stopped.");
+}
+
 GstFlowReturn gst_zedoddisplaysink_render( GstBaseSink * sink, GstBuffer* buf )
 {
     GstZedOdDisplaySink* displaysink = GST_OD_DISPLAY_SINK(sink);
@@ -323,7 +354,7 @@ GstFlowReturn gst_zedoddisplaysink_render( GstBaseSink * sink, GstBuffer* buf )
     if(gst_buffer_map(buf, &map_in, GST_MAP_READ))
     {
         // Get left image (upper half memory buffer)
-        cv::Mat ocv_left = cv::Mat( displaysink->img_left_h, displaysink->img_left_w, CV_8UC4, map_in.data ).clone();
+        cv::Mat ocv_left = cv::Mat( displaysink->img_left_h, displaysink->img_left_w, CV_8UC4, map_in.data );
 
         // Metadata
         GstZedSrcMeta* meta = (GstZedSrcMeta*)gst_buffer_get_meta( buf, GST_ZED_SRC_META_API_TYPE );
@@ -345,7 +376,9 @@ GstFlowReturn gst_zedoddisplaysink_render( GstBaseSink * sink, GstBuffer* buf )
         if(meta->info.grab_frame_width != displaysink->img_left_w ||
                 meta->info.grab_frame_height != displaysink->img_left_h)
         {
-
+            rescaled = TRUE;
+            scaleW = ((gfloat)displaysink->img_left_w)/meta->info.grab_frame_width;
+            scaleH = ((gfloat)displaysink->img_left_h)/meta->info.grab_frame_height;
         }
 
         if(meta->od_enabled)
@@ -355,12 +388,17 @@ GstFlowReturn gst_zedoddisplaysink_render( GstBaseSink * sink, GstBuffer* buf )
             draw_objects( ocv_left, meta->obj_count, meta->objects, scaleW, scaleH );
         }
 
-        // rendering
-        cv::imshow( displaysink->ocv_wnd_name, ocv_left );
+        // ----> Update rendering image
+        cv::Mat* prevFrame;
+        prevFrame = displaysink->atomicFrame.exchange(new cv::Mat( ocv_left ));
+        if(prevFrame)
+        {
+            delete prevFrame;
+        }
+        // <---- Update rendering image
 
         // Release incoming buffer
         gst_buffer_unmap( buf, &map_in );
-        //gst_buffer_unref(buf); // NOTE: do not uncomment to not crash
     }
     else
     {
