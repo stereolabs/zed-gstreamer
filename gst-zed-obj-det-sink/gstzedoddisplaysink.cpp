@@ -323,6 +323,14 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat
     }
 }
 
+int handleOCVError( int status, const char* func_name,
+            const char* err_msg, const char* file_name,
+            int line, void* userdata )
+{
+    //Do nothing -- will suppress console output
+    return 0;   //Return value is not used
+}
+
 void render_thread(GstZedOdDisplaySink* displaysink)
 {
     GST_TRACE( "Render thread starting...");
@@ -335,6 +343,8 @@ void render_thread(GstZedOdDisplaySink* displaysink)
         cv::Mat* frame = displaysink->atomicFrame.load();
         if(frame)
         {
+            cv::redirectError(handleOCVError); // To avoid OpenCV assertion error messages
+
             try
             {
                 if(frame->size().width>0 && frame->size().height>0)
