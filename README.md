@@ -149,7 +149,7 @@ you want to install plugins
  * `is-depth`: indicates if the bottom stream of a composite `stream-type` of the `ZED Video Source Plugin` is a color image (Right image) or a depth map.
  * `stream-data`: Enable binary data streaming on `src_data` pad - {TRUE, FALSE} 
  
- ### `ZED Data CSV sink Plugin` parameters
+### `ZED Data CSV sink Plugin` parameters
  * `location`: Location of the CSV file to write
  * `append`: Append data to an already existing CSV file
 
@@ -189,7 +189,20 @@ you want to install plugins
 
 ### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + Skeleton Tracking result displaying + Depth displaying with FPS
 
-    gst-launch-1.0 zedsrc stream-type=4 resolution=2 od-detection-model=1 od-enabled=true ! zeddemux name=demux demux.src_left ! queue ! zedoddisplaysink demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+    gst-launch-1.0 \
+    zedsrc stream-type=4 resolution=2 od-detection-model=1 od-enabled=true ! \
+    zeddemux name=demux \
+    demux.src_left ! queue ! zedoddisplaysink \
+    demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+
+### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + rescaling + remux + Skeleton Tracking result displaying + Depth displaying with FPS
+
+    gst-launch-1.0 zeddatamux name=mux zedsrc stream-type=4 resolution=0 framerate=15 od-detection-model=1 od-enabled=true ! \
+    zeddemux stream-data=true is-depth=true name=demux \
+    demux.src_aux ! queue ! autovideoconvert ! videoscale ! video/x-raw,width=672,height=376 ! queue ! fpsdisplaysink \
+    demux.src_data ! mux.sink_data \
+    demux.src_left ! queue ! videoscale ! video/x-raw,width=672,height=376 ! mux.sink_video \
+    mux.src ! queue ! zedoddisplaysink 
 
 
 ## Related
