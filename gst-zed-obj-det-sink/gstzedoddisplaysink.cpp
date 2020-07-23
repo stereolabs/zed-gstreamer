@@ -232,6 +232,7 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat
             GST_TRACE( "Scale: %g, %g",scaleW,scaleH );
 
             // ----> Bounding box
+
             cv::Point2f tl;
             tl.x = objs[i].bounding_box_2d[0][0]*scaleW;
             tl.y = objs[i].bounding_box_2d[0][1]*scaleH;
@@ -239,6 +240,7 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat
             br.x = objs[i].bounding_box_2d[2][0]*scaleW;
             br.y = objs[i].bounding_box_2d[2][1]*scaleH;
             cv::rectangle( image, tl, br, color, 3 );
+
             // <---- Bounding box
 
             // ----> Text info
@@ -295,25 +297,39 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat
                 // ----> Bones
                 for (const auto& parts : skeleton::BODY_BONES)
                 {
-                    cv::Point2f kp_a;
-                    kp_a.x = objs[i].keypoint_2d[skeleton::getIdx(parts.first)][0]*scaleW;
-                    kp_a.y = objs[i].keypoint_2d[skeleton::getIdx(parts.first)][1]*scaleH;
-                    cv::Point2f kp_b;
-                    kp_b.x = objs[i].keypoint_2d[skeleton::getIdx(parts.second)][0]*scaleW;
-                    kp_b.y = objs[i].keypoint_2d[skeleton::getIdx(parts.second)][1]*scaleH;
-                    if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
-                        cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
+                    if( objs[i].keypoint_2d[skeleton::getIdx(parts.first)][0]>=0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx(parts.first)][1]>=0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx(parts.second)][0]>=0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx(parts.second)][1]>=0 )
+                    {
+                        cv::Point2f kp_a;
+                        kp_a.x = objs[i].keypoint_2d[skeleton::getIdx(parts.first)][0]*scaleW;
+                        kp_a.y = objs[i].keypoint_2d[skeleton::getIdx(parts.first)][1]*scaleH;
+                        GST_TRACE( "kp_a: %g, %g",kp_a.x,kp_a.y );
+
+                        cv::Point2f kp_b;
+                        kp_b.x = objs[i].keypoint_2d[skeleton::getIdx(parts.second)][0]*scaleW;
+                        kp_b.y = objs[i].keypoint_2d[skeleton::getIdx(parts.second)][1]*scaleH;
+                        GST_TRACE( "kp_b: %g, %g",kp_b.x,kp_b.y );
+
+                        if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
+                            cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
+                    }
                 }
                 // <---- Bones
                 // ----> Joints
                 for(int j=0; j<18; j++)
                 {
-                    cv::Point2f cv_kp;
-                    cv_kp.x = objs[i].keypoint_2d[j][0]*scaleW;
-                    cv_kp.y = objs[i].keypoint_2d[j][1]*scaleH;
-                    if (roi_render.contains(cv_kp))
+                    if( objs[i].keypoint_2d[j][0]>=0 &&
+                            objs[i].keypoint_2d[j][1]>=0 )
                     {
-                        cv::circle(image, cv_kp, 3, color+cv::Scalar(50,50,50), -1, cv::LINE_AA);
+                        cv::Point2f cv_kp;
+                        cv_kp.x = objs[i].keypoint_2d[j][0]*scaleW;
+                        cv_kp.y = objs[i].keypoint_2d[j][1]*scaleH;
+                        if (roi_render.contains(cv_kp))
+                        {
+                            cv::circle(image, cv_kp, 3, color+cv::Scalar(50,50,50), -1, cv::LINE_AA);
+                        }
                     }
                 }
                 // <---- Joints
@@ -324,8 +340,8 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat
 }
 
 int handleOCVError( int status, const char* func_name,
-            const char* err_msg, const char* file_name,
-            int line, void* userdata )
+                    const char* err_msg, const char* file_name,
+                    int line, void* userdata )
 {
     //Do nothing -- will suppress console output
     return 0;   //Return value is not used
