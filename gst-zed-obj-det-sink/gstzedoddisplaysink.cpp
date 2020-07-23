@@ -352,7 +352,7 @@ void render_thread(GstZedOdDisplaySink* displaysink)
                     cv::imshow(displaysink->ocv_wnd_name, displaysink->atomicFrame.load()[0]);
                 }
             } catch (cv::Exception& e) {
-                GST_DEBUG( "OpenCV exception: %s", e.err.c_str());
+                GST_DEBUG( "OpenCV exception: %s", e.what() );
             }
         }
 

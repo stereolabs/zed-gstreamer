@@ -443,7 +443,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
                 // ----> Release incoming buffer
                 gst_buffer_unmap( buf, &map_in );
-                gst_buffer_unref(buf);
+                //gst_buffer_unref(buf);
                 // <---- Release incoming buffer
 
                 return GST_FLOW_ERROR;
@@ -469,10 +469,10 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
                     // ----> Release incoming buffer
                     gst_buffer_unmap( buf, &map_in );
-                    gst_buffer_unref(buf);
+                    //gst_buffer_unref(buf);
                     GST_TRACE ("Data buffer unmap" );
                     gst_buffer_unmap(data_buf, &map_out_data);
-                    gst_buffer_unref(data_buf);
+                    //gst_buffer_unref(data_buf);
                     // <---- Release incoming buffer
                     return ret_data;
                 }
@@ -504,7 +504,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
             // ----> Release incoming buffer
             gst_buffer_unmap( buf, &map_in );
-            gst_buffer_unref(buf);
+            //gst_buffer_unref(buf);
             // <---- Release incoming buffer
 
             return GST_FLOW_ERROR;
@@ -541,10 +541,10 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
                 // ----> Release incoming buffer
                 gst_buffer_unmap( buf, &map_in );
-                gst_buffer_unref(buf);
+                //gst_buffer_unref(buf);
                 GST_TRACE ("Left buffer unmap" );
                 gst_buffer_unmap(left_proc_buf, &map_out_left);
-                gst_buffer_unref(left_proc_buf);
+                //gst_buffer_unref(left_proc_buf);
                 // <---- Release incoming buffer
                 return ret_left;
             }
@@ -578,7 +578,7 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
             // ----> Release incoming buffer
             gst_buffer_unmap( buf, &map_in );
-            gst_buffer_unref(buf);
+            //gst_buffer_unref(buf);
             // <---- Release incoming buffer
             return GST_FLOW_ERROR;
         }
@@ -630,10 +630,10 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
                 // ----> Release incoming buffer
                 gst_buffer_unmap( buf, &map_in );
-                gst_buffer_unref(buf);
+                //gst_buffer_unref(buf);
                 GST_TRACE ("Aux buffer unmap" );
                 gst_buffer_unmap(aux_proc_buf, &map_out_aux);
-                gst_buffer_unref(aux_proc_buf);
+                //gst_buffer_unref(aux_proc_buf);
                 // <---- Release incoming buffer
                 return ret_aux;
             }

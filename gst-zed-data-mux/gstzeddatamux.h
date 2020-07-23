@@ -48,8 +48,6 @@
 #define GST_ZEDDATAMUX_H
 #include <gst/gst.h>
 #include <gst/gstelement.h>
-#include <gst/video/video.h>
-#include <gst/base/gstcollectpads.h>
 
 G_BEGIN_DECLS
 
@@ -66,23 +64,26 @@ struct _GstZedDataMux
 {
   GstElement element;
 
-  GstCollectPads *collect;
-
-  GstPad* sinkvideopad;
-  GstPad* sinkdatapad;
+  GstPad* sinkpad_video;
+  GstPad* sinkpad_data;
   GstPad* srcpad;
 
   GstCaps* caps;
-  GstVideoInfo info;
 
-  GstEvent *segment_event;
+  GstClockTime last_data_ts;
+  GstClockTime last_video_ts;
 
-  GstPadEventFunction collect_event;
+  GstBuffer* last_video_buf;
+  gsize last_video_buf_size;
+  GstBuffer* last_data_buf;
+  gsize last_data_buf_size;
 };
 
 struct _GstZedDataMuxClass
 {
     GstElementClass base_zeddatamux_class;
+
+
 };
 
 GType gst_zeddatamux_get_type (void);

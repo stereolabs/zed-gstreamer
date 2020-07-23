@@ -56,6 +56,7 @@
  * </refsect2>
  */
 
+
 #include <gst/gst.h>
 #include <gst/video/video.h>
 #include <gst/gstbuffer.h>
@@ -77,104 +78,90 @@ enum
 enum
 {
     PROP_0,
-    PROP_IS_DEPTH,
-    PROP_STREAM_DATA
 };
-
-#define DEFAULT_PROP_IS_DEPTH       TRUE
-#define DEFAULT_PROP_STREAM_DATA   FALSE
 
 
 /* the capabilities of the inputs and outputs.
  *
  * describe the real formats here.
  */
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
+                                                                   GST_PAD_SRC,
+                                                                   GST_PAD_ALWAYS,
+                                                                   GST_STATIC_CAPS( ("video/x-raw, " // Double stream (only BGRA)
+                                                                                     "format = (string) { BGRA }, "
+                                                                                     "width = (int) { 672, 1280, 1920, 2208 } , "
+                                                                                     "height =  (int) { 752, 1440, 2160, 2484 } , "
+                                                                                     "framerate =  (fraction) { 15, 30, 60, 100 }"
+                                                                                     ";"
+                                                                                     "video/x-raw, " // Single stream (can be depth)
+                                                                                     "format = (string) { BGRA, GRAY16_LE }, "
+                                                                                     "width = (int) { 672, 1280, 1920, 2208 } , "
+                                                                                     "height =  (int) { 376, 720, 1080, 1242 } , "
+                                                                                     "framerate =  (fraction) { 15, 30, 60, 100 }") ) );
+
 static GstStaticPadTemplate sink_video_factory = GST_STATIC_PAD_TEMPLATE ("sink_video",
                                                                           GST_PAD_SINK,
                                                                           GST_PAD_ALWAYS,
-                                                                          GST_STATIC_CAPS( ("video/x-raw, "
-                                                                                            "format = (string) { BGRA, GRAY16_LE  }, "
-                                                                                            "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                                                            "height =  (int) { 376, 720, 1080, 1242 } , "
-                                                                                            "framerate =  (fraction)  { 15, 30, 60, 100 }"
-                                                                                            ";"
-                                                                                            "video/x-raw, " // Double stream
-                                                                                            "format = (string) { BGRA, GRAY16_LE }, "
+                                                                          GST_STATIC_CAPS( ("video/x-raw, " // Double stream
+                                                                                            "format = (string) { BGRA }, "
                                                                                             "width = (int) { 672, 1280, 1920, 2208 } , "
                                                                                             "height =  (int) { 752, 1440, 2160, 2484 } , "
+                                                                                            "framerate =  (fraction) { 15, 30, 60, 100 }"
+                                                                                            ";"
+                                                                                            "video/x-raw, " // Single stream
+                                                                                            "format = (string) { BGRA, GRAY16_LE }, "
+                                                                                            "width = (int) { 672, 1280, 1920, 2208 } , "
+                                                                                            "height =  (int) { 376, 720, 1080, 1242 } , "
                                                                                             "framerate =  (fraction) { 15, 30, 60, 100 }") ) );
+
 
 static GstStaticPadTemplate sink_data_factory = GST_STATIC_PAD_TEMPLATE ("sink_data",
                                                                          GST_PAD_SINK,
                                                                          GST_PAD_ALWAYS,
                                                                          GST_STATIC_CAPS ("application/data"));
 
-
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
-                                                                   GST_PAD_SINK,
-                                                                   GST_PAD_ALWAYS,
-                                                                   GST_STATIC_CAPS( ("video/x-raw, "
-                                                                                     "format = (string) { BGRA, GRAY16_LE  }, "
-                                                                                     "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                                                     "height =  (int) { 376, 720, 1080, 1242 } , "
-                                                                                     "framerate =  (fraction)  { 15, 30, 60, 100 }"
-                                                                                     ";"
-                                                                                     "video/x-raw, " // Double stream
-                                                                                     "format = (string) { BGRA, GRAY16_LE }, "
-                                                                                     "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                                                     "height =  (int) { 752, 1440, 2160, 2484 } , "
-                                                                                     "framerate =  (fraction) { 15, 30, 60, 100 }") ) );
-
-
-
 /* class initialization */
 G_DEFINE_TYPE(GstZedDataMux, gst_zeddatamux, GST_TYPE_ELEMENT);
 
-static void gst_zeddatamux_set_property (GObject * object, guint prop_id, const GValue * value, GParamSpec * pspec);
-static void gst_zeddatamux_get_property (GObject * object, guint prop_id, GValue * value, GParamSpec * pspec);
-static void gst_zeddatamux_finalize  (GObject * object);
-static GstStateChangeReturn gst_zeddatamux_change_state (GstElement * element, GstStateChange transition);
-static GstFlowReturn  gst_zeddatamux_collected (GstCollectPads * pads, GstZedDataMux * self);
-static void gst_zeddatamux_reset(GstZedDataMux * self);
-static gboolean gst_zeddatamux_sink_event (GstCollectPads * pads, GstCollectData * cdata, GstEvent * event, GstZedDataMux * self);
-static gboolean gst_zeddatamux_sink_query (GstCollectPads * pads, GstCollectData * cdata, GstQuery * query, GstZedDataMux * self);
-static gboolean gst_zeddatamux_set_caps (GstZedDataMux * self, GstPad * pad, GstCaps * caps);
-static GstCaps* gst_zeddatamux_get_caps (GstZedDataMux * self, GstPad * pad, GstCaps * filter);
-static GstCaps* gst_zeddatamux_query_pad_caps (GstPad * pad, GstPad * skip, GstCaps * filter);
+static void gst_zeddatamux_set_property (GObject * object, guint prop_id,
+                                         const GValue * value, GParamSpec * pspec);
+static void gst_zeddatamux_get_property (GObject * object, guint prop_id,
+                                         GValue * value, GParamSpec * pspec);
 
+static gboolean gst_zeddatamux_sink_data_event (GstPad * pad, GstObject * parent, GstEvent * event);
+static GstFlowReturn gst_zeddatamux_chain_data (GstPad * pad, GstObject * parent, GstBuffer * buf);
+static gboolean gst_zeddatamux_sink_video_event (GstPad * pad, GstObject * parent, GstEvent * event);
+static GstFlowReturn gst_zeddatamux_chain_video (GstPad * pad, GstObject * parent, GstBuffer * buf);
+
+/* GObject vmethod implementations */
 
 /* initialize the plugin's class */
 static void
 gst_zeddatamux_class_init (GstZedDataMuxClass * klass)
 {
-    GST_TRACE ("class_init" );
-
     GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
     GstElementClass *gstelement_class = GST_ELEMENT_CLASS (klass);
 
     GST_DEBUG_OBJECT( gobject_class, "Class Init" );
 
-    gobject_class->finalize = gst_zeddatamux_finalize;
     gobject_class->set_property = gst_zeddatamux_set_property;
     gobject_class->get_property = gst_zeddatamux_get_property;
 
     gst_element_class_set_static_metadata (gstelement_class,
-                                           "ZED Stream Data Muxer",
+                                           "ZED Data Video Muxer",
                                            "Muxer/Video",
-                                           "Stereolabs ZED Data Muxer",
+                                           "Stereolabs ZED Data Video Muxer",
                                            "Stereolabs <support@stereolabs.com>");
 
     gst_element_class_add_pad_template (gstelement_class,
                                         gst_static_pad_template_get (&src_factory));
 
     gst_element_class_add_pad_template (gstelement_class,
-                                        gst_static_pad_template_get (&sink_video_factory));
-
-    gst_element_class_add_pad_template (gstelement_class,
                                         gst_static_pad_template_get (&sink_data_factory));
 
-    gstelement_class->change_state =
-            GST_DEBUG_FUNCPTR (gst_zeddatamux_change_state);
+    gst_element_class_add_pad_template (gstelement_class,
+                                        gst_static_pad_template_get (&sink_video_factory));
 }
 
 /* initialize the new element
@@ -182,233 +169,39 @@ gst_zeddatamux_class_init (GstZedDataMuxClass * klass)
  * set pad calback functions
  * initialize instance structure
  */
-static void gst_zeddatamux_init (GstZedDataMux *self)
+static void gst_zeddatamux_init (GstZedDataMux *filter)
 {
-    GST_TRACE ("init" );
+    GST_DEBUG_OBJECT( filter, "Filter Init" );
 
-    GST_DEBUG_OBJECT( self, "Filter Init" );
+    filter->sinkpad_data = gst_pad_new_from_static_template (&sink_data_factory, "sink_data");
+    gst_element_add_pad (GST_ELEMENT (filter), filter->sinkpad_data);
 
-    self->sinkvideopad = gst_pad_new_from_static_template (&sink_video_factory, "sink_video");
-    gst_element_add_pad (GST_ELEMENT (self), self->sinkvideopad);
+    filter->sinkpad_video = gst_pad_new_from_static_template( &sink_video_factory, "sink_video" );
+    gst_element_add_pad (GST_ELEMENT (filter), filter->sinkpad_video);
 
-    self->sinkdatapad = gst_pad_new_from_static_template( &sink_data_factory, "sink_data" );
-    gst_element_add_pad (GST_ELEMENT (self), self->sinkdatapad);
+    filter->srcpad = gst_pad_new_from_static_template( &src_factory, "src" );
+    gst_element_add_pad(GST_ELEMENT (filter), filter->srcpad);
 
-    self->srcpad = gst_pad_new_from_static_template( &src_factory, "src" );
-    gst_element_add_pad(GST_ELEMENT (self), self->srcpad);
+    gst_pad_set_event_function( filter->sinkpad_data, GST_DEBUG_FUNCPTR(gst_zeddatamux_sink_data_event) );
+    gst_pad_set_event_function( filter->sinkpad_video, GST_DEBUG_FUNCPTR(gst_zeddatamux_sink_video_event) );
 
-    self->collect = gst_collect_pads_new ();
-    gst_collect_pads_set_function (self->collect, (GstCollectPadsFunction) gst_zeddatamux_collected, self);
-    gst_collect_pads_set_event_function (self->collect, (GstCollectPadsEventFunction) gst_zeddatamux_sink_event, self);
-    gst_collect_pads_set_query_function (self->collect, (GstCollectPadsQueryFunction) gst_zeddatamux_sink_query, self);
+    gst_pad_set_chain_function( filter->sinkpad_video, GST_DEBUG_FUNCPTR(gst_zeddatamux_chain_video) );
+    gst_pad_set_chain_function( filter->sinkpad_data, GST_DEBUG_FUNCPTR(gst_zeddatamux_chain_data) );
 
-    self->caps= nullptr;
-}
+    filter->caps = nullptr;
 
-static gboolean gst_zeddatamux_sink_query (GstCollectPads * pads, GstCollectData * cdata,
-                                           GstQuery * query, GstZedDataMux * self)
-{
-    GST_TRACE ("sink_query" );
-
-    gboolean ret = TRUE;
-
-    switch (GST_QUERY_TYPE (query)) {
-    case GST_QUERY_CAPS:
-    {
-        GstCaps *filter, *caps;
-        gst_query_parse_caps (query, &filter);
-        caps = gst_zeddatamux_get_caps (self, cdata->pad, filter);
-        gst_query_set_caps_result (query, caps);
-        gst_caps_unref (caps);
-        break;
-    }
-    default:
-        ret = gst_collect_pads_query_default (pads, cdata, query, FALSE);
-        break;
-    }
-    return ret;
-}
-
-static void gst_zeddatamux_finalize  (GObject * object)
-{
-    GST_TRACE ("finalize" );
-
-    GstZedDataMux *self = GST_ZEDDATAMUX (object);
-    //GstZedDataMuxClass *klass = GST_ZEDDATAMUX_CLASS (object);
-
-    if (self->collect)
-        gst_object_unref (self->collect);
-    self->collect = NULL;
-
-    //G_OBJECT_CLASS (g_type_class_peek_parent (klass))->finalize (object);
-}
-
-static void gst_zeddatamux_reset(GstZedDataMux * self)
-{
-    GST_TRACE ("reset" );
-
-    GstEvent **p_ev;
-
-    gst_caps_replace (&self->caps, NULL);
-    p_ev = &self->segment_event;
-    gst_event_replace (p_ev, NULL);
-
-    gst_video_info_init (&self->info);
-}
-
-static gboolean gst_zeddatamux_set_caps (GstZedDataMux * self, GstPad * pad, GstCaps * caps)
-{
-    GST_TRACE ("set_caps" );
-
-    gboolean ret = TRUE;
-
-    if (!self->caps) {
-        gst_caps_replace (&self->caps, caps);
-
-        ret = gst_pad_set_caps (self->srcpad, caps);
-
-        if (ret)
-        {
-            GstVideoInfo info;
-
-            gst_video_info_init (&info);
-            if (!gst_video_info_from_caps (&self->info, caps))
-            {
-                ret = FALSE;
-            }
-        }
-    }
-    else if (!gst_caps_is_equal (caps, self->caps))
-    {
-        GstCaps *upstream_caps;
-
-        upstream_caps = gst_pad_peer_query_caps (pad, NULL);
-        if (gst_caps_can_intersect (self->caps, upstream_caps))
-            gst_pad_push_event (pad, gst_event_new_reconfigure ());
-        gst_caps_unref (upstream_caps);
-        ret = FALSE;
-    }
-
-    return ret;
-}
-
-static GstCaps* gst_zeddatamux_query_pad_caps (GstPad * pad, GstPad * skip, GstCaps * filter)
-{
-    GST_TRACE ("query_pad_caps" );
-
-    GstCaps *caps;
-
-    if (pad == skip)
-        return filter;
-
-    caps = gst_pad_peer_query_caps (pad, filter);
-
-    if (caps)
-        gst_caps_unref (filter);
-    else
-        caps = filter;
-
-    return caps;
-}
-
-static GstCaps* gst_zeddatamux_get_caps (GstZedDataMux * self, GstPad * pad, GstCaps * filter)
-{
-    GST_TRACE ("get_caps" );
-
-    GstCaps *caps = NULL;
-
-    if (self->caps) {
-        caps = gst_caps_ref (self->caps);
-    } else {
-        GstCaps *tmp;
-
-        caps = gst_pad_get_pad_template_caps (self->srcpad);
-        if (filter) {
-            tmp = caps;
-            caps = gst_caps_intersect_full (tmp, filter, GST_CAPS_INTERSECT_FIRST);
-            gst_caps_unref (tmp);
-        }
-
-        caps = gst_zeddatamux_query_pad_caps (self->srcpad, pad, caps);
-        caps = gst_zeddatamux_query_pad_caps (self->sinkvideopad, pad, caps);
-        caps = gst_zeddatamux_query_pad_caps (self->sinkdatapad, pad, caps);
-    }
-
-    return caps;
-}
-
-static gboolean gst_zeddatamux_sink_event (GstCollectPads * pads, GstCollectData * cdata, GstEvent * event, GstZedDataMux * self)
-{
-    GST_TRACE ("sink_event" );
-
-    gboolean ret = TRUE;
-
-    switch (GST_EVENT_TYPE (event)) {
-    case GST_EVENT_CAPS:
-    {
-        GstCaps *caps;
-        gst_event_parse_caps (event, &caps);
-        ret = gst_zeddatamux_set_caps (self, cdata->pad, caps);
-        gst_event_unref (event);
-        break;
-    }
-    default:
-        ret = gst_collect_pads_event_default (pads, cdata, event, FALSE);
-        break;
-    }
-    return ret;
-}
-
-
-static GstStateChangeReturn gst_zeddatamux_change_state (GstElement * element, GstStateChange transition)
-{
-    GST_TRACE ("change_state" );
-
-    GstZedDataMux *self = GST_ZEDDATAMUX (element);
-    GstStateChangeReturn ret;
-
-    switch (transition) {
-    case GST_STATE_CHANGE_NULL_TO_READY:
-        break;
-    case GST_STATE_CHANGE_READY_TO_PAUSED:
-        gst_collect_pads_start (self->collect);
-        break;
-    case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
-        break;
-    default:
-        break;
-    }
-
-    /* Stop before calling the parent's state change function as
-       * GstCollectPads might take locks and we would deadlock in that
-       * case
-       */
-    if (transition == GST_STATE_CHANGE_PAUSED_TO_READY)
-        gst_collect_pads_stop (self->collect);
-
-    ret = GST_ELEMENT_CLASS (gst_zeddatamux_parent_class)->change_state (element, transition);
-
-    switch (transition) {
-    case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
-        break;
-    case GST_STATE_CHANGE_PAUSED_TO_READY:
-        gst_zeddatamux_reset (self);
-        break;
-    case GST_STATE_CHANGE_READY_TO_NULL:
-        break;
-    default:
-        break;
-    }
-
-    return ret;
+    filter->last_data_ts=0;
+    filter->last_video_ts=0;
+    filter->last_video_buf = nullptr;
+    filter->last_video_buf_size = 0;
+    filter->last_data_buf = nullptr;
+    filter->last_data_buf_size = 0;
 }
 
 static void
 gst_zeddatamux_set_property (GObject * object, guint prop_id,
                              const GValue * value, GParamSpec * pspec)
 {
-    GST_TRACE ("set_property" );
-
     GstZedDataMux *filter = GST_ZEDDATAMUX (object);
 
     GST_DEBUG_OBJECT( filter, "Set property" );
@@ -424,8 +217,6 @@ static void
 gst_zeddatamux_get_property (GObject * object, guint prop_id,
                              GValue * value, GParamSpec * pspec)
 {
-    GST_TRACE ("get_property" );
-
     GstZedDataMux *filter = GST_ZEDDATAMUX (object);
 
     GST_DEBUG_OBJECT( filter, "Get property" );
@@ -437,26 +228,413 @@ gst_zeddatamux_get_property (GObject * object, guint prop_id,
     }
 }
 
-static GstFlowReturn  gst_zeddatamux_collected (GstCollectPads * pads, GstZedDataMux * self)
+/* GstElement vmethod implementations */
+
+static gboolean set_out_caps( GstZedDataMux* filter, GstCaps* sink_caps )
 {
-    GST_TRACE ("collected" );
+    GstVideoInfo vinfo_in;
+    GstVideoInfo vinfo_out;
 
-    GstZedDataMuxClass *klass = GST_ZEDDATAMUX_CLASS (self);
+    GST_DEBUG_OBJECT( filter, "Sink caps %" GST_PTR_FORMAT, sink_caps);
 
-    GstBuffer *inbuf0 = NULL, *inbuf1 = NULL;
-    GstBuffer *outbuf = NULL;
+    // ----> Caps source
+    if (filter->caps) {
+        gst_caps_unref (filter->caps);
+    }
 
-    GstFlowReturn ret = GST_FLOW_OK;
-    GSList *l;
+    gst_video_info_from_caps(&vinfo_in, sink_caps);
 
-    GstClockTime timestamp;
-    gdouble time;
+    gst_video_info_init( &vinfo_out );
+    gst_video_info_set_format( &vinfo_out, vinfo_in.finfo->format,
+                               vinfo_in.width, vinfo_in.height );
+    vinfo_out.fps_d = vinfo_in.fps_d;
+    vinfo_out.fps_n = vinfo_in.fps_n;
+    filter->caps = gst_video_info_to_caps(&vinfo_out);
 
-    GstMapInfo outmap, inmap0, inmap1;
+    GST_DEBUG_OBJECT( filter, "Created video caps %" GST_PTR_FORMAT, filter->caps );
+    if(gst_pad_set_caps(filter->srcpad, filter->caps)==FALSE)
+    {
+        return false;
+    }
+    // <---- Caps source
 
-
+    return TRUE;
 }
 
+/* this function handles video sink events */
+static gboolean gst_zeddatamux_sink_video_event(GstPad* pad, GstObject* parent, GstEvent* event)
+{
+    GstZedDataMux *filter;
+    gboolean ret;
+
+    filter = GST_ZEDDATAMUX (parent);
+
+    GST_LOG_OBJECT (filter, "Received %s event: %" GST_PTR_FORMAT,
+                    GST_EVENT_TYPE_NAME (event), event);
+
+    switch (GST_EVENT_TYPE (event)) {
+    case GST_EVENT_CAPS:
+    {
+        GST_DEBUG_OBJECT( filter, "Event CAPS" );
+        GstCaps* caps;
+
+        gst_event_parse_caps(event, &caps);
+        /* do something with the caps */
+
+        ret = set_out_caps( filter, caps );
+
+        /* and forward */
+        ret = gst_pad_event_default (pad, parent, event);
+        break;
+    }
+    default:
+        ret = gst_pad_event_default (pad, parent, event);
+        break;
+    }
+
+    return ret;
+}
+
+/* this function handles data sink events */
+static gboolean gst_zeddatamux_sink_data_event(GstPad* pad, GstObject* parent, GstEvent* event)
+{
+    GstZedDataMux *filter;
+    gboolean ret;
+
+    filter = GST_ZEDDATAMUX (parent);
+
+    GST_LOG_OBJECT (filter, "Received %s event: %" GST_PTR_FORMAT,
+                    GST_EVENT_TYPE_NAME (event), event);
+
+    switch (GST_EVENT_TYPE (event)) {
+    case GST_EVENT_CAPS:
+    {
+        GST_DEBUG_OBJECT( filter, "Event CAPS" );
+        GstCaps* caps;
+
+        gst_event_parse_caps(event, &caps);
+        /* do something with the caps */
+
+        /* and forward */
+        ret = gst_pad_event_default (pad, parent, event);
+        break;
+    }
+    default:
+        ret = gst_pad_event_default (pad, parent, event);
+        break;
+    }
+
+    return ret;
+}
+
+/* chain function for data sink
+ * this function does the actual processing
+ */
+static GstFlowReturn gst_zeddatamux_chain_data(GstPad* pad, GstObject * parent, GstBuffer* buf )
+{
+    GstZedDataMux *filter;
+    filter = GST_ZEDDATAMUX (parent);
+
+    GST_TRACE_OBJECT( filter, "Chain data" );
+
+    GstMapInfo map_in;
+    GstMapInfo map_out;
+    GstMapInfo map_store;
+
+    GstClockTime timestamp = GST_CLOCK_TIME_NONE;
+    timestamp = GST_BUFFER_TIMESTAMP (buf);
+    GST_LOG ("timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS (timestamp));
+
+    GST_TRACE_OBJECT( filter, "Processing data..." );
+    if(gst_buffer_map(buf, &map_in, GST_MAP_READ))
+    {
+        GST_TRACE ("Input buffer size %lu B", map_in.size );
+
+        if( timestamp == filter->last_video_ts )
+        {
+            GST_TRACE ("Data sync" );
+
+            if( filter->last_video_buf )
+            {
+                gsize out_buf_size = filter->last_video_buf_size;
+                GstBuffer* out_buf = gst_buffer_new_allocate(NULL, out_buf_size, NULL );
+
+                if( !GST_IS_BUFFER(out_buf) )
+                {
+                    GST_DEBUG ("Out buffer not allocated");
+
+                    // ----> Release incoming buffer
+                    GST_TRACE ("Input buffer unmap" );
+                    gst_buffer_unmap( buf, &map_in );
+                    //gst_buffer_unref(buf);
+                    // <---- Release incoming buffer
+
+                    return GST_FLOW_ERROR;
+                }
+
+                if( gst_buffer_map(out_buf, &map_out, (GstMapFlags)(GST_MAP_WRITE)) &&
+                        gst_buffer_map(filter->last_video_buf, &map_store, (GstMapFlags)(GST_MAP_READ)))
+                {
+                    GST_TRACE ("Copying video buffer %lu B", out_buf_size );
+                    memcpy(map_out.data, map_store.data, out_buf_size);
+
+                    GstZedSrcMeta* meta = (GstZedSrcMeta*)buf;
+
+                    GST_TRACE ("Adding metadata");
+                    gst_buffer_add_zed_src_meta( out_buf,
+                                                 meta->info,
+                                                 meta->pose, meta->sens,
+                                                 meta->od_enabled, meta->obj_count, meta->objects);
+
+                    // ----> Timestamp meta-data
+                    GST_TRACE ("Out buffer set timestamp" );
+                    GST_BUFFER_TIMESTAMP(out_buf) = timestamp;
+                    GST_BUFFER_DTS(out_buf) = GST_BUFFER_TIMESTAMP(out_buf);
+                    GST_BUFFER_OFFSET(out_buf) = GST_BUFFER_OFFSET(filter->last_video_buf);
+                    // <---- Timestamp meta-data
+
+                    GST_TRACE ("Out buffer push" );
+                    GstFlowReturn ret = gst_pad_push(filter->srcpad, out_buf);
+
+                    if( ret != GST_FLOW_OK )
+                    {
+                        GST_DEBUG_OBJECT( filter, "Error pushing out buffer: %s", gst_flow_get_name (ret));
+
+                        // ----> Release incoming buffer
+                        GST_TRACE ("Input buffer unmap" );
+                        gst_buffer_unmap( buf, &map_in );
+                        //gst_buffer_unref(buf);
+                        GST_TRACE ("Out buffer unmap" );
+                        gst_buffer_unmap(out_buf, &map_out);
+                        //gst_buffer_unref(out_buf);
+                        // <---- Release incoming buffer
+                        return ret;
+                    }
+
+                    GST_TRACE ("Out buffer unmap" );
+                    gst_buffer_unmap(out_buf, &map_out);
+                    GST_TRACE ("Store buffer unmap" );
+                    gst_buffer_unmap(filter->last_video_buf, &map_store);
+                    //gst_buffer_unref(data_buf);
+                }
+            }
+            else
+            {
+                GST_TRACE ("No video buffer to be muxed" );
+            }
+        }
+        else if( timestamp > filter->last_video_ts )
+        {
+            GST_TRACE ("Wait for sync" );
+
+            filter->last_data_ts = timestamp;
+
+            if( !filter->last_data_buf )
+            {
+                GST_TRACE ("Creating new stored data buffer" );
+                filter->last_data_buf_size = map_in.size;
+                filter->last_data_buf = gst_buffer_new_allocate(NULL, filter->last_data_buf_size, NULL );
+            }
+            else if( map_in.size != filter->last_data_buf_size)
+            {
+                GST_TRACE ("Resizing stored data buffer" );
+                filter->last_data_buf_size = map_in.size;
+                gst_buffer_resize( filter->last_data_buf, 0, filter->last_data_buf_size );
+            }
+
+            if( !GST_IS_BUFFER(filter->last_data_buf) )
+            {
+                GST_DEBUG ("Stored data buffer not valid");
+
+                // ----> Release incoming buffer
+                GST_TRACE ("Input buffer unmap" );
+                gst_buffer_unmap( buf, &map_in );
+                //gst_buffer_unref(buf);
+                // <---- Release incoming buffer
+
+                return GST_FLOW_ERROR;
+            }
+
+            if( gst_buffer_map(filter->last_data_buf, &map_store, (GstMapFlags)(GST_MAP_WRITE))  )
+            {
+                GST_TRACE ("Storing data buffer %lu B", map_in.size );
+                memcpy(map_store.data, map_in.data, map_in.size);
+
+                GST_TRACE ("Store buffer unmap" );
+                gst_buffer_unmap( filter->last_data_buf, &map_store );
+            }
+        }
+
+        // ----> Release incoming buffer
+        GST_TRACE ("Input buffer unmap" );
+        gst_buffer_unmap( buf, &map_in );
+        //gst_buffer_unref(buf); // NOTE: required to not increase memory consumption exponentially
+        // <---- Release incoming buffer
+    }
+    else
+    {
+        GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
+                           ("Failed to map buffer for reading" ), (NULL));
+        return GST_FLOW_ERROR;
+    }
+    GST_TRACE ("... processed" );
+
+    return GST_FLOW_OK;
+}
+
+/* chain function for video sink
+ * this function does the actual processing
+ */
+static GstFlowReturn gst_zeddatamux_chain_video(GstPad* pad, GstObject * parent, GstBuffer* buf )
+{
+    GstZedDataMux *filter;
+
+    filter = GST_ZEDDATAMUX (parent);
+
+    GST_TRACE_OBJECT( filter, "Chain video" );
+
+    GstMapInfo map_in;
+    GstMapInfo map_out;
+    GstMapInfo map_store;
+
+    GstClockTime timestamp = GST_CLOCK_TIME_NONE;
+    timestamp = GST_BUFFER_TIMESTAMP (buf);
+    GST_LOG ("timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS (timestamp));
+
+    GST_TRACE_OBJECT( filter, "Processing video..." );
+    if(gst_buffer_map(buf, &map_in, (GstMapFlags)(GST_MAP_READ)))
+    {
+        GST_TRACE ("Input buffer size %lu B", map_in.size );
+
+        if( timestamp == filter->last_data_ts )
+        {
+            GST_TRACE ("Data sync" );
+
+            if( filter->last_data_buf )
+            {
+                gsize out_buf_size = map_in.size;
+                GstBuffer* out_buf = gst_buffer_new_allocate(NULL, out_buf_size, NULL );
+
+                if( !GST_IS_BUFFER(out_buf) )
+                {
+                    GST_DEBUG ("Out buffer not allocated");
+
+                    // ----> Release incoming buffer
+                    GST_TRACE ("Input buffer unmap" );
+                    gst_buffer_unmap( buf, &map_in );
+                    //gst_buffer_unref(buf);
+                    // <---- Release incoming buffer
+
+                    return GST_FLOW_ERROR;
+                }
+
+                if( gst_buffer_map(out_buf, &map_out, (GstMapFlags)(GST_MAP_WRITE)) &&
+                        gst_buffer_map(filter->last_data_buf, &map_store, (GstMapFlags)(GST_MAP_WRITE)))
+                {
+                    GST_TRACE ("Copying video buffer %lu B", map_in.size );
+                    memcpy(map_out.data, map_in.data, map_in.size);
+
+                    GstZedSrcMeta* meta = (GstZedSrcMeta*)map_store.data;
+
+                    GST_TRACE ("Adding metadata");
+                    gst_buffer_add_zed_src_meta( out_buf,
+                                                 meta->info,
+                                                 meta->pose, meta->sens,
+                                                 meta->od_enabled, meta->obj_count, meta->objects);
+
+                    // ----> Timestamp meta-data
+                    GST_TRACE ("Out buffer set timestamp" );
+                    GST_BUFFER_TIMESTAMP(out_buf) = timestamp;
+                    GST_BUFFER_DTS(out_buf) = GST_BUFFER_TIMESTAMP(out_buf);
+                    GST_BUFFER_OFFSET(out_buf) = GST_BUFFER_OFFSET(buf);
+                    // <---- Timestamp meta-data
+
+                    GST_TRACE ("Out buffer push" );
+                    GstFlowReturn ret = gst_pad_push(filter->srcpad, out_buf);
+
+                    if( ret != GST_FLOW_OK )
+                    {
+                        GST_DEBUG_OBJECT( filter, "Error pushing out buffer: %s", gst_flow_get_name (ret));
+
+                        // ----> Release incoming buffer
+                        GST_TRACE ("Input buffer unmap" );
+                        gst_buffer_unmap( buf, &map_in );
+                        //gst_buffer_unref(buf);
+                        GST_TRACE ("Out buffer unmap" );
+                        gst_buffer_unmap(out_buf, &map_out);
+                        //gst_buffer_unref(out_buf);
+                        // <---- Release incoming buffer
+                        return ret;
+                    }
+
+                    GST_TRACE ("Out buffer unmap" );
+                    gst_buffer_unmap(out_buf, &map_out);
+                    GST_TRACE ("Store buffer unmap" );
+                    gst_buffer_unmap(filter->last_data_buf, &map_store);
+                    //gst_buffer_unref(data_buf);
+                }
+            }
+            else
+            {
+                GST_TRACE ("No data buffer to be muxed" );
+            }
+        }
+        else if( timestamp > filter->last_data_ts )
+        {
+            GST_TRACE ("Wait for sync" );
+
+            filter->last_video_ts = timestamp;
+
+            if( !filter->last_video_buf )
+            {
+                GST_TRACE ("Creating new stored video buffer" );
+                filter->last_video_buf_size = map_in.size;
+                filter->last_video_buf = gst_buffer_new_allocate(NULL, filter->last_video_buf_size, NULL );
+            }
+            else if( map_in.size != filter->last_video_buf_size)
+            {
+                filter->last_video_buf_size = map_in.size;
+                gst_buffer_resize( filter->last_video_buf, 0, filter->last_video_buf_size );
+            }
+
+            if( !GST_IS_BUFFER(filter->last_video_buf) )
+            {
+                GST_DEBUG ("Stored video buffer not valid");
+
+                // ----> Release incoming buffer
+                GST_TRACE ("Input buffer unmap" );
+                gst_buffer_unmap( buf, &map_in );
+                //gst_buffer_unref(buf);
+                // <---- Release incoming buffer
+
+                return GST_FLOW_ERROR;
+            }
+
+            if( gst_buffer_map(filter->last_video_buf, &map_store, (GstMapFlags)(GST_MAP_WRITE))  )
+            {
+                GST_TRACE ("Storing video buffer %lu B", map_in.size );
+                memcpy(filter->last_video_buf, map_in.data, map_in.size);
+
+                GST_TRACE ("Store buffer unmap" );
+                gst_buffer_unmap( filter->last_video_buf, &map_store );
+            }
+        }
+
+        // ----> Release incoming buffer
+        gst_buffer_unmap( buf, &map_in );
+        //gst_buffer_unref(buf); // NOTE: required to not increase memory consumption exponentially
+        // <---- Release incoming buffer
+    }
+    else
+    {
+        GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
+                           ("Failed to map buffer for reading" ), (NULL));
+        return GST_FLOW_ERROR;
+    }
+    GST_TRACE ("... processed" );
+
+    return GST_FLOW_OK;
+}
 
 /* entry point to initialize the plug-in
  * initialize the plug-in itself
@@ -464,12 +642,10 @@ static GstFlowReturn  gst_zeddatamux_collected (GstCollectPads * pads, GstZedDat
  */
 static gboolean plugin_init (GstPlugin * plugin)
 {
-    GST_TRACE ("plugin_init" );
-
     /* debug category for fltering log messages
-     *
-     * exchange the string 'Template plugin' with your description
-     */
+   *
+   * exchange the string 'Template plugin' with your description
+   */
     GST_DEBUG_CATEGORY_INIT( gst_zeddatamux_debug, "zeddatamux",
                              0, "debug category for zeddatamux element");
 
@@ -486,7 +662,7 @@ static gboolean plugin_init (GstPlugin * plugin)
 GST_PLUGIN_DEFINE( GST_VERSION_MAJOR,
                    GST_VERSION_MINOR,
                    zeddatamux,
-                   "ZED stream data muxer",
+                   "ZED data video muxer",
                    plugin_init,
                    GST_PACKAGE_VERSION,
                    GST_PACKAGE_LICENSE,
