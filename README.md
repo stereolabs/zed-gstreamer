@@ -157,37 +157,68 @@ you want to install plugins
 
 ### Local RGB stream + RGB rendering
 
+See [`simple-fps_rendering.sh`](./scripts/simple-fps_rendering.sh) script
+
     gst-launch-1.0 zedsrc ! autovideoconvert ! fpsdisplaysink
 
 ### Local 16 bit Depth stream + Depth rendering
 
-    gst-launch-1.0 zedsrc stream-type=1 ! autovideoconvert ! fpsdisplaysink
+See [`simple-depth-fps_rendering.sh`](./scripts/simple-depth-fps_rendering.sh) script
+
+    gst-launch-1.0 zedsrc stream-type=3 ! autovideoconvert ! fpsdisplaysink
 
 ### Local Left/Right stream + demux + double RGB rendering
 
-    gst-launch-1.0 zedsrc stream-type=2 ! queue ! zeddemux is-depth=false name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+See [`local-rgb_left_right-fps_rendering.sh`](./scripts/local-rgb_left_right-fps_rendering.sh) script
+
+    gst-launch-1.0 \
+    zedsrc stream-type=2 ! queue ! \
+    zeddemux name=demux \
+    demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink \
+    demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
 
 ### Local Left/Depth stream + demux + double streams rendering
 
-    gst-launch-1.0 zedsrc stream-type=4 ! queue ! zeddemux name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+See [`local-rgb_left_depth-fps_rendering.sh`](./scripts/local-rgb_left_depth-fps_rendering.sh) script
+
+    gst-launch-1.0 \
+    zedsrc stream-type=4 ! queue ! \
+    zeddemux is-depth=false name=demux \
+    demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink \
+    demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
 
 ### Local Left/Depth stream + demux + double streams rendering + data saving on CSV file
 
-    gst-launch-1.0 zedsrc stream-type=4 ! zeddemux stream-data=TRUE name=demux demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink  demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink demux.src_data ! queue ! zeddatacsvsink location="${HOME}/test_csv.csv" append=FALSE
+See [`local-rgb-depth-sens-csv.sh`](./scripts/local-rgb-depth-sens-csv.sh) script
+
+    gst-launch-1.0 \
+    zedsrc stream-type=4 ! \
+    zeddemux stream-data=TRUE name=demux \
+    demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink \
+    demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink \
+    demux.src_data ! queue ! zeddatacsvsink location="${HOME}/test_csv.csv" append=FALSE
 
 ### Local Left/Right stream + Multiclass Object Detection result displaying
+
+See [`local-rgb-od_multi-render.sh`](./scripts/local-rgb-od_multi-render.sh) script
     
     gst-launch-1.0 zedsrc stream-type=2 od-enabled=true od-detection-model=0 resolution=2 ! zedoddisplaysink
 
-### Local Left/Right stream + Skeleton Tracking result displaying
+### Local Left/Right stream + Fast Skeleton Tracking result displaying
+
+See [`local-rgb-skel_fast-render.sh`](./scripts/local-rgb-skel_fast-render.sh) script
     
     gst-launch-1.0 zedsrc stream-type=2 od-enabled=true od-detection-model=1 resolution=2 ! zedoddisplaysink
 
-### Local Left/Right stream + Accurate Skeleton Tracking result displaying
+### Local Left RGB stream + Accurate Skeleton Tracking result displaying
+
+See [`local-rgb-skel_accurate-render.sh`](./scripts/local-rgb-skel_accurate-render.sh) script
     
-    gst-launch-1.0 zedsrc stream-type=2 od-enabled=true od-detection-model=2 resolution=2 ! zedoddisplaysink
+    gst-launch-1.0 zedsrc stream-type=0 od-enabled=true od-detection-model=2 resolution=2 ! zedoddisplaysink
 
 ### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + Skeleton Tracking result displaying + Depth displaying with FPS
+
+See [`local-od-fps_render.sh`](./scripts/local-od-fps_render.sh) script
 
     gst-launch-1.0 \
     zedsrc stream-type=4 resolution=2 od-detection-model=1 od-enabled=true ! \
@@ -196,6 +227,8 @@ you want to install plugins
     demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
 
 ### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + rescaling + remux + Skeleton Tracking result displaying + Depth displaying with FPS
+
+See [`local-rgb-rescale-od-render.sh.sh`](./scripts/local-rgb-rescale-od-render.sh.sh) script
 
     gst-launch-1.0 zeddatamux name=mux zedsrc stream-type=4 resolution=0 framerate=15 od-detection-model=1 od-enabled=true ! \
     zeddemux stream-data=true is-depth=true name=demux \
