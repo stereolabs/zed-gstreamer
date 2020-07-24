@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Example pipeline to acquire a stream at 720p resolution with RGB, Depth and Object Detection information and 
+# Example pipeline to acquire a stream at default resolution with RGB and Skeleton Tracking information and 
 # displaying the results using `zedoddisplaysink`
 
 # 1) Start `zedsrc` to acquire RGB enabling Skeleton Tracking (ACCURATE).

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Example pipeline to acquire a stream at 720p resolution with RGB, Depth and Object Detection information and 
-# displaying the results using `zedoddisplaysink`
+# Example pipeline to acquire a stream at default resolution with RGB LEft and Right information and 
+# displaying the results on screen with FPS information
 
 # 1) Start `zedsrc` to acquire RGB left and right streams
 # 2) Demux the composite left/right stream

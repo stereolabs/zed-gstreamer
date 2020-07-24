@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Example pipeline to acquire a stream at 720p resolution with RGB, Depth and Object Detection information and 
-# displaying the results using `zedoddisplaysink`
+# displaying the data on screen
 
 # 1) Start `zedsrc` to acquire RGB and depth at 720p resolution enabling Skeleton Tracking (FAST).
 # 2) Define `zeddemux` object named `demux` to demux the `zedsrc` composite stream creating two single streams: RGB and Depth.

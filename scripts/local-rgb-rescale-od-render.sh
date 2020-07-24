@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Example pipeline to resize 2K video and depth stream to VGA resolution for display purpose remuxing the Object 
+# Example pipeline to resize 2K RGB and depth stream to VGA resolution for display purpose remuxing the Object 
 # Detection metadata as input for `zedoddisplaysink`
 
 # 1) Define a `zeddatamux` object named `mux` to be used to recompose the RGB+metadata stream to be used to render 
