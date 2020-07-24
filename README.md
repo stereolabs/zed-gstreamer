@@ -228,7 +228,7 @@ See [`local-od-fps_render.sh`](./scripts/local-od-fps_render.sh) script
 
 ### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + rescaling + remux + Skeleton Tracking result displaying + Depth displaying with FPS
 
-See [`local-rgb-rescale-od-render.sh.sh`](./scripts/local-rgb-rescale-od-render.sh.sh) script
+See [`local-rgb-rescale-od-render.sh`](./scripts/local-rgb-rescale-od-render.sh) script
 
     gst-launch-1.0 zeddatamux name=mux zedsrc stream-type=4 resolution=0 framerate=15 od-detection-model=1 od-enabled=true ! \
     zeddemux stream-data=true is-depth=true name=demux \
