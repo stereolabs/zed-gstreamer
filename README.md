@@ -55,7 +55,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
      cd build
      cmake -G "Visual Studio 16 2019" ..
      cmake --build . --target INSTALL
-     ```   
+     ```
 
 ### Linux installation
 
@@ -81,7 +81,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
     $ mkdir build
     $ cd build
     $ cmake -DCMAKE_BUILD_TYPE=Release ..
-    $ make
+    $ make # NOTE: do not add the `-j` flag, parallel compilation is not supported
     $ sudo make install 
 
 

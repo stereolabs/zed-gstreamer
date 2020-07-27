@@ -18,7 +18,7 @@ link_directories(${ZED_LIBRARY_DIR})
 link_directories(${CUDA_LIBRARY_DIRS})
 link_directories(${LIBRARY_INSTALL_DIR})
 
-set(libname gstzed)
+set(libname gstzedsrc)
 
 message( " * ${libname} plugin added")
 

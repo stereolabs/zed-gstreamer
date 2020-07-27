@@ -1300,7 +1300,7 @@ static gboolean plugin_init (GstPlugin * plugin)
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
                    GST_VERSION_MINOR,
-                   zed,
+                   zedsrc,
                    "Zed camera source",
                    plugin_init,
                    GST_PACKAGE_VERSION,
