@@ -40,33 +40,22 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Windows installation
 
- * Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/)
+ * Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` plugin to acquire data from a ZED camera device]
  * Install [Git](https://git-scm.com/) or download a ZIP archive
  * Install [CMake](https://cmake.org/)
- * Install [GStreamer distribution](https://gstreamer.freedesktop.org/download/)
-  or build from source. The installer should set
-  the installation path via the `GSTREAMER_1_0_ROOT_X86_64` environment variable. If
-  not set, set the CMake variable `GSTREAMER_ROOT` to your installation, the directory
-  containing `bin` and `lib`
- * Install any camera or framegrabber software/SDK for those plugins you wish to
-  build. Check `cmake/modules` for any paths you may need to set.
- * Run the following commands from a terminal or command prompt, assuming CMake
-  and Git are in your `PATH`.
+ * Install a [GStreamer distribution (runtime and development installers)](https://gstreamer.freedesktop.org/download/). 
+ * The installer should set the installation path via the `GSTREAMER_1_0_ROOT_X86_64` environment variable.
+ * Add the path `%GSTREAMER_1_0_ROOT_X86_64%\bin` to the system variable `PATH`
+ * Run the following commands from a terminal or command prompt, assuming CMake and Git are in your `PATH`.
 
      ```
      git clone https://github.com/stereolabs/zed-gstreamer.git
      cd zed-gstreamer
      mkdir build
      cd build
-     cmake -G "Visual Studio 15 2017 Win64" ..
-     ```
-
-To install the plugins, first make sure you've set `CMAKE_INSTALL_PREFIX` properly,
-the default might not be desired (e.g., system path). For finer grained control
-you can set `PLUGIN_INSTALL_DIR` and related variables to specify exactly where
-you want to install plugins
-
-    cmake --build . --target INSTALL
+     cmake -G "Visual Studio 16 2019" ..
+     cmake --build . --target INSTALL
+     ```   
 
 ### Linux installation
 
