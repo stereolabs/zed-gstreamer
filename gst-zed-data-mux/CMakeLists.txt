@@ -14,10 +14,30 @@ add_library (${libname} MODULE
   ${SOURCES}
   ${HEADERS})
 
-add_definitions(-std=c++11 -g -O2)
+if (UNIX)    
+  add_definitions(-std=c++11)
+endif (UNIX)
 
+if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
+  message("${libname}: Debug mode")
+  add_definitions(-g)
+else()
+  if (UNIX)
+    add_definitions(-O2)
+  endif (UNIX)
+endif()
+
+if (WIN32)
 target_link_libraries (${libname} LINK_PUBLIC
-
+  ${GLIB2_LIBRARIES}
+  ${GOBJECT_LIBRARIES}
+  ${GSTREAMER_LIBRARY}
+  ${GSTREAMER_BASE_LIBRARY}
+  ${GSTREAMER_VIDEO_LIBRARY}
+  ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/Release/gstzedmeta.lib
+)
+else()
+target_link_libraries (${libname} LINK_PUBLIC
   ${GLIB2_LIBRARIES}
   ${GOBJECT_LIBRARIES}
   ${GSTREAMER_LIBRARY}
@@ -25,6 +45,7 @@ target_link_libraries (${libname} LINK_PUBLIC
   ${GSTREAMER_VIDEO_LIBRARY}
   ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
 )
+endif()
 
 
 if (WIN32)

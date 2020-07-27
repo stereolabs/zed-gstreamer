@@ -14,7 +14,18 @@ add_library (${libname} MODULE
   ${SOURCES}
   ${HEADERS})
 
-add_definitions(-std=c++11 -g -O2)
+if (UNIX)    
+  add_definitions(-std=c++11)
+endif (UNIX)
+
+if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
+  message("${libname}: Debug mode")
+  add_definitions(-g)
+else()
+  if (UNIX)
+    add_definitions(-O2)
+  endif (UNIX)
+endif()
 
 target_link_libraries (${libname}
   ${GLIB2_LIBRARIES}

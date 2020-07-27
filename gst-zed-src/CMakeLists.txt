@@ -20,7 +20,20 @@ add_library (${libname} MODULE
   ${SOURCES}
   ${HEADERS})
 
-add_definitions(-std=c++11 -g -O2 -Wno-deprecated-declarations)
+if (UNIX)    
+  add_definitions(-std=c++11)
+endif (UNIX)
+
+add_definitions(-Wno-deprecated-declarations)
+
+if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
+  message("${libname}: Debug mode")
+  add_definitions(-g)
+else()
+  if (UNIX)
+    add_definitions(-O2)
+  endif (UNIX)
+endif()
 
 SET(ZED_LIBS ${ZED_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_CUDART_LIBRARY} ${CUDA_NPP_LIBRARIES_ZED})
 

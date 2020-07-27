@@ -34,6 +34,7 @@ static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer
     emeta->pose.orient[0] = 0.0;
     emeta->pose.orient[1] = 0.0;
     emeta->pose.orient[2] = 0.0;
+    return true;
 }
 
 static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
