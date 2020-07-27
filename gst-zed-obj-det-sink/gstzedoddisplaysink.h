@@ -4,7 +4,6 @@
 #include <gst/gst.h>
 #include <gst/base/gstbasesink.h>
 
-#include <unistd.h>
 #include <string>
 #include <string.h>
 #include <fstream>

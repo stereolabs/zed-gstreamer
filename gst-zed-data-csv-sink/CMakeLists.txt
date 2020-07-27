@@ -27,14 +27,28 @@ else()
   endif (UNIX)
 endif()
 
-target_link_libraries (${libname}
-  ${GLIB2_LIBRARIES}
-  ${GOBJECT_LIBRARIES}
-  ${GSTREAMER_LIBRARY}
-  ${GSTREAMER_BASE_LIBRARY}
-  ${GSTREAMER_VIDEO_LIBRARY}
-  ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
-)
+if (WIN32)
+  set(CMAKE_SHARED_LIBRARY_PREFIX "")
+  set(CMAKE_STATIC_LIBRARY_PREFIX "")
+
+  target_link_libraries (${libname} LINK_PUBLIC
+    ${GLIB2_LIBRARIES}
+    ${GOBJECT_LIBRARIES}
+    ${GSTREAMER_LIBRARY}
+    ${GSTREAMER_BASE_LIBRARY}
+    ${GSTREAMER_VIDEO_LIBRARY}
+    gstzedmeta_shared
+  )
+else()
+  target_link_libraries (${libname} LINK_PUBLIC
+    ${GLIB2_LIBRARIES}
+    ${GOBJECT_LIBRARIES}
+    ${GSTREAMER_LIBRARY}
+    ${GSTREAMER_BASE_LIBRARY}
+    ${GSTREAMER_VIDEO_LIBRARY}
+    ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
+  )
+endif()
 
 if (WIN32)
   install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)

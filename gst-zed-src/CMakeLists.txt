@@ -1,3 +1,9 @@
+option(LINK_SHARED_ZED "Link with the ZED SDK shared executable" ON)
+
+if (NOT LINK_SHARED_ZED AND MSVC)
+    message(FATAL_ERROR "LINK_SHARED_ZED OFF : ZED SDK static libraries not available on Windows")
+endif()
+
 set (SOURCES
   gstzedsrc.cpp)
     
@@ -21,10 +27,8 @@ add_library (${libname} MODULE
   ${HEADERS})
 
 if (UNIX)    
-  add_definitions(-std=c++11)
+  add_definitions(-std=c++11 -Wno-deprecated-declarations)
 endif (UNIX)
-
-add_definitions(-Wno-deprecated-declarations)
 
 if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
   message("${libname}: Debug mode")
@@ -37,15 +41,30 @@ endif()
 
 SET(ZED_LIBS ${ZED_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_CUDART_LIBRARY} ${CUDA_NPP_LIBRARIES_ZED})
 
-target_link_libraries (${libname} LINK_PUBLIC  
-  ${GLIB2_LIBRARIES}
-  ${GOBJECT_LIBRARIES}  
-  ${GSTREAMER_LIBRARY}
-  ${GSTREAMER_BASE_LIBRARY}
-  ${GSTREAMER_VIDEO_LIBRARY}  
-  ${ZED_LIBS}
-  ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
-)
+if (WIN32)
+  set(CMAKE_SHARED_LIBRARY_PREFIX "")
+  set(CMAKE_STATIC_LIBRARY_PREFIX "")
+
+  target_link_libraries (${libname} LINK_PUBLIC
+    ${GLIB2_LIBRARIES}
+    ${GOBJECT_LIBRARIES}
+    ${GSTREAMER_LIBRARY}
+    ${GSTREAMER_BASE_LIBRARY}
+    ${GSTREAMER_VIDEO_LIBRARY}
+    ${ZED_LIBS}
+    gstzedmeta_shared
+  )
+else()
+  target_link_libraries (${libname} LINK_PUBLIC
+    ${GLIB2_LIBRARIES}
+    ${GOBJECT_LIBRARIES}
+    ${GSTREAMER_LIBRARY}
+    ${GSTREAMER_BASE_LIBRARY}
+    ${GSTREAMER_VIDEO_LIBRARY}
+    ${ZED_LIBS}
+    ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
+  )
+endif()
 
 if (WIN32)
   install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)
