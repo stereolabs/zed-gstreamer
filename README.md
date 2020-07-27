@@ -43,7 +43,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
  * Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` plugin to acquire data from a ZED camera device]
  * Install [Git](https://git-scm.com/) or download a ZIP archive
  * Install [CMake](https://cmake.org/)
- * Install a [GStreamer distribution (runtime and development installers)](https://gstreamer.freedesktop.org/download/). 
+ * Install a [GStreamer distribution (both `runtime` and `development` installers)](https://gstreamer.freedesktop.org/download/). 
  * The installer should set the installation path via the `GSTREAMER_1_0_ROOT_X86_64` environment variable.
  * Add the path `%GSTREAMER_1_0_ROOT_X86_64%\bin` to the system variable `PATH`
  * Run the following commands from a terminal or command prompt, assuming CMake and Git are in your `PATH`.
@@ -54,8 +54,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
      mkdir build
      cd build
      cmake -G "Visual Studio 16 2019" ..
-     cmake --build . --target INSTALL
-     ```
+     cmake --build . --target INSTALL --config Release
+     ```   
 
 ### Linux installation
 
@@ -81,7 +81,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
     $ mkdir build
     $ cd build
     $ cmake -DCMAKE_BUILD_TYPE=Release ..
-    $ make # NOTE: do not add the `-j` flag, parallel compilation is not supported
+    $ make
     $ sudo make install 
 
 
