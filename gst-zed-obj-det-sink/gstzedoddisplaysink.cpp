@@ -125,7 +125,7 @@ gboolean gst_zedoddisplaysink_start(GstBaseSink* sink)
 {
     GstZedOdDisplaySink* displaysink = GST_OD_DISPLAY_SINK(sink);
 
-    GST_TRACE_OBJECT( displaysink, "Start" );    
+    GST_TRACE_OBJECT( displaysink, "Start" );
 
     displaysink->render_thread = std::thread(render_thread, displaysink);
 
@@ -351,15 +351,14 @@ void render_thread(GstZedOdDisplaySink* displaysink)
                 {
                     cv::imshow(displaysink->ocv_wnd_name, displaysink->atomicFrame.load()[0]);
 
-                    if (WIN32)
-                    {
-                        GST_TRACE("WaitKey");
-                        cv::waitKey(5);
-                    }
-                    else
-                    {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-                    }
+#ifdef WIN32
+            GST_TRACE("WaitKey");
+            cv::waitKey(100);
+
+#else
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+#endif
                 }
             }
             catch (cv::Exception& e) {
@@ -367,16 +366,16 @@ void render_thread(GstZedOdDisplaySink* displaysink)
             }
         }
         else
-        {      
-            if (WIN32)
-            {
-                GST_TRACE("WaitKey");
-                cv::waitKey(100);
-            }
-            else
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
+        {
+#ifdef WIN32
+
+            GST_TRACE("WaitKey");
+            cv::waitKey(100);
+
+#else
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+#endif
         }
     }
     GST_TRACE( "... render thread stopped.");
