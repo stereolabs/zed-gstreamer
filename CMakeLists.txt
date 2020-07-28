@@ -31,7 +31,7 @@ find_package(CUDA ${ZED_CUDA_VERSION} EXACT)
 macro_log_feature(CUDA_FOUND "Nvidia CUDA library" "Required to build 'gstzed'" "http://www.nvidia.com" FALSE "${ZED_CUDA_VERSION}")
 
 find_package(OpenCV)
-macro_log_feature(OpenCV_FOUND "OpenCV library" "Required to build 'gstzedoddisplaysink'" "http://www.opencv.org" FALSE)
+macro_log_feature(OpenCV_FOUND "OpenCV library" "Required to build 'gstzedodoverlay'" "http://www.opencv.org" FALSE)
 
 # Setup common environment
 include_directories(
@@ -105,6 +105,7 @@ else()
 endif()
 add_subdirectory(gst-zed-demux)
 add_subdirectory(gst-zed-data-mux)
+add_subdirectory(gst-zed-od-overlay)
 add_subdirectory(gst-zed-data-csv-sink)
 
 if(OpenCV_FOUND)
