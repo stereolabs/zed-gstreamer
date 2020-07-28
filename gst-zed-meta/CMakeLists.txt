@@ -13,11 +13,6 @@ add_library (${libname} SHARED
   ${HEADERS}
 )
 
-add_library (${libname}_shared SHARED
-  ${SOURCES}
-  ${HEADERS}
-)
-
 if (UNIX)    
   add_definitions(-std=c++11)
 endif (UNIX)
@@ -42,19 +37,7 @@ target_link_libraries (${libname} LINK_PUBLIC
   ${GSTREAMER_VIDEO_LIBRARY}
 )
 
-target_link_libraries (${libname}_shared LINK_PUBLIC
-  ${GLIB2_LIBRARIES}
-  ${GOBJECT_LIBRARIES}
-  ${GSTREAMER_LIBRARY}
-  ${GSTREAMER_BASE_LIBRARY}
-  ${GSTREAMER_VIDEO_LIBRARY}
-)
-
 set_target_properties(${libname} PROPERTIES
-    PUBLIC_HEADER "${HEADERS}"
-)
-
-set_target_properties(${libname}_shared PROPERTIES
     PUBLIC_HEADER "${HEADERS}"
 )
 

@@ -38,9 +38,6 @@ struct _GstZedOdDisplaySink
 
     gboolean stop;
     std::thread render_thread;
-
-    // Properties
-    gboolean display3d;
 };
 
 struct _GstZedOdDisplaySinkClass {

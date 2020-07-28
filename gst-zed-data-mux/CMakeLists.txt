@@ -25,17 +25,14 @@ else()
   add_definitions(-O2)  
 endif()
 
-if (WIN32)
-  set(CMAKE_SHARED_LIBRARY_PREFIX "")
-  set(CMAKE_STATIC_LIBRARY_PREFIX "")
-  
+if (WIN32)  
   target_link_libraries (${libname} LINK_PUBLIC
     ${GLIB2_LIBRARIES}
     ${GOBJECT_LIBRARIES}
     ${GSTREAMER_LIBRARY}
     ${GSTREAMER_BASE_LIBRARY}
     ${GSTREAMER_VIDEO_LIBRARY}
-    gstzedmeta_shared
+    gstzedmeta
   )
 else()
   target_link_libraries (${libname} LINK_PUBLIC

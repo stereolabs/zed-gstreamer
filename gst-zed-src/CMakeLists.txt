@@ -40,17 +40,14 @@ endif()
 SET(ZED_LIBS ${ZED_LIBRARIES} ${CUDA_CUDA_LIBRARY} ${CUDA_CUDART_LIBRARY} ${CUDA_NPP_LIBRARIES_ZED})
 
 if (WIN32)
-  set(CMAKE_SHARED_LIBRARY_PREFIX "")
-  set(CMAKE_STATIC_LIBRARY_PREFIX "")
-
   target_link_libraries (${libname} LINK_PUBLIC
     ${GLIB2_LIBRARIES}
     ${GOBJECT_LIBRARIES}
     ${GSTREAMER_LIBRARY}
     ${GSTREAMER_BASE_LIBRARY}
     ${GSTREAMER_VIDEO_LIBRARY}
-    ${ZED_LIBS}
-    gstzedmeta_shared
+    gstzedmeta
+    ${ZED_LIBS}    
   )
 else()
   target_link_libraries (${libname} LINK_PUBLIC

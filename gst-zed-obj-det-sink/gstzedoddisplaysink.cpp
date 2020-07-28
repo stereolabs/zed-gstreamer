@@ -27,12 +27,9 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
 GST_DEBUG_CATEGORY_STATIC (gst_zedoddisplaysink_debug);
 #define GST_CAT_DEFAULT gst_zedoddisplaysink_debug
 
-#define DEFAULT_PROP_DISPLAY_3D     TRUE
-
 enum
 {
     PROP_0,
-    PROP_DISPLAY3D,
     PROP_LAST
 };
 
@@ -64,13 +61,6 @@ static void gst_zedoddisplaysink_class_init (GstZedOdDisplaySinkClass * klass)
     gobject_class->set_property = gst_zedoddisplaysink_set_property;
     gobject_class->get_property = gst_zedoddisplaysink_get_property;
 
-    // TODO UNCOMMENT WHEN 3D DISPLAY SINK IS READY
-    //    g_object_class_install_property( gobject_class, PROP_DISPLAY3D,
-    //                                     g_param_spec_boolean("display-3d", "Display results in 3D  ",
-    //                                                          "Creates a 3D OpenGL View to display bounding boxes and skeletons",
-    //                                                          DEFAULT_PROP_DISPLAY_3D,
-    //                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
     gst_element_class_set_static_metadata (gstelement_class,
                                            "ZED Object Detection Display Sink",
                                            "Sink/Video", "Display results of ZED Object Detection module",
@@ -87,11 +77,9 @@ static void gst_zedoddisplaysink_init(GstZedOdDisplaySink * displaysink)
 {
     GST_TRACE_OBJECT( displaysink, "Init" );
 
-    displaysink->display3d = DEFAULT_PROP_DISPLAY_3D;
     displaysink->ocv_wnd_name = "Detections";
 
     gst_base_sink_set_sync(GST_BASE_SINK(displaysink), FALSE);
-
 }
 
 static void gst_zedoddisplaysink_dispose (GObject * object)
@@ -113,9 +101,6 @@ void gst_zedoddisplaysink_set_property (GObject * object, guint prop_id,
     GST_TRACE_OBJECT( sink, "Set property" );
 
     switch (prop_id) {
-    case PROP_DISPLAY3D:
-        sink->display3d = g_value_get_boolean (value);
-        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
         break;
@@ -130,9 +115,6 @@ void gst_zedoddisplaysink_get_property (GObject * object, guint prop_id,
     GST_TRACE_OBJECT( sink, "Get property" );
 
     switch (prop_id) {
-    case PROP_DISPLAY3D:
-        g_value_set_boolean (value, sink->display3d);
-        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
         break;
@@ -143,9 +125,7 @@ gboolean gst_zedoddisplaysink_start(GstBaseSink* sink)
 {
     GstZedOdDisplaySink* displaysink = GST_OD_DISPLAY_SINK(sink);
 
-    GST_TRACE_OBJECT( displaysink, "Start" );
-
-    cv::namedWindow(displaysink->ocv_wnd_name, cv::WINDOW_AUTOSIZE);
+    GST_TRACE_OBJECT( displaysink, "Start" );    
 
     displaysink->render_thread = std::thread(render_thread, displaysink);
 
@@ -351,30 +331,58 @@ void render_thread(GstZedOdDisplaySink* displaysink)
 {
     GST_TRACE( "Render thread starting...");
     displaysink->stop = FALSE;
-    while(1)
+
+    GST_TRACE("Create OpenCV window");
+    cv::namedWindow(displaysink->ocv_wnd_name, cv::WINDOW_AUTOSIZE);
+
+    while (1)
     {
-        if(displaysink->stop==TRUE)
+        if (displaysink->stop == TRUE)
             break;
 
         cv::Mat* frame = displaysink->atomicFrame.load();
-        if(frame)
+        if (frame)
         {
             cv::redirectError(handleOCVError); // To avoid OpenCV assertion error messages
 
             try
             {
-                if(frame->size().width>0 && frame->size().height>0)
+                if (frame->size().width > 0 && frame->size().height > 0)
                 {
                     cv::imshow(displaysink->ocv_wnd_name, displaysink->atomicFrame.load()[0]);
+
+                    if (WIN32)
+                    {
+                        GST_TRACE("WaitKey");
+                        cv::waitKey(5);
+                    }
+                    else
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                    }
                 }
-            } catch (cv::Exception& e) {
-                GST_DEBUG( "OpenCV exception: %s", e.what() );
+            }
+            catch (cv::Exception& e) {
+                GST_DEBUG("OpenCV exception: %s", e.what());
             }
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        else
+        {      
+            if (WIN32)
+            {
+                GST_TRACE("WaitKey");
+                cv::waitKey(100);
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
     }
     GST_TRACE( "... render thread stopped.");
+
+    GST_TRACE("Destroy all OpenCV windows");
+    cv::destroyAllWindows();
 }
 
 GstFlowReturn gst_zedoddisplaysink_render( GstBaseSink * sink, GstBuffer* buf )
