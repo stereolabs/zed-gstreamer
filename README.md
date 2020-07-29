@@ -149,95 +149,114 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 * Linux: [`simple-fps_rendering.sh`](./scripts/simple-fps_rendering.sh)
 * Windows: [`simple-fps_rendering.bat`](./scripts/simple-fps_rendering.bat)
 
+```
     gst-launch-1.0 zedsrc ! queue ! autovideoconvert ! queue ! fpsdisplaysink
+```
 
 ### Local 16 bit Depth stream + Depth rendering
 
 * Linux: [`simple-depth-fps_rendering.sh`](./scripts/simple-depth-fps_rendering.sh)
 * Windows: [`simple-depth-fps_rendering.bat`](./scripts/simple-depth-fps_rendering.bat)
 
+```
     gst-launch-1.0 zedsrc stream-type=3 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
+```
 
 ### Local Left/Right stream + demux + double RGB rendering
 
 * Linux: [`local-rgb_left_right-fps_rendering.sh`](./scripts/local-rgb_left_right-fps_rendering.sh)
 * Windows: [`local-rgb_left_right-fps_rendering.bat`](./scripts/local-rgb_left_right-fps_rendering.bat)
 
+```
     gst-launch-1.0 \
     zedsrc stream-type=2 ! queue ! \
     zeddemux is-depth=false name=demux \
     demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink \
     demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+```
 
 ### Local Left/Depth stream + demux + double streams rendering
 
 * Linux: [`local-rgb_left_depth-fps_rendering.sh`](./scripts/local-rgb_left_depth-fps_rendering.sh)
 * Windows: [`local-rgb_left_depth-fps_rendering.bat`](./scripts/local-rgb_left_depth-fps_rendering.bat)
 
+```
     gst-launch-1.0 \
     zedsrc stream-type=4 ! queue ! \
     zeddemux name=demux \
     demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink \
     demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+```
 
 ### Local Left/Depth stream + demux + double streams rendering + data saving on CSV file
 
 * Linux: [`local-rgb-depth-sens-csv.sh`](./scripts/local-rgb-depth-sens-csv.sh)
 * Windows: [`local-rgb-depth-sens-csv.bat`](./scripts/local-rgb-depth-sens-csv.bat)
 
+```
     gst-launch-1.0 \
     zedsrc stream-type=4 ! \
     zeddemux stream-data=TRUE name=demux \
     demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink \
     demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink \
     demux.src_data ! queue ! zeddatacsvsink location="${HOME}/test_csv.csv" append=FALSE
+```
 
 ### Local Left/Right stream + Multiclass Object Detection result displaying
 
 * Linux: [`local-rgb-od_multi-overlay.sh`](./scripts/local-rgb-od_multi-overlay.sh)
 * Windows: [`local-rgb-od_multi-overlay.bat`](./scripts/local-rgb-od_multi-overlay.bat)
     
+```    
     gst-launch-1.0 \
     zedsrc stream-type=0 od-enabled=true od-detection-model=0 resolution=2 framerate=30 ! queue ! \
     zedodoverlay ! queue ! \
     autovideoconvert ! fpsdisplaysink
+```
 
 ### Local Left/Right stream + Fast Skeleton Tracking result displaying
 
 * Linux: [`local-rgb-skel_fast-overlay.sh`](./scripts/local-rgb-skel_fast-overlay.sh)
 * Windows: [`local-rgb-skel_fast-overlay.bat`](./scripts/local-rgb-skel_fast-overlay.bat)
-    
+
+```    
     gst-launch-1.0 \
     zedsrc stream-type=2 od-enabled=true od-detection-model=1 resolution=2 framerate=30 ! queue ! \
     zedodoverlay ! queue ! \
     autovideoconvert ! fpsdisplaysink
+```
 
 ### Local Left RGB stream + Accurate Skeleton Tracking result displaying
 
 * Linux: [`local-rgb-skel_accurate-overlay.sh`](./scripts/local-rgb-skel_accurate-overlay.sh)
 * Windows: [`local-rgb-skel_accurate-overlay.bat`](./scripts/local-rgb-skel_accurate-overlay.bat)
-    
+ 
+``` 
     gst-launch-1.0 \
     zedsrc stream-type=0 od-enabled=true od-detection-model=2 resolution=2 framerate=15 ! queue ! \
     zedodoverlay ! queue ! \
     autovideoconvert ! fpsdisplaysink
+```
 
 ### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + Skeleton Tracking result displaying + Depth displaying with FPS
 
 * Linux: [`local-od-fps_overlay.sh`](./scripts/local-od-fps_overlay.sh)
 * Windows: [`local-od-fps_overlay.bat`](./scripts/local-od-fps_overlay.bat)
 
+```
     gst-launch-1.0 \
     zedsrc stream-type=4 resolution=2 framerate=30 od-enabled=true od-detection-model=1 ! \
     zeddemux name=demux \
     demux.src_left ! queue ! zedodoverlay ! queue ! autovideoconvert ! fpsdisplaysink \
     demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+```
 
 ### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + rescaling + remux + Skeleton Tracking result displaying + Depth displaying with FPS
 
 * Linux: [`local-rgb-rescale-od-overlay.sh`](./scripts/local-rgb-rescale-od-overlay.sh)
 * Windows: [`local-rgb-rescale-od-overlay.bat`](./scripts/local-rgb-rescale-od-overlay.bat)
 
+```
     gst-launch-1.0 \
     zeddatamux name=mux \
     zedsrc stream-type=4 resolution=0 framerate=30 od-detection-model=1 od-enabled=true ! \
@@ -247,6 +266,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
     demux.src_left ! queue ! videoscale ! video/x-raw,width=672,height=376 ! mux.sink_video \
     mux.src ! queue ! zedodoverlay ! queue ! \
     autovideoconvert ! fpsdisplaysink
+```
 
 ## Related
 
