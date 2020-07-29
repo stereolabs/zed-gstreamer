@@ -146,19 +146,22 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local RGB stream + RGB rendering
 
-See [`simple-fps_rendering.sh`](./scripts/simple-fps_rendering.sh) script
+Linux: [`simple-fps_rendering.sh`](./scripts/simple-fps_rendering.sh) script
+Windows: [`simple-fps_rendering.bat`](./scripts/simple-fps_rendering.bat) script
 
     gst-launch-1.0 zedsrc ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 
 ### Local 16 bit Depth stream + Depth rendering
 
-See [`simple-depth-fps_rendering.sh`](./scripts/simple-depth-fps_rendering.sh) script
+Linux: [`simple-depth-fps_rendering.sh`](./scripts/simple-depth-fps_rendering.sh) script
+Windows: [`simple-depth-fps_rendering.bat`](./scripts/simple-depth-fps_rendering.bat) script
 
     gst-launch-1.0 zedsrc stream-type=3 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 
 ### Local Left/Right stream + demux + double RGB rendering
 
-See [`local-rgb_left_right-fps_rendering.sh`](./scripts/local-rgb_left_right-fps_rendering.sh) script
+Linux: [`local-rgb_left_right-fps_rendering.sh`](./scripts/local-rgb_left_right-fps_rendering.sh) script
+Windows: [`local-rgb_left_right-fps_rendering.bat`](./scripts/local-rgb_left_right-fps_rendering.bat) script
 
     gst-launch-1.0 \
     zedsrc stream-type=2 ! queue ! \
@@ -168,7 +171,8 @@ See [`local-rgb_left_right-fps_rendering.sh`](./scripts/local-rgb_left_right-fps
 
 ### Local Left/Depth stream + demux + double streams rendering
 
-See [`local-rgb_left_depth-fps_rendering.sh`](./scripts/local-rgb_left_depth-fps_rendering.sh) script
+Linux: [`local-rgb_left_depth-fps_rendering.sh`](./scripts/local-rgb_left_depth-fps_rendering.sh) script
+Windows: [`local-rgb_left_depth-fps_rendering.bat`](./scripts/local-rgb_left_depth-fps_rendering.bat) script
 
     gst-launch-1.0 \
     zedsrc stream-type=4 ! queue ! \
@@ -178,7 +182,8 @@ See [`local-rgb_left_depth-fps_rendering.sh`](./scripts/local-rgb_left_depth-fps
 
 ### Local Left/Depth stream + demux + double streams rendering + data saving on CSV file
 
-See [`local-rgb-depth-sens-csv.sh`](./scripts/local-rgb-depth-sens-csv.sh) script
+Linux: [`local-rgb-depth-sens-csv.sh`](./scripts/local-rgb-depth-sens-csv.sh) script
+Windows: [`local-rgb-depth-sens-csv.bat`](./scripts/local-rgb-depth-sens-csv.bat) script
 
     gst-launch-1.0 \
     zedsrc stream-type=4 ! \
@@ -189,7 +194,8 @@ See [`local-rgb-depth-sens-csv.sh`](./scripts/local-rgb-depth-sens-csv.sh) scrip
 
 ### Local Left/Right stream + Multiclass Object Detection result displaying
 
-See [`local-rgb-od_multi-overlay.sh`](./scripts/local-rgb-od_multi-overlay.sh) script
+Linux: [`local-rgb-od_multi-overlay.sh`](./scripts/local-rgb-od_multi-overlay.sh) script
+Windows: [`local-rgb-od_multi-overlay.bat`](./scripts/local-rgb-od_multi-overlay.bat) script
     
     gst-launch-1.0 \
     zedsrc stream-type=0 od-enabled=true od-detection-model=0 resolution=2 framerate=30 ! queue ! \
@@ -198,7 +204,8 @@ See [`local-rgb-od_multi-overlay.sh`](./scripts/local-rgb-od_multi-overlay.sh) s
 
 ### Local Left/Right stream + Fast Skeleton Tracking result displaying
 
-See [`local-rgb-skel_fast-overlay.sh`](./scripts/local-rgb-skel_fast-overlay.sh) script
+Linux: [`local-rgb-skel_fast-overlay.sh`](./scripts/local-rgb-skel_fast-overlay.sh) script
+Windows: [`local-rgb-skel_fast-overlay.bat`](./scripts/local-rgb-skel_fast-overlay.bat) script
     
     gst-launch-1.0 \
     zedsrc stream-type=2 od-enabled=true od-detection-model=1 resolution=2 framerate=30 ! queue ! \
@@ -207,7 +214,8 @@ See [`local-rgb-skel_fast-overlay.sh`](./scripts/local-rgb-skel_fast-overlay.sh)
 
 ### Local Left RGB stream + Accurate Skeleton Tracking result displaying
 
-See [`local-rgb-skel_accurate-overlay.sh`](./scripts/local-rgb-skel_accurate-overlay.sh) script
+Linux: [`local-rgb-skel_accurate-overlay.sh`](./scripts/local-rgb-skel_accurate-overlay.sh) script
+Windows: [`local-rgb-skel_accurate-overlay.bat`](./scripts/local-rgb-skel_accurate-overlay.bat) script
     
     gst-launch-1.0 \
     zedsrc stream-type=0 od-enabled=true od-detection-model=2 resolution=2 framerate=15 ! queue ! \
@@ -216,7 +224,8 @@ See [`local-rgb-skel_accurate-overlay.sh`](./scripts/local-rgb-skel_accurate-ove
 
 ### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + Skeleton Tracking result displaying + Depth displaying with FPS
 
-See [`local-od-fps_overlay.sh`](./scripts/local-od-fps_overlay.sh) script
+Linux: [`local-od-fps_overlay.sh`](./scripts/local-od-fps_overlay.sh) script
+Windows: [`local-od-fps_overlay.bat`](./scripts/local-od-fps_overlay.bat) script
 
     gst-launch-1.0 \
     zedsrc stream-type=4 resolution=2 framerate=30 od-enabled=true od-detection-model=1 ! \
@@ -226,7 +235,8 @@ See [`local-od-fps_overlay.sh`](./scripts/local-od-fps_overlay.sh) script
 
 ### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + rescaling + remux + Skeleton Tracking result displaying + Depth displaying with FPS
 
-See [`local-rgb-rescale-od-overlay.sh`](./scripts/local-rgb-rescale-od-overlay.sh) script
+Linux: [`local-rgb-rescale-od-overlay.sh`](./scripts/local-rgb-rescale-od-overlay.sh) script
+Windows: [`local-rgb-rescale-od-overlay.bat`](./scripts/local-rgb-rescale-od-overlay.bat) script
 
     gst-launch-1.0 \
     zeddatamux name=mux \
