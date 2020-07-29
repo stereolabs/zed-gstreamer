@@ -24,6 +24,8 @@ static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer
 
     emeta->info.cam_model = 0;
     emeta->info.stream_type = 0;
+    emeta->info.grab_frame_width = 0;
+    emeta->info.grab_frame_height = 0;
 
     emeta->pose.pose_avail = FALSE;
     emeta->pose.pos[0] = 0.0;
@@ -32,11 +34,14 @@ static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer
     emeta->pose.orient[0] = 0.0;
     emeta->pose.orient[1] = 0.0;
     emeta->pose.orient[2] = 0.0;
+    return true;
 }
 
 static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
                                             GstBuffer* buffer, GQuark type, gpointer data)
 {
+    GST_TRACE("Transform");
+
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
     /* we always copy no matter what transform */

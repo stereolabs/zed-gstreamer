@@ -1,18 +1,18 @@
-set( SOURCES
-     gstzeddatacsvsink.cpp
+set(SOURCES
+    gstzeddatamux.cpp
     )
     
-set( HEADERS
-     gstzeddatacsvsink.h
+set(HEADERS
+    gstzeddatamux.h
     )
 
-set(libname gstzeddatacsvsink)
+set(libname gstzeddatamux)
 
 message(" * ${libname} plugin added")
 
 link_directories(${LIBRARY_INSTALL_DIR})
 
-add_library( ${libname} MODULE
+add_library(${libname} MODULE
     ${SOURCES}
     ${HEADERS}
     )
@@ -25,7 +25,7 @@ endif(UNIX)
 if(CMAKE_BUILD_TYPE EQUAL "DEBUG")
     message("   ${libname}: Debug mode")
     add_definitions(-g)
-else()
+else()  
     message("   ${libname}: Release mode")
     add_definitions(-O2)
 endif()
@@ -50,7 +50,7 @@ else()
         )
 endif()
 
-if (WIN32)
+if(WIN32)
     install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)
 endif()
 install(TARGETS ${libname} LIBRARY DESTINATION ${PLUGIN_INSTALL_DIR})

@@ -1,25 +1,44 @@
-set (SOURCES
-  gstzedmeta.cpp)
+set(SOURCES
+    gstzedmeta.cpp
+    )
     
-set (HEADERS
-  gstzedmeta.h)
+set(HEADERS
+    gstzedmeta.h
+    )
 
 set(libname gstzedmeta)
 
 message( " * ${libname} library added")
 
 add_library (${libname} SHARED
-  ${SOURCES}
-  ${HEADERS})
+    ${SOURCES}
+    ${HEADERS}
+)
 
-add_definitions(-std=c++11 -g -O2)
+if(UNIX)
+    message("   ${libname}: OS Unix")
+    add_definitions(-std=c++11 -Wno-deprecated-declarations)
+endif(UNIX)
+
+if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
+    message("   ${libname}: Debug mode")
+    add_definitions(-g)
+else()
+    message("   ${libname}: Release mode")
+    add_definitions(-O2)
+endif()
+
+if(WIN32)
+    set(CMAKE_SHARED_LIBRARY_PREFIX "")
+    set(CMAKE_STATIC_LIBRARY_PREFIX "")
+endif()
 
 target_link_libraries (${libname} LINK_PUBLIC
-  ${GLIB2_LIBRARIES}
-  ${GOBJECT_LIBRARIES}
-  ${GSTREAMER_LIBRARY}
-  ${GSTREAMER_BASE_LIBRARY}
-  ${GSTREAMER_VIDEO_LIBRARY}
+    ${GLIB2_LIBRARIES}
+    ${GOBJECT_LIBRARIES}
+    ${GSTREAMER_LIBRARY}
+    ${GSTREAMER_BASE_LIBRARY}
+    ${GSTREAMER_VIDEO_LIBRARY}
 )
 
 set_target_properties(${libname} PROPERTIES
@@ -27,7 +46,7 @@ set_target_properties(${libname} PROPERTIES
 )
 
 if (WIN32)
-  install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)
+    install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)
 endif ()
 install( TARGETS ${libname}
     LIBRARY DESTINATION ${LIBRARY_INSTALL_DIR}

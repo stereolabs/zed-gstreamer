@@ -4,7 +4,11 @@
 #include <gst/gst.h>
 #include <gst/base/gstbasesink.h>
 
+
+#ifdef __linux__ 
 #include <unistd.h>
+#endif
+
 #include <string>
 #include <string.h>
 #include <fstream>

@@ -17,6 +17,8 @@ typedef struct _ZedObjectData ZedObjectData;
 struct _ZedInfo {
     gint cam_model;
     gint stream_type;
+    guint grab_frame_width;
+    guint grab_frame_height;
 };
 
 struct _ZedPose {
@@ -182,6 +184,7 @@ static const std::vector<std::pair< BODY_PARTS, BODY_PARTS>> BODY_BONES{
 };
 }
 
+GST_EXPORT
 GType gst_zed_src_meta_api_get_type (void);
 #define GST_ZED_SRC_META_API_TYPE (gst_zed_src_meta_api_get_type())
 #define gst_buffer_get_zed_src_meta(b) \

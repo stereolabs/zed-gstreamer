@@ -172,7 +172,7 @@ gboolean gst_zeddatacsvsink_open_file(GstZedDataCsvSink* sink)
         sink->out_file_ptr = new std::ofstream( sink->filename.str, std::ios::out | std::ios::trunc);
         GST_TRACE_OBJECT( sink, "... open." );
 
-        *sink->out_file_ptr << "TIMESTAMP,STREAM_TYPE,CAM_MODEL," <<
+        *sink->out_file_ptr << "TIMESTAMP,STREAM_TYPE,CAM_MODEL,GRAB_W,GRAB_H," <<
                                "POSE_VAL,POS_TRK_STATE,POS_X_[m],POS_Y_[m],POS_Z_[m],OR_X_[rad],OR_Y_[rad],OR_Z_[rad]," <<
                                "IMU_VAL,ACC_X_[m/s²],ACC_Y_[m/s²],ACC_Z_[m/s²],GYRO_X_[rad/s],GYROY_[rad/s],GYRO_Z_[rad/s]," <<
                                "MAG_VAL,MAG_X_[uT],MAG_Y_[uT],MAG_Z_[uT]," <<
@@ -245,7 +245,7 @@ gboolean gst_zeddatacsvsink_event (GstBaseSink * sink, GstEvent * event)
         break;
     }
 
-    return GST_BASE_SINK_CLASS(gst_zeddatacsvsink_parent_class)->event (sink, event);
+    return GST_BASE_SINK_CLASS(gst_zeddatacsvsink_parent_class)->event( sink, event );
 }
 
 
@@ -272,9 +272,12 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
         // ----> Info
         *csvsink->out_file_ptr << meta->info.stream_type << CSV_SEP;
         *csvsink->out_file_ptr << meta->info.cam_model << CSV_SEP;
+        *csvsink->out_file_ptr << meta->info.grab_frame_width << CSV_SEP;
+        *csvsink->out_file_ptr << meta->info.grab_frame_height << CSV_SEP;
 
         GST_LOG (" * [META] Stream type: %d", meta->info.stream_type );
         GST_LOG (" * [META] Camera model: %d", meta->info.cam_model );
+        GST_LOG (" * [META] Grab frame size: %d x %d", meta->info.grab_frame_width,  meta->info.grab_frame_height );
         // <---- Info
 
         // ----> Camera Pose
@@ -352,6 +355,12 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
 
         // Release incoming buffer
         gst_buffer_unmap( buf, &map_in );
+    }
+    else
+    {
+        GST_ELEMENT_ERROR (sink, RESOURCE, FAILED,
+                           ("Failed to map buffer for reading" ), (NULL));
+        return GST_FLOW_ERROR;
     }
 
     return GST_FLOW_OK;
