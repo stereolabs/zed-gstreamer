@@ -1,51 +1,56 @@
-set (SOURCES
-  gstzeddatacsvsink.cpp)
+set( SOURCES
+     gstzeddatacsvsink.cpp
+    )
     
-set (HEADERS
-  gstzeddatacsvsink.h)
+set( HEADERS
+     gstzeddatacsvsink.h
+    )
 
 set(libname gstzeddatacsvsink)
 
-message( " * ${libname} plugin added")
+message(" * ${libname} plugin added")
 
 link_directories(${LIBRARY_INSTALL_DIR})
 
-add_library (${libname} MODULE
-  ${SOURCES}
-  ${HEADERS})
+add_library( ${libname} MODULE
+    ${SOURCES}
+    ${HEADERS}
+    )
 
-if (UNIX)    
-  add_definitions(-std=c++11)
-endif (UNIX)
+if(UNIX)
+    message("   ${libname}: OS Unix")
+    add_definitions(-std=c++11 -Wno-deprecated-declarations)
+endif(UNIX)
 
-if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
-  message("${libname}: Debug mode")
-  add_definitions(-g)
+if(CMAKE_BUILD_TYPE EQUAL "DEBUG")
+    message("   ${libname}: Debug mode")
+    add_definitions(-g)
 else()
-  add_definitions(-O2)
+    message("   ${libname}: Release mode")
+    add_definitions(-O2)
+endif()
+
+if(WIN32)
+    target_link_libraries (${libname} LINK_PUBLIC
+        ${GLIB2_LIBRARIES}
+        ${GOBJECT_LIBRARIES}
+        ${GSTREAMER_LIBRARY}
+        ${GSTREAMER_BASE_LIBRARY}
+        ${GSTREAMER_VIDEO_LIBRARY}
+        gstzedmeta
+        )
+else()
+    target_link_libraries (${libname} LINK_PUBLIC
+        ${GLIB2_LIBRARIES}
+        ${GOBJECT_LIBRARIES}
+        ${GSTREAMER_LIBRARY}
+        ${GSTREAMER_BASE_LIBRARY}
+        ${GSTREAMER_VIDEO_LIBRARY}
+        ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
+        )
 endif()
 
 if (WIN32)
-  target_link_libraries (${libname} LINK_PUBLIC
-    ${GLIB2_LIBRARIES}
-    ${GOBJECT_LIBRARIES}
-    ${GSTREAMER_LIBRARY}
-    ${GSTREAMER_BASE_LIBRARY}
-    ${GSTREAMER_VIDEO_LIBRARY}
-    gstzedmeta
-  )
-else()
-  target_link_libraries (${libname} LINK_PUBLIC
-    ${GLIB2_LIBRARIES}
-    ${GOBJECT_LIBRARIES}
-    ${GSTREAMER_LIBRARY}
-    ${GSTREAMER_BASE_LIBRARY}
-    ${GSTREAMER_VIDEO_LIBRARY}
-    ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
-  )
+    install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)
 endif()
-
-if (WIN32)
-  install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)
-endif ()
 install(TARGETS ${libname} LIBRARY DESTINATION ${PLUGIN_INSTALL_DIR})
