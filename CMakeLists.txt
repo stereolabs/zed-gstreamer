@@ -109,7 +109,6 @@ add_subdirectory(gst-zed-data-csv-sink)
 
 if(OpenCV_FOUND)
     add_subdirectory(gst-zed-od-overlay)
-    add_subdirectory(gst-zed-obj-det-sink)
 else()
     message( "OpenCV not available. 'gstzedodoverlay' will not be installed")
 endif()

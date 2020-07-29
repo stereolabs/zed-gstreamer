@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Example pipeline to resize 2K RGB and depth stream to VGA resolution for display purpose remuxing the Object 
-# Detection metadata as input for `zedoddisplaysink`
+# Detection metadata as input for `zedodoverlay`
 
 # 1) Define a `zeddatamux` object named `mux` to be used to recompose the RGB+metadata stream to be used to render 
 #    the result of Object Detection using `zedoddisplaysink`. The `videoscale` filter indeed removes ZED metadata
@@ -12,11 +12,11 @@
 # 5) Set the data stream from `demux` as input on the data sink of `mux`.
 # 6) Rescale the RGB stream to VGA resolution and set it as input on the video sink of `mux`.
 # 7) Set the source of the muxer as input for `zedodoverlay` to draw Object Detection overlays
-# 8) Convert the stream and display it using `fpsdisplaysink`.
+# 8) Convert the stream RGB stream with Object Detection overlay and display it using `fpsdisplaysink`.
 
 gst-launch-1.0 \
 zeddatamux name=mux \
-zedsrc stream-type=4 resolution=0 framerate=15 od-detection-model=1 od-enabled=true ! \
+zedsrc stream-type=4 resolution=0 framerate=30 od-detection-model=1 od-enabled=true ! \
 zeddemux stream-data=true is-depth=true name=demux \
 demux.src_aux ! queue ! autovideoconvert ! videoscale ! video/x-raw,width=672,height=376 ! queue ! fpsdisplaysink \
 demux.src_data ! mux.sink_data \

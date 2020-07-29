@@ -1,31 +1,7 @@
 ﻿/*
  * GStreamer
- * Copyright (C) 2005 Thomas Vander Stichele <thomas@apestaart.org>
- * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
+ * Copyright (C) 2006 Stefan Kost <ensonic@users.sf.net>
  * Copyright (C) YEAR AUTHOR_NAME AUTHOR_EMAIL
- *
- * Permission is hereby granted, free of charge, to any person obtaining a
- * copy of this software and associated documentation files (the "Software"),
- * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
- * and/or sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- * DEALINGS IN THE SOFTWARE.
- *
- * Alternatively, the contents of this file may be used under the
- * GNU Lesser General Public License Version 2.1 (the "LGPL"), in
- * which case the following provisions apply instead of the ones
- * mentioned above:
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -51,24 +27,28 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch -v -m fakesrc ! plugin ! fakesink silent=TRUE
+ * gst-launch -v -m fakesrc ! zedodoverlay ! fakesink silent=TRUE
  * ]|
  * </refsect2>
  */
 
+#include <opencv2/opencv.hpp>
+#include <gst-zed-meta/gstzedmeta.h>
+
+
 
 #include <gst/gst.h>
+#include <gst/base/base.h>
+#include <gst/controller/controller.h>
 #include <gst/video/video.h>
-#include <gst/gstbuffer.h>
-#include <gst/gstcaps.h>
-
-#include <opencv2/opencv.hpp>
 
 #include "gstzedodoverlay.h"
-#include "gst-zed-meta/gstzedmeta.h"
 
-GST_DEBUG_CATEGORY_STATIC (gst_zedodoverlay_debug);
-#define GST_CAT_DEFAULT gst_zedodoverlay_debug
+GST_DEBUG_CATEGORY_STATIC (gst_zed_od_overlay_debug);
+#define GST_CAT_DEFAULT gst_zed_od_overlay_debug
+
+static void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat scaleW, gfloat scaleH );
+gboolean gst_zedoddisplaysink_event (GstBaseTransform * base, GstEvent * event);
 
 /* Filter signals and args */
 enum
@@ -82,99 +62,108 @@ enum
     PROP_0
 };
 
-
-
 /* the capabilities of the inputs and outputs.
  *
- * describe the real formats here.
+ * FIXME:describe the real formats here.
  */
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
-                                                                    GST_PAD_SINK,
-                                                                    GST_PAD_ALWAYS,
-                                                                    GST_STATIC_CAPS( ("video/x-raw, "
-                                                                                      "format = (string) { BGRA }, "
-                                                                                      "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                                                      "height =  (int) { 376, 720, 1080, 1242 } , "
-                                                                                      "framerate =  (fraction) { 15, 30, 60, 100 }") ) );
 
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
-                                                                   GST_PAD_SRC,
-                                                                   GST_PAD_ALWAYS,
-                                                                   GST_STATIC_CAPS( ("video/x-raw, "
-                                                                                     "format = (string) { BGRA }, "
-                                                                                     "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                                                     "height =  (int) { 376, 720, 1080, 1242 } , "
-                                                                                     "framerate =  (fraction)  { 15, 30, 60, 100 }") ) );
+static GstStaticPadTemplate sink_template =
+        GST_STATIC_PAD_TEMPLATE (
+            "sink",
+            GST_PAD_SINK,
+            GST_PAD_ALWAYS,
+            GST_STATIC_CAPS(
+                ("video/x-raw, " // Double stream
+                 "format = (string) { BGRA }, "
+                 "width = (int) { 672, 1280, 1920, 2208 } , "
+                 "height =  (int) { 752, 1440, 2160, 2484 } , "
+                 "framerate =  (fraction) { 15, 30, 60, 100 }"
+                 ";"
+                 "video/x-raw, " // Single stream
+                 "format = (string) { BGRA }, "
+                 "width = (int) { 672, 1280, 1920, 2208 } , "
+                 "height =  (int) { 376, 720, 1080, 1242 } , "
+                 "framerate =  (fraction) { 15, 30, 60, 100 }")  ) );
 
-/* class initialization */
-G_DEFINE_TYPE(GstZedOdOverlay, gst_zedodoverlay, GST_TYPE_ELEMENT);
+static GstStaticPadTemplate src_template =
+        GST_STATIC_PAD_TEMPLATE (
+            "src",
+            GST_PAD_SRC,
+            GST_PAD_ALWAYS,
+            GST_STATIC_CAPS(
+                ("video/x-raw, " // Double stream
+                 "format = (string) { BGRA }, "
+                 "width = (int) { 672, 1280, 1920, 2208 } , "
+                 "height =  (int) { 752, 1440, 2160, 2484 } , "
+                 "framerate =  (fraction) { 15, 30, 60, 100 }"
+                 ";"
+                 "video/x-raw, " // Single stream
+                 "format = (string) { BGRA }, "
+                 "width = (int) { 672, 1280, 1920, 2208 } , "
+                 "height =  (int) { 376, 720, 1080, 1242 } , "
+                 "framerate =  (fraction) { 15, 30, 60, 100 }")  ) );
 
-static void gst_zedodoverlay_set_property (GObject * object, guint prop_id,
-                                           const GValue * value, GParamSpec * pspec);
-static void gst_zedodoverlay_get_property (GObject * object, guint prop_id,
-                                           GValue * value, GParamSpec * pspec);
+#define gst_zed_od_overlay_parent_class parent_class
+G_DEFINE_TYPE (GstZedOdOverlay, gst_zed_od_overlay, GST_TYPE_BASE_TRANSFORM);
 
-static gboolean gst_zedodoverlay_sink_event (GstPad * pad, GstObject * parent, GstEvent * event);
-static GstFlowReturn gst_zedodoverlay_chain (GstPad * pad, GstObject * parent, GstBuffer * buf);
+static void gst_zed_od_overlay_set_property (GObject * object, guint prop_id,
+                                             const GValue * value, GParamSpec * pspec);
+static void gst_zed_od_overlay_get_property (GObject * object, guint prop_id,
+                                             GValue * value, GParamSpec * pspec);
+
+static GstFlowReturn gst_zed_od_overlay_transform_ip (GstBaseTransform * base,
+                                                      GstBuffer * outbuf);
 
 /* GObject vmethod implementations */
 
 /* initialize the plugin's class */
 static void
-gst_zedodoverlay_class_init (GstZedOdOverlayClass * klass)
+gst_zed_od_overlay_class_init (GstZedOdOverlayClass * klass)
 {
-    GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
-    GstElementClass *gstelement_class = GST_ELEMENT_CLASS (klass);
+    GObjectClass *gobject_class;
+    GstElementClass *gstelement_class;
 
-    GST_DEBUG_OBJECT( gobject_class, "Class Init" );
+    gobject_class = (GObjectClass *) klass;
+    gstelement_class = (GstElementClass *) klass;
 
-    gobject_class->set_property = gst_zedodoverlay_set_property;
-    gobject_class->get_property = gst_zedodoverlay_get_property;
+    gobject_class->set_property = gst_zed_od_overlay_set_property;
+    gobject_class->get_property = gst_zed_od_overlay_get_property;
 
-    gst_element_class_set_static_metadata (gstelement_class,
-                                           "ZED Object Detection Overlay",
-                                           "Overlay/Video",
-                                           "Stereolabs ZED Object Detection Overlay",
-                                           "Stereolabs <support@stereolabs.com>");
-
-    gst_element_class_add_pad_template (gstelement_class,
-                                        gst_static_pad_template_get (&src_factory));
+    gst_element_class_set_details_simple (gstelement_class,
+                                          "ZedOdOverlay",
+                                          "Generic/Filter",
+                                          "Draws the results of ZED Object Detection module",
+                                          "Stereolabs <support@stereolabs.com>");
 
     gst_element_class_add_pad_template (gstelement_class,
-                                        gst_static_pad_template_get (&sink_factory));
+                                        gst_static_pad_template_get (&src_template));
+    gst_element_class_add_pad_template (gstelement_class,
+                                        gst_static_pad_template_get (&sink_template));
+
+    GST_BASE_TRANSFORM_CLASS (klass)->transform_ip =
+            GST_DEBUG_FUNCPTR (gst_zed_od_overlay_transform_ip);
+
+    GST_BASE_TRANSFORM_CLASS (klass)->sink_event = GST_DEBUG_FUNCPTR (gst_zedoddisplaysink_event);
+
+    //debug category for filtering log messages
+    GST_DEBUG_CATEGORY_INIT (gst_zed_od_overlay_debug, "zedodoverlay", 0, "Zed Object Detection Overlay");
 }
 
 /* initialize the new element
- * instantiate pads and add them to element
- * set pad calback functions
  * initialize instance structure
  */
-static void gst_zedodoverlay_init (GstZedOdOverlay *filter)
+static void
+gst_zed_od_overlay_init (GstZedOdOverlay *filter)
 {
-    GST_DEBUG_OBJECT( filter, "Filter Init" );
-
-    filter->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
-    gst_element_add_pad (GST_ELEMENT (filter), filter->sinkpad);
-
-    filter->srcpad = gst_pad_new_from_static_template( &src_factory, "src" );
-    gst_element_add_pad (GST_ELEMENT (filter), filter->srcpad);
-
-    gst_pad_set_event_function( filter->sinkpad, GST_DEBUG_FUNCPTR(gst_zedodoverlay_sink_event) );
-    gst_pad_set_chain_function( filter->sinkpad, GST_DEBUG_FUNCPTR(gst_zedodoverlay_chain) );
-
-    filter->caps = nullptr;
-
-    filter->img_left_w = 0;
-    filter->img_left_h = 0;
+    filter->img_left_w=0;
+    filter->img_left_h=0;
 }
 
 static void
-gst_zedodoverlay_set_property (GObject * object, guint prop_id,
-                               const GValue * value, GParamSpec * pspec)
+gst_zed_od_overlay_set_property (GObject * object, guint prop_id,
+                                 const GValue * value, GParamSpec * pspec)
 {
-    GstZedOdOverlay *filter = GST_ZEDODOVERLAY (object);
-
-    GST_DEBUG_OBJECT( filter, "Set property" );
+    GstZedOdOverlay *filter = GST_ZED_OD_OVERLAY (object);
 
     switch (prop_id) {
     default:
@@ -184,12 +173,10 @@ gst_zedodoverlay_set_property (GObject * object, guint prop_id,
 }
 
 static void
-gst_zedodoverlay_get_property (GObject * object, guint prop_id,
-                               GValue * value, GParamSpec * pspec)
+gst_zed_od_overlay_get_property (GObject * object, guint prop_id,
+                                 GValue * value, GParamSpec * pspec)
 {
-    GstZedOdOverlay *filter = GST_ZEDODOVERLAY (object);
-
-    GST_DEBUG_OBJECT( filter, "Get property" );
+    GstZedOdOverlay *filter = GST_ZED_OD_OVERLAY (object);
 
     switch (prop_id) {
     default:
@@ -198,55 +185,19 @@ gst_zedodoverlay_get_property (GObject * object, guint prop_id,
     }
 }
 
-/* GstElement vmethod implementations */
-
-static gboolean set_out_caps( GstZedOdOverlay* filter, GstCaps* sink_caps )
+/* GstBaseTransform vmethod implementations */
+gboolean gst_zedoddisplaysink_event (GstBaseTransform * base, GstEvent * event)
 {
-    GstVideoInfo vinfo_in;
-    GstVideoInfo vinfo_left;
+    GstEventType type;
+    GstZedOdOverlay *filter = GST_ZED_OD_OVERLAY (base);
 
-    GST_DEBUG_OBJECT( filter, "Sink caps %" GST_PTR_FORMAT, sink_caps);
+    type = GST_EVENT_TYPE (event);
 
-    // ----> Caps source
-    if (filter->caps) {
-        gst_caps_unref (filter->caps);
-    }
+    GST_TRACE_OBJECT( filter, "Event %d [%d]", type, GST_EVENT_CAPS  );
 
-    gst_video_info_from_caps(&vinfo_in, sink_caps);
-
-    filter->img_left_w = vinfo_in.width;
-    filter->img_left_h = vinfo_in.height;
-
-    gst_video_info_init( &vinfo_left );
-    gst_video_info_set_format( &vinfo_left, GST_VIDEO_FORMAT_BGRA,
-                               vinfo_in.width, vinfo_in.height );
-    vinfo_left.fps_d = vinfo_in.fps_d;
-    vinfo_left.fps_n = vinfo_in.fps_n;
-    filter->caps = gst_video_info_to_caps(&vinfo_left);
-
-    GST_DEBUG_OBJECT( filter, "Created left caps %" GST_PTR_FORMAT, filter->caps );
-    if(gst_pad_set_caps(filter->srcpad, filter->caps)==FALSE)
-    {
-        return false;
-    }
-    // <---- Caps source
-
-
-    return TRUE;
-}
-
-/* this function handles sink events */
-static gboolean gst_zedodoverlay_sink_event(GstPad* pad, GstObject* parent, GstEvent* event)
-{
-    GstZedOdOverlay *filter;
-    gboolean ret;
-
-    filter = GST_ZEDODOVERLAY (parent);
-
-    GST_LOG_OBJECT (filter, "Received %s event: %" GST_PTR_FORMAT,
-                    GST_EVENT_TYPE_NAME (event), event);
-
-    switch (GST_EVENT_TYPE (event)) {
+    switch (type) {
+    case GST_EVENT_EOS:
+        break;
     case GST_EVENT_CAPS:
     {
         GST_DEBUG_OBJECT( filter, "Event CAPS" );
@@ -254,21 +205,114 @@ static gboolean gst_zedodoverlay_sink_event(GstPad* pad, GstObject* parent, GstE
 
         gst_event_parse_caps(event, &caps);
 
-        ret = set_out_caps( filter, caps );
+        GstVideoInfo vinfo_in;
+        gst_video_info_from_caps(&vinfo_in, caps);
+        filter->img_left_w = vinfo_in.width;
+        filter->img_left_h = vinfo_in.height;
+        if(vinfo_in.height==752 || vinfo_in.height==1440 || vinfo_in.height==2160 || vinfo_in.height==2484)
+        {
+            filter->img_left_h/=2; // Only half buffer size if the stream is composite
+        }
 
-        /* and forward */
-        ret = gst_pad_event_default (pad, parent, event);
         break;
     }
     default:
-        ret = gst_pad_event_default (pad, parent, event);
         break;
     }
 
-    return ret;
+    return GST_BASE_TRANSFORM_CLASS(parent_class)->sink_event(base, event);
 }
 
-void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat scaleW, gfloat scaleH )
+/* this function does the actual processing
+ */
+static GstFlowReturn
+gst_zed_od_overlay_transform_ip (GstBaseTransform * base, GstBuffer * outbuf)
+{
+    GstZedOdOverlay *filter = GST_ZED_OD_OVERLAY (base);
+    GST_TRACE_OBJECT( filter, "transform_ip" );
+
+    GstMapInfo map_buf;
+
+    if (GST_CLOCK_TIME_IS_VALID (GST_BUFFER_TIMESTAMP (outbuf)))
+        gst_object_sync_values (GST_OBJECT (filter), GST_BUFFER_TIMESTAMP (outbuf));
+
+    if(FALSE==gst_buffer_map(outbuf, &map_buf, GstMapFlags(GST_MAP_READ|GST_MAP_WRITE)))
+    {
+        GST_WARNING_OBJECT( filter, "Could not map buffer for write/read" );
+        return GST_FLOW_OK;
+    }
+
+    // Get left image (upper half memory buffer)
+    cv::Mat ocv_left = cv::Mat( filter->img_left_h, filter->img_left_w, CV_8UC4, map_buf.data );
+
+    // Metadata
+    GstZedSrcMeta* meta = (GstZedSrcMeta*)gst_buffer_get_meta( outbuf, GST_ZED_SRC_META_API_TYPE );
+
+    if( meta==NULL ) // Metadata not found
+    {
+        GST_ELEMENT_ERROR (filter, RESOURCE, FAILED,
+                           ("No ZED metadata [GstZedSrcMeta] found in the stream'" ), (NULL));
+        return GST_FLOW_ERROR;
+    }
+
+    GST_TRACE_OBJECT( filter, "Cam. Model: %d",meta->info.cam_model );
+    GST_TRACE_OBJECT( filter, "Stream type: %d",meta->info.stream_type );
+    GST_TRACE_OBJECT( filter, "Grab frame Size: %d x %d",meta->info.grab_frame_width,meta->info.grab_frame_height );
+
+    gboolean rescaled = FALSE;
+    gfloat scaleW = 1.0f;
+    gfloat scaleH = 1.0f;
+    if(meta->info.grab_frame_width != filter->img_left_w ||
+            meta->info.grab_frame_height != filter->img_left_h)
+    {
+        rescaled = TRUE;
+        scaleW = ((gfloat)filter->img_left_w)/meta->info.grab_frame_width;
+        scaleH = ((gfloat)filter->img_left_h)/meta->info.grab_frame_height;
+    }
+
+    if(meta->od_enabled)
+    {
+        GST_TRACE_OBJECT( filter, "Detected %d objects",meta->obj_count );
+        // Draw 2D detections
+        draw_objects( ocv_left, meta->obj_count, meta->objects, scaleW, scaleH );
+    }
+
+
+    GST_TRACE ("Buffer unmap" );
+    gst_buffer_unmap( outbuf, &map_buf );
+
+    return GST_FLOW_OK;
+}
+
+
+/* entry point to initialize the plug-in
+         * initialize the plug-in itself
+         * register the element factories and other features
+         */
+static gboolean
+plugin_init (GstPlugin * plugin)
+{
+    return gst_element_register (plugin, "zedodoverlay", GST_RANK_NONE,
+                                 GST_TYPE_ZED_OD_OVERLAY);
+}
+
+/* gstreamer looks for this structure to register plugins
+         *
+         * FIXME:exchange the string 'Template plugin' with you plugin description
+         */
+GST_PLUGIN_DEFINE (
+        GST_VERSION_MAJOR,
+        GST_VERSION_MINOR,
+        zedodoverlay,
+        "ZED Object Detection Overlay",
+        plugin_init,
+        GST_PACKAGE_VERSION,
+        GST_PACKAGE_LICENSE,
+        GST_PACKAGE_NAME,
+        GST_PACKAGE_ORIGIN
+        )
+
+static void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat scaleW, gfloat scaleH )
 {
     for( int i=0; i<obj_count; i++ )
     {
@@ -395,187 +439,3 @@ void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs, gfloat
         }
     }
 }
-
-/* chain function
- * this function does the actual processing
- */
-static GstFlowReturn gst_zedodoverlay_chain(GstPad* pad, GstObject * parent, GstBuffer* buf )
-{
-    GstZedOdOverlay *filter;
-
-    filter = GST_ZEDODOVERLAY (parent);
-
-    GST_TRACE_OBJECT( filter, "Chain" );
-
-    GstMapInfo map_in;
-    GstMapInfo map_out;
-
-    GstZedSrcMeta* meta = nullptr;
-
-    GstFlowReturn ret = GST_FLOW_ERROR;
-
-    GstClockTime timestamp = GST_CLOCK_TIME_NONE;
-    timestamp = GST_BUFFER_TIMESTAMP (buf);
-    GST_LOG ("timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS (timestamp));
-
-    GST_TRACE_OBJECT( filter, "Processing ..." );
-    if(gst_buffer_map(buf, &map_in, (GstMapFlags)(GST_MAP_WRITE|GST_MAP_READ)))
-    {
-        GST_TRACE ("Input buffer size %lu B", map_in.size );
-
-//        GST_TRACE ("Output buffer allocation - size %lu B", map_in.size );
-//        GstBuffer* proc_buf = gst_buffer_new_allocate(NULL, map_in.size, NULL );
-
-//        if( !GST_IS_BUFFER(proc_buf) )
-//        {
-//            GST_DEBUG ("Out buffer not allocated");
-
-//            // ----> Release incoming buffer
-//            gst_buffer_unmap( buf, &map_in );
-//            gst_buffer_unref(buf);
-//            // <---- Release incoming buffer
-
-//            return GST_FLOW_ERROR;
-//        }
-
-        //if( gst_buffer_map(proc_buf, &map_out, (GstMapFlags)(GST_MAP_WRITE)) )
-        //{
-            //GST_TRACE ("Copying buffer %lu B", map_out.size );
-            //memcpy(map_out.data, map_in.data, map_out.size);
-
-            // Get image
-            //cv::Mat frame = cv::Mat( filter->img_left_h, filter->img_left_w, CV_8UC4, map_out.data );
-            cv::Mat frame = cv::Mat( filter->img_left_h, filter->img_left_w, CV_8UC4, map_in.data );
-
-            // Get metadata
-            meta = (GstZedSrcMeta*)gst_buffer_get_meta( buf, GST_ZED_SRC_META_API_TYPE );
-
-            if(meta==NULL)
-            {
-                GST_WARNING( "The ZED Stream does not contain ZED metadata" );
-            }
-
-            if( meta==NULL ) // Metadata not found
-            {
-                GST_ELEMENT_ERROR (filter, RESOURCE, FAILED,
-                                   ("No ZED metadata [GstZedSrcMeta] found in the stream. No overlay'" ), (NULL));
-
-                gst_buffer_unmap( buf, &map_in );
-                gst_buffer_unref(buf);
-
-                return GST_FLOW_ERROR;
-            }
-
-            GST_TRACE_OBJECT( filter, "Cam. Model: %d",meta->info.cam_model );
-            GST_TRACE_OBJECT( filter, "Stream type: %d",meta->info.stream_type );
-            GST_TRACE_OBJECT( filter, "Grab frame Size: %d x %d",meta->info.grab_frame_width,meta->info.grab_frame_height );
-
-            gboolean rescaled = FALSE;
-            gfloat scaleW = 1.0f;
-            gfloat scaleH = 1.0f;
-            if(meta->info.grab_frame_width != filter->img_left_w ||
-                    meta->info.grab_frame_height != filter->img_left_h)
-            {
-                rescaled = TRUE;
-                scaleW = ((gfloat)filter->img_left_w)/meta->info.grab_frame_width;
-                scaleH = ((gfloat)filter->img_left_h)/meta->info.grab_frame_height;
-            }
-
-            if(meta->od_enabled)
-            {
-                GST_TRACE_OBJECT( filter, "Detected %d objects",meta->obj_count );
-                // Draw 2D detections
-                draw_objects( frame, meta->obj_count, meta->objects, scaleW, scaleH );
-            }
-
-            //GST_TRACE ("Out buffer set timestamp" );
-            //GST_BUFFER_PTS(proc_buf) = GST_BUFFER_PTS (buf);
-            //GST_BUFFER_DTS(proc_buf) = GST_BUFFER_DTS (buf);
-            //GST_BUFFER_TIMESTAMP(proc_buf) = GST_BUFFER_TIMESTAMP (buf);
-
-            GST_TRACE ("Out buffer push" );
-            //ret = gst_pad_push(filter->srcpad, proc_buf);
-            ret = gst_pad_push(filter->srcpad, buf);
-
-            if( ret != GST_FLOW_OK )
-            {
-                GST_DEBUG_OBJECT( filter, "Error pushing out buffer: %s", gst_flow_get_name (ret));
-
-                // ----> Release incoming buffer
-                gst_buffer_unmap( buf, &map_in );
-                gst_buffer_unref(buf);
-//                GST_TRACE ("Out buffer unmap" );
-//                gst_buffer_unmap(proc_buf, &map_out);
-//                gst_buffer_unref(proc_buf);
-                // <---- Release incoming buffer
-                return ret;
-            }
-
-            //GST_TRACE ("Out buffer unmap" );
-            //gst_buffer_unmap(proc_buf, &map_out);
-            //gst_buffer_unref(proc_buf);
-//        }
-//        else
-//        {
-//            GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
-//                               ("Failed to map buffer for writing" ), (NULL));
-//            return GST_FLOW_ERROR;
-//        }
-
-        // ----> Release incoming buffer.
-        //GST_TRACE ("In buffer unmap" );
-        //gst_buffer_unmap( buf, &map_in );
-        //gst_buffer_unref(buf); // NOTE: required to not increase memory consumption exponentially
-        // <---- Release incoming buffer
-    }
-    else
-    {
-        GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
-                           ("Failed to map buffer for reading" ), (NULL));
-        return GST_FLOW_ERROR;
-    }
-    GST_TRACE ("... processed" );
-
-    if(ret==GST_FLOW_OK)
-    {
-        GST_TRACE_OBJECT( filter, "Chain OK" );
-        GST_LOG( "**************************" );
-        return GST_FLOW_OK;
-    }
-
-    return GST_FLOW_ERROR;
-}
-
-
-/* entry point to initialize the plug-in
- * initialize the plug-in itself
- * register the element factories and other features
- */
-static gboolean plugin_init (GstPlugin * plugin)
-{
-    /* debug category for fltering log messages
-   *
-   * exchange the string 'Template plugin' with your description
-   */
-    GST_DEBUG_CATEGORY_INIT( gst_zedodoverlay_debug, "zedodoverlay",
-                             0, "debug category for zedodoverlay element");
-
-    gst_element_register( plugin, "zedodoverlay", GST_RANK_NONE,
-                          gst_zedodoverlay_get_type());
-
-    return TRUE;
-}
-
-/* gstreamer looks for this structure to register plugins
- *
- * exchange the string 'Template plugin' with your plugin description
- */
-GST_PLUGIN_DEFINE( GST_VERSION_MAJOR,
-                   GST_VERSION_MINOR,
-                   zedodoverlay,
-                   "ZED OBject Detection Overlay",
-                   plugin_init,
-                   GST_PACKAGE_VERSION,
-                   GST_PACKAGE_LICENSE,
-                   GST_PACKAGE_NAME,
-                   GST_PACKAGE_ORIGIN)
