@@ -10,7 +10,9 @@ set(libname gstzedodoverlay)
 
 message( " * ${libname} plugin added")
 
+include_directories(${OpenCV_INCLUDE_DIRS})
 link_directories(${LIBRARY_INSTALL_DIR})
+link_directories(${OpenCV_LINK_DIRECTORIES})
 
 add_library (${libname} MODULE
     ${SOURCES}

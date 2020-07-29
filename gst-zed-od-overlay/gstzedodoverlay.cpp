@@ -35,8 +35,6 @@
 #include <opencv2/opencv.hpp>
 #include <gst-zed-meta/gstzedmeta.h>
 
-
-
 #include <gst/gst.h>
 #include <gst/base/base.h>
 #include <gst/controller/controller.h>
