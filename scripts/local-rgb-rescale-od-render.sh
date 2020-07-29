@@ -11,7 +11,8 @@
 # 4) Rescale the Depth stream to VGA resolution and render it using `fpsdisplaysink`.
 # 5) Set the data stream from `demux` as input on the data sink of `mux`.
 # 6) Rescale the RGB stream to VGA resolution and set it as input on the video sink of `mux`.
-# 7) Set the source of the muxer as input for `zedoddisplaysink` to be displayed.
+# 7) Set the source of the muxer as input for `zedodoverlay` to draw Object Detection overlays
+# 8) Convert the stream and display it using `fpsdisplaysink`.
 
 gst-launch-1.0 \
 zeddatamux name=mux \
@@ -20,4 +21,5 @@ zeddemux stream-data=true is-depth=true name=demux \
 demux.src_aux ! queue ! autovideoconvert ! videoscale ! video/x-raw,width=672,height=376 ! queue ! fpsdisplaysink \
 demux.src_data ! mux.sink_data \
 demux.src_left ! queue ! videoscale ! video/x-raw,width=672,height=376 ! mux.sink_video \
-mux.src ! queue ! zedoddisplaysink
+mux.src ! queue ! zedodoverlay ! queue ! \
+autovideoconvert ! fpsdisplaysink
