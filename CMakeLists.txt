@@ -13,10 +13,10 @@ include(MacroLogFeature)
 
 find_package(GStreamer REQUIRED COMPONENTS base)
 macro_log_feature(GSTREAMER_FOUND "GStreamer" "Required to build ${proj_name}" "http://gstreamer.freedesktop.org/" TRUE "1.2.0")
-macro_log_feature(GSTREAMER_BASE_LIBRARY_FOUND "GStreamer base library" "Required to build ${proj_name}" "http://gstreamer.freedesktop.org/" FALSE "1.2.0")
+macro_log_feature(GSTREAMER_BASE_LIBRARY_FOUND "GStreamer base library" "Required to build ${proj_name}" "http://gstreamer.freedesktop.org/" TRUE "1.2.0")
 
 find_package(GStreamerPluginsBase COMPONENTS video)
-macro_log_feature(GSTREAMER_VIDEO_LIBRARY_FOUND "GStreamer video library" "Required to build ${proj_name}" "http://gstreamer.freedesktop.org/" FALSE "1.2.0")
+macro_log_feature(GSTREAMER_VIDEO_LIBRARY_FOUND "GStreamer video library" "Required to build ${proj_name}" "http://gstreamer.freedesktop.org/" TRUE "1.2.0")
 
 find_package(GLIB2 REQUIRED)
 macro_log_feature(GLIB2_FOUND "GLib" "Required to build ${proj_name}" "http://www.gtk.org/" TRUE)
@@ -32,6 +32,11 @@ macro_log_feature(CUDA_FOUND "Nvidia CUDA library" "Required to build 'gstzed'" 
 
 find_package(OpenCV)
 macro_log_feature(OpenCV_FOUND "OpenCV library" "Required to build 'gstzedodoverlay'" "http://www.opencv.org" FALSE)
+
+if(NOT WIN32)
+    pkg_check_modules(GSTRTSPSERVER gstreamer-rtsp-server-1.0>=1.14.5)
+    macro_log_feature(GSTRTSPSERVER_FOUND "GSTREAMER RTSP SERVER library" "Required to build 'gstrtspserver'" "http://gstreamer.freedesktop.org/" FALSE  "1.14.5")
+endif()
 
 # Setup common environment
 include_directories(
@@ -84,7 +89,16 @@ if(NOT INCLUDE_INSTALL_DIR)
         set(INCLUDE_INSTALL_DIR "${INC_PREFIX}/include/gstreamer-1.0/gst/zed/"
             CACHE PATH "Location to install include headers" FORCE)
     endif()
-endif ()
+endif()
+if(NOT EXE_INSTALL_DIR)
+    if(WIN32)
+        set(EXE_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin"
+            CACHE PATH "Location to install executables" FORCE)
+    else()
+        set(EXE_INSTALL_DIR "/usr/bin"
+            CACHE PATH "Location to install executables" FORCE)
+    endif()
+endif()
 
 message("")
 message("Plugin install dir:")
@@ -96,6 +110,9 @@ message("")
 message("Include install dir:")
 message(${INCLUDE_INSTALL_DIR})
 message("")
+message("Executable install dir:")
+message(${EXE_INSTALL_DIR})
+message("")
 
 add_subdirectory(gst-zed-meta)
 if(ZED_FOUND)
@@ -106,11 +123,23 @@ endif()
 add_subdirectory(gst-zed-demux)
 add_subdirectory(gst-zed-data-mux)
 add_subdirectory(gst-zed-data-csv-sink)
-
 if(OpenCV_FOUND)
     add_subdirectory(gst-zed-od-overlay)
 else()
     message( "OpenCV not available. 'gstzedodoverlay' will not be installed")
 endif()
+if(GSTRTSPSERVER_FOUND)
+    add_subdirectory(gst-zed-rtsp-server)
+else()
+    message( "GstRTSPServer not available. 'gst-zed-rtsp-launch' will not be installed")
+endif()
+
+####################################################################
+# USEFUL FILES
+FILE(GLOB_RECURSE readme_files ${CMAKE_SOURCE_DIR}/README*)
+add_custom_target("READMEs" SOURCES ${readme_files})
+FILE(GLOB_RECURSE script_files ${CMAKE_SOURCE_DIR}/scripts/*)
+add_custom_target("SCRIPTS" SOURCES ${script_files})
+####################################################################
 
 macro_display_feature_log()
