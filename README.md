@@ -204,7 +204,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local Left/Right stream + Multiclass Object Detection result displaying
 
-* Linux: [`local-rgb-od_multi-overlay.sh`](./scripts/linux/linux/local-rgb-od_multi-overlay.sh)
+* Linux: [`local-rgb-od_multi-overlay.sh`](./scripts/linux/local-rgb-od_multi-overlay.sh)
 * Windows: [`local-rgb-od_multi-overlay.bat`](./scripts/windows/local-rgb-od_multi-overlay.bat)
     
 ```    
