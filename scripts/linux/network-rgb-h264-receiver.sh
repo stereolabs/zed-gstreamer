@@ -4,8 +4,8 @@
 
 # install x264enc: `sudo apt-get install x264 gstreamer1.0-plugins-ugly`
 
-#gst-launch-1.0 zedsrc ! queue ! autovideoconvert ! queue ! fpsdisplaysink
-
 gst-launch-1.0 udpsrc port=5000 ! application/x-rtp,clock-rate=90000,payload=96 ! \
  queue ! rtph264depay ! h264parse ! avdec_h264 ! \
  queue ! autovideoconvert ! fpsdisplaysink
+
+

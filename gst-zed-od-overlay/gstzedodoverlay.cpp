@@ -255,17 +255,18 @@ gst_zed_od_overlay_transform_ip (GstBaseTransform * base, GstBuffer * outbuf)
 
     GST_TRACE_OBJECT( filter, "Cam. Model: %d",meta->info.cam_model );
     GST_TRACE_OBJECT( filter, "Stream type: %d",meta->info.stream_type );
-    GST_TRACE_OBJECT( filter, "Grab frame Size: %d x %d",meta->info.grab_frame_width,meta->info.grab_frame_height );
+    GST_TRACE_OBJECT( filter, "Grab frame Size: %d x %d",meta->info.grab_single_frame_width,meta->info.grab_single_frame_height );
+    GST_TRACE_OBJECT( filter, "Filter frame Size: %d x %d",filter->img_left_w,filter->img_left_h );
 
     gboolean rescaled = FALSE;
     gfloat scaleW = 1.0f;
     gfloat scaleH = 1.0f;
-    if(meta->info.grab_frame_width != filter->img_left_w ||
-            meta->info.grab_frame_height != filter->img_left_h)
+    if(meta->info.grab_single_frame_width != filter->img_left_w ||
+            meta->info.grab_single_frame_height != filter->img_left_h)
     {
         rescaled = TRUE;
-        scaleW = ((gfloat)filter->img_left_w)/meta->info.grab_frame_width;
-        scaleH = ((gfloat)filter->img_left_h)/meta->info.grab_frame_height;
+        scaleW = ((gfloat)filter->img_left_w)/meta->info.grab_single_frame_width;
+        scaleH = ((gfloat)filter->img_left_h)/meta->info.grab_single_frame_height;
     }
 
     if(meta->od_enabled)

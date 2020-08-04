@@ -94,35 +94,107 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
                                                                     GST_PAD_SINK,
                                                                     GST_PAD_ALWAYS,
                                                                     GST_STATIC_CAPS( ("video/x-raw, " // Double stream
-                                                                                      "format = (string) { BGRA }, "
-                                                                                      "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                                                      "height =  (int) { 752, 1440, 2160, 2484 } , "
-                                                                                      "framerate =  (fraction) { 15, 30, 60, 100 }") ) );
+                                                                                      "format = (string)BGRA, "
+                                                                                      "width = (int)672, "
+                                                                                      "height = (int)752 , "
+                                                                                      "framerate = (fraction) { 15, 30, 60, 100 }"
+                                                                                      ";"
+                                                                                      "video/x-raw, " // Double stream
+                                                                                      "format = (string)BGRA, "
+                                                                                      "width = (int)1280, "
+                                                                                      "height = (int)1440, "
+                                                                                      "framerate = (fraction) { 15, 30, 60 }"
+                                                                                      ";"
+                                                                                      "video/x-raw, " // Double stream
+                                                                                      "format = (string)BGRA, "
+                                                                                      "width = (int)1920, "
+                                                                                      "height = (int)2160, "
+                                                                                      "framerate = (fraction) { 15, 30 }"
+                                                                                      ";"
+                                                                                      "video/x-raw, " // Double stream
+                                                                                      "format = (string)BGRA, "
+                                                                                      "width = (int)2208, "
+                                                                                      "height = (int)2484, "
+                                                                                      "framerate = (fraction)15") ) );
 
 static GstStaticPadTemplate src_left_factory = GST_STATIC_PAD_TEMPLATE ("src_left",
                                                                         GST_PAD_SRC,
                                                                         GST_PAD_ALWAYS,
                                                                         GST_STATIC_CAPS( ("video/x-raw, "
-                                                                                          "format = (string) { BGRA }, "
-                                                                                          "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                                                          "height =  (int) { 376, 720, 1080, 1242 } , "
-                                                                                          "framerate =  (fraction)  { 15, 30, 60, 100 }") ) );
+                                                                                          "format = (string)BGRA, "
+                                                                                          "width = (int)672, "
+                                                                                          "height =  (int)376, "
+                                                                                          "framerate = (fraction) { 15, 30, 60, 100 }"
+                                                                                          ";"
+                                                                                          "video/x-raw, "
+                                                                                          "format = (string)BGRA, "
+                                                                                          "width = (int)1280, "
+                                                                                          "height =  (int)720, "
+                                                                                          "framerate =  (fraction)  { 15, 30, 60}"
+                                                                                          ";"
+                                                                                          "video/x-raw, "
+                                                                                          "format = (string)BGRA, "
+                                                                                          "width = (int)1920, "
+                                                                                          "height = (int)1080, "
+                                                                                          "framerate = (fraction) { 15, 30 }"
+                                                                                          ";"
+                                                                                          "video/x-raw, "
+                                                                                          "format = (string)BGRA, "
+                                                                                          "width = (int)2208, "
+                                                                                          "height = (int)1242, "
+                                                                                          "framerate = (fraction)15") ) );
 
 
 static GstStaticPadTemplate src_aux_factory = GST_STATIC_PAD_TEMPLATE ("src_aux",
                                                                        GST_PAD_SRC,
                                                                        GST_PAD_ALWAYS,
                                                                        GST_STATIC_CAPS( ("video/x-raw, "
-                                                                                         "format = (string) { GRAY16_LE }, "
-                                                                                         "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                                                         "height =  (int) { 376, 720, 1080, 1242 } , "
-                                                                                         "framerate =  (fraction)  { 15, 30, 60, 100 }"
+                                                                                         "format = (string)BGRA, "
+                                                                                         "width = (int)672, "
+                                                                                         "height =  (int)376, "
+                                                                                         "framerate = (fraction) { 15, 30, 60, 100 }"
                                                                                          ";"
                                                                                          "video/x-raw, "
-                                                                                         "format = (string) { BGRA }, "
-                                                                                         "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                                                         "height =  (int) { 376, 720, 1080, 1242 } , "
-                                                                                         "framerate =  (fraction) { 15, 30, 60, 100 }") ) );
+                                                                                         "format = (string)BGRA, "
+                                                                                         "width = (int)1280, "
+                                                                                         "height =  (int)720, "
+                                                                                         "framerate =  (fraction)  { 15, 30, 60}"
+                                                                                         ";"
+                                                                                         "video/x-raw, "
+                                                                                         "format = (string)BGRA, "
+                                                                                         "width = (int)1920, "
+                                                                                         "height = (int)1080, "
+                                                                                         "framerate = (fraction) { 15, 30 }"
+                                                                                         ";"
+                                                                                         "video/x-raw, "
+                                                                                         "format = (string)BGRA, "
+                                                                                         "width = (int)2208, "
+                                                                                         "height = (int)1242, "
+                                                                                         "framerate = (fraction)15"
+                                                                                         ";"
+                                                                                         "video/x-raw, "
+                                                                                         "format = (string)GRAY16_LE, "
+                                                                                         "width = (int)672, "
+                                                                                         "height =  (int)376, "
+                                                                                         "framerate = (fraction) { 15, 30, 60, 100 }"
+                                                                                         ";"
+                                                                                         "video/x-raw, "
+                                                                                         "format = (string)GRAY16_LE, "
+                                                                                         "width = (int)1280, "
+                                                                                         "height =  (int)720, "
+                                                                                         "framerate =  (fraction)  { 15, 30, 60}"
+                                                                                         ";"
+                                                                                         "video/x-raw, "
+                                                                                         "format = (string)GRAY16_LE, "
+                                                                                         "width = (int)1920, "
+                                                                                         "height = (int)1080, "
+                                                                                         "framerate = (fraction) { 15, 30 }"
+                                                                                         ";"
+                                                                                         "video/x-raw, "
+                                                                                         "format = (string)GRAY16_LE, "
+                                                                                         "width = (int)2208, "
+                                                                                         "height = (int)1242, "
+                                                                                         "framerate = (fraction)15") ) );
 
 static GstStaticPadTemplate src_data_factory = GST_STATIC_PAD_TEMPLATE ("src_data",
                                                                         GST_PAD_SRC,

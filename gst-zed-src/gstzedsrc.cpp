@@ -1031,9 +1031,13 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     ZedInfo info;
     info.cam_model = (gint) cam_info.camera_model;
     info.stream_type = src->stream_type;
-    info.grab_frame_width = cam_info.camera_configuration.resolution.width;
-    info.grab_frame_height = cam_info.camera_configuration.resolution.height;
-    // <---- Info metadat
+    info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
+    info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
+    if(info.grab_single_frame_height==752 || info.grab_single_frame_height==1440 || info.grab_single_frame_height==2160 || info.grab_single_frame_height==2484)
+    {
+        info.grab_single_frame_height/=2; // Only half buffer size if the stream is composite
+    }
+    // <---- Info metadata
 
     // ----> Positional Tracking metadata
     ZedPose pose;

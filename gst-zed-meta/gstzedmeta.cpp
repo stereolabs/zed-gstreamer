@@ -2,12 +2,18 @@
 #include "gstzedmeta.h"
 #include <gst/gstbuffer.h>
 
-
+#include <iostream>
 
 GType gst_zed_src_meta_api_get_type()
 {
+    //std::cout << "gst_zed_src_meta_api_get_type" << std::endl;
+
     static volatile GType type;
-    static const gchar *tags[] = { "ZED", "source", "demux", NULL };
+
+    //static const gchar *tags[] = { "ZED", "Sensors", "ObjectDetection", "Skeletons", NULL };
+
+    // Note: NOT TAGS TO BE SURE THAT METADATA ARE COPIED AND PROPAGATED BY DEFAULT
+    static const gchar *tags[] = { NULL };
 
     if (g_once_init_enter (&type)) {
         GType _type = gst_meta_api_type_register( "GstZedSrcMetaAPI", tags );
@@ -20,12 +26,14 @@ GType gst_zed_src_meta_api_get_type()
 
 static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer* buffer)
 {
+    //std::cout << "gst_zed_src_meta_init" << std::endl;
+
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
     emeta->info.cam_model = 0;
     emeta->info.stream_type = 0;
-    emeta->info.grab_frame_width = 0;
-    emeta->info.grab_frame_height = 0;
+    emeta->info.grab_single_frame_width = 0;
+    emeta->info.grab_single_frame_height = 0;
 
     emeta->pose.pose_avail = FALSE;
     emeta->pose.pos[0] = 0.0;
@@ -40,7 +48,9 @@ static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer
 static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
                                             GstBuffer* buffer, GQuark type, gpointer data)
 {
-    GST_TRACE("Transform");
+    //std::cout << "gst_zed_src_meta_transform" << std::endl;
+
+    GST_DEBUG("Transform");
 
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
@@ -58,6 +68,8 @@ static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
 
 static void gst_zed_src_meta_free(GstMeta * meta, GstBuffer * buffer)
 {
+    //std::cout << "gst_zed_src_meta_free" << std::endl;
+
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
     // TODO eventually free dynamic data
@@ -65,6 +77,8 @@ static void gst_zed_src_meta_free(GstMeta * meta, GstBuffer * buffer)
 
 const GstMetaInfo* gst_zed_src_meta_get_info (void)
 {
+    //std::cout << "gst_zed_src_meta_get_info" << std::endl;
+
     static const GstMetaInfo *meta_info = NULL;
 
     if (g_once_init_enter (&meta_info)) {
@@ -89,12 +103,15 @@ GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
                                             guint8 obj_count,
                                             ZedObjectData* objects)
 {
+    //std::cout << "gst_buffer_add_zed_src_meta" << std::endl;
+
+    GST_DEBUG("Add GstZedSrcMeta");
+
     GstZedSrcMeta* meta;
 
     g_return_val_if_fail (GST_IS_BUFFER (buffer), NULL);
 
-    meta = (GstZedSrcMeta *) gst_buffer_add_meta( buffer,
-                                                  GST_ZED_SRC_META_INFO, NULL);
+    meta = (GstZedSrcMeta *) gst_buffer_add_meta( buffer, GST_ZED_SRC_META_INFO, NULL);
 
     memcpy( &meta->info, &info, sizeof(ZedInfo));
     memcpy( &meta->pose, &pose, sizeof(ZedPose));

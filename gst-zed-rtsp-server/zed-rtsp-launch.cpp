@@ -166,7 +166,7 @@ main( int argc, char *argv[])
     /* attach the server to the default maincontext */
     gst_rtsp_server_attach( server, NULL );
 
-    g_signal_connect (server, "client-connected", (GCallback) client_connected, NULL);
+    g_signal_connect( server, "client-connected", (GCallback) client_connected, NULL );
 
     /* start serving */
     g_print( " ZED RTSP Server \n" );

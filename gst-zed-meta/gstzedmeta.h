@@ -17,8 +17,8 @@ typedef struct _ZedObjectData ZedObjectData;
 struct _ZedInfo {
     gint cam_model;
     gint stream_type;
-    guint grab_frame_width;
-    guint grab_frame_height;
+    guint grab_single_frame_width;
+    guint grab_single_frame_height;
 };
 
 struct _ZedPose {

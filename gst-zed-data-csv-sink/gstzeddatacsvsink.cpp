@@ -272,12 +272,12 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
         // ----> Info
         *csvsink->out_file_ptr << meta->info.stream_type << CSV_SEP;
         *csvsink->out_file_ptr << meta->info.cam_model << CSV_SEP;
-        *csvsink->out_file_ptr << meta->info.grab_frame_width << CSV_SEP;
-        *csvsink->out_file_ptr << meta->info.grab_frame_height << CSV_SEP;
+        *csvsink->out_file_ptr << meta->info.grab_single_frame_width << CSV_SEP;
+        *csvsink->out_file_ptr << meta->info.grab_single_frame_height << CSV_SEP;
 
         GST_LOG (" * [META] Stream type: %d", meta->info.stream_type );
         GST_LOG (" * [META] Camera model: %d", meta->info.cam_model );
-        GST_LOG (" * [META] Grab frame size: %d x %d", meta->info.grab_frame_width,  meta->info.grab_frame_height );
+        GST_LOG (" * [META] Grab frame size: %d x %d", meta->info.grab_single_frame_width,  meta->info.grab_single_frame_height );
         // <---- Info
 
         // ----> Camera Pose
