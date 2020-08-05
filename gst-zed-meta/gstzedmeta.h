@@ -4,6 +4,8 @@
 #include <gst/gst.h>
 #include <vector>
 
+G_BEGIN_DECLS
+
 typedef struct _GstZedSrcMeta GstZedSrcMeta;
 typedef struct _ZedInfo ZedInfo;
 typedef struct _ZedPose ZedPose;
@@ -187,8 +189,9 @@ static const std::vector<std::pair< BODY_PARTS, BODY_PARTS>> BODY_BONES{
 GST_EXPORT
 GType gst_zed_src_meta_api_get_type (void);
 #define GST_ZED_SRC_META_API_TYPE (gst_zed_src_meta_api_get_type())
-#define gst_buffer_get_zed_src_meta(b) \
-    ((GstZedSrcMeta*)gst_buffer_get_meta((b),GST_ZED_SRC_META_API_TYPE))
+#define GST_ZED_SRC_META_INFO  (gst_zed_src_meta_get_info())
+
+#define gst_buffer_get_zed_src_meta(b) ((GstZedSrcMeta*)gst_buffer_get_meta((b),GST_ZED_SRC_META_API_TYPE))
 
 /* implementation */
 
@@ -204,5 +207,7 @@ GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
                                             gboolean od_enabled,
                                             guint8 obj_count,
                                             ZedObjectData* objects);
+
+G_END_DECLS
 
 #endif

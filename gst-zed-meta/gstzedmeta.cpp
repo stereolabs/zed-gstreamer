@@ -1,19 +1,41 @@
 
 #include "gstzedmeta.h"
 #include <gst/gstbuffer.h>
+#include <gst/video/video.h>
+#include <gst/video/gstvideofilter.h>
+#include <gst/video/gstvideometa.h>
 
-#include <iostream>
+#ifndef GST_DISABLE_GST_DEBUG
+#define GST_CAT_DEFAULT ensure_debug_category()
+static GstDebugCategory *
+ensure_debug_category (void)
+{
+    static gsize cat_gonce = 0;
+
+    if (g_once_init_enter (&cat_gonce)) {
+        gsize cat_done;
+
+        cat_done = (gsize) _gst_debug_category_new ("zedsrcmeta", 0, "zedsrcmeta");
+
+        g_once_init_leave (&cat_gonce, cat_done);
+    }
+
+    return (GstDebugCategory *) cat_gonce;
+}
+#else
+#define ensure_debug_category() /* NOOP */
+#endif /* GST_DISABLE_GST_DEBUG */
 
 GType gst_zed_src_meta_api_get_type()
 {
-    //std::cout << "gst_zed_src_meta_api_get_type" << std::endl;
+    GST_TRACE( "gst_zed_src_meta_api_get_type");
 
     static volatile GType type;
 
-    //static const gchar *tags[] = { "ZED", "Sensors", "ObjectDetection", "Skeletons", NULL };
-
-    // Note: NOT TAGS TO BE SURE THAT METADATA ARE COPIED AND PROPAGATED BY DEFAULT
-    static const gchar *tags[] = { NULL };
+    static const gchar *tags[] =
+    { /*GST_META_TAG_VIDEO_STR, GST_META_TAG_VIDEO_SIZE_STR,
+        GST_META_TAG_VIDEO_ORIENTATION_STR,*/ NULL
+    };
 
     if (g_once_init_enter (&type)) {
         GType _type = gst_meta_api_type_register( "GstZedSrcMetaAPI", tags );
@@ -26,7 +48,7 @@ GType gst_zed_src_meta_api_get_type()
 
 static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer* buffer)
 {
-    //std::cout << "gst_zed_src_meta_init" << std::endl;
+    GST_TRACE( "gst_zed_src_meta_init");
 
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
@@ -48,13 +70,33 @@ static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer
 static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
                                             GstBuffer* buffer, GQuark type, gpointer data)
 {
-    //std::cout << "gst_zed_src_meta_transform" << std::endl;
-
-    GST_DEBUG("Transform");
+    GST_TRACE( "gst_zed_src_meta_transform [%u]", type);
 
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
-    /* we always copy no matter what transform */
+    // ----> Scale transformation
+    // TODO understand how `videoscale` filter hands this part because there is something weird with
+    //      metadata tags handling
+    //    if( GST_VIDEO_META_TRANSFORM_IS_SCALE(type) )
+    //    {
+    //        if(emeta->od_enabled==TRUE && emeta->obj_count>0)
+    //        {
+    //            GstVideoMetaTransform* transf = (GstVideoMetaTransform*)data;
+    //            gint in_w = transf->in_info->width;
+    //            gint in_h = transf->in_info->height;
+    //            gint out_w = transf->out_info->width;
+    //            gint out_h = transf->out_info->height;
+
+    //            GST_DEBUG(  "Transform scale: [%dx%d] -> [%d,x%d]", in_w,in_h, out_w,out_h );
+    //        }
+    //    }
+    // <---- Scale transformation
+
+    if(GST_META_TRANSFORM_IS_COPY(type))
+    {
+        GST_DEBUG( "Transform copy" );
+    }
+
     gst_buffer_add_zed_src_meta( transbuf,
                                  emeta->info,
                                  emeta->pose,
@@ -63,12 +105,13 @@ static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
                                  emeta->obj_count,
                                  emeta->objects );
 
+
     return TRUE;
 }
 
 static void gst_zed_src_meta_free(GstMeta * meta, GstBuffer * buffer)
 {
-    //std::cout << "gst_zed_src_meta_free" << std::endl;
+    GST_TRACE( "gst_zed_src_meta_free" );
 
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
@@ -77,7 +120,7 @@ static void gst_zed_src_meta_free(GstMeta * meta, GstBuffer * buffer)
 
 const GstMetaInfo* gst_zed_src_meta_get_info (void)
 {
-    //std::cout << "gst_zed_src_meta_get_info" << std::endl;
+    GST_TRACE( "gst_zed_src_meta_get_info" );
 
     static const GstMetaInfo *meta_info = NULL;
 
@@ -103,7 +146,7 @@ GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
                                             guint8 obj_count,
                                             ZedObjectData* objects)
 {
-    //std::cout << "gst_buffer_add_zed_src_meta" << std::endl;
+    GST_TRACE( "gst_buffer_add_zed_src_meta" );
 
     GST_DEBUG("Add GstZedSrcMeta");
 
