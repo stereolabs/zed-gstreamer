@@ -8,6 +8,7 @@
   <a href="#key-features">Key Features</a> •
   <a href="#build">Build</a> •
   <a href="#plugins-parameters">Plugins parameters</a> • 
+  <a href="#metadata">Metadata</a> • 
   <a href="#example-pipelines">Example pipelines</a> • 
   <a href="#related">Related</a> •
   <a href="#license">License</a>
@@ -36,7 +37,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 ### GStreamer Installation
  * Follow the installation guide for GStreamer [here](https://gstreamer.freedesktop.org/documentation/installing/index.html?gi-language=c)
  To build on Linux, you also need to install the dev package with :
- `$ sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev`
+ `$ sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstrtspserver-1.0-0libgstrtspserver-1.0-dev gstreamer1.0-libav gstreamer1.0-tools`
 
 ### Windows installation
 
@@ -142,12 +143,29 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
  * `location`: Location of the CSV file to write
  * `append`: Append data to an already existing CSV file
 
+## Metadata
+The `zedsrc` plugin add metadata to the video stream containing information about the original frame size,
+the camera position and orientatio, the sensors data and the object and skeleton detected by the Object Detection
+module.
+The `zeddatacsvsink` and `zedodoverlay` elements demonstrate how to handle, respectively, the sensors data and the
+detected object data.
+The `GstZedSrcMeta` structure is provided to handle the `zedmeta` metadata and it is available in the `gstzedmeta` library.
+
+### GstZedSrcMeta structure
+The GstZedSrcMeta is subdivided in four sub-structures:
+ * `ZedInfo`: info about camera model, stream type and original stream size
+ * `ZedPose`: position and orientation of the camera if positional tracking is enabled
+ * `ZedSensors`: sensors data (only ZED-Mini and ZED2)
+ * `ZedObjectData`: detected object information (only ZED2)
+
+More details about the sub-structures are available in the [`gstzedmeta.h` file](./gst-zed-meta/gstzedmeta.h)
+
 ## Example pipelines
 
 ### Local RGB stream + RGB rendering
 
-* Linux: [`simple-fps_rendering.sh`](./scripts/simple-fps_rendering.sh)
-* Windows: [`simple-fps_rendering.bat`](./scripts/simple-fps_rendering.bat)
+* Linux: [`simple-fps_rendering.sh`](./scripts/linux/simple-fps_rendering.sh)
+* Windows: [`simple-fps_rendering.bat`](./scripts/windows/simple-fps_rendering.bat)
 
 ```
     gst-launch-1.0 zedsrc ! queue ! autovideoconvert ! queue ! fpsdisplaysink
@@ -155,8 +173,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local 16 bit Depth stream + Depth rendering
 
-* Linux: [`simple-depth-fps_rendering.sh`](./scripts/simple-depth-fps_rendering.sh)
-* Windows: [`simple-depth-fps_rendering.bat`](./scripts/simple-depth-fps_rendering.bat)
+* Linux: [`simple-depth-fps_rendering.sh`](./scripts/linux/simple-depth-fps_rendering.sh)
+* Windows: [`simple-depth-fps_rendering.bat`](./scripts/windows/simple-depth-fps_rendering.bat)
 
 ```
     gst-launch-1.0 zedsrc stream-type=3 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
@@ -164,8 +182,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local Left/Right stream + demux + double RGB rendering
 
-* Linux: [`local-rgb_left_right-fps_rendering.sh`](./scripts/local-rgb_left_right-fps_rendering.sh)
-* Windows: [`local-rgb_left_right-fps_rendering.bat`](./scripts/local-rgb_left_right-fps_rendering.bat)
+* Linux: [`local-rgb_left_right-fps_rendering.sh`](./scripts/linux/local-rgb_left_right-fps_rendering.sh)
+* Windows: [`local-rgb_left_right-fps_rendering.bat`](./scripts/windows/local-rgb_left_right-fps_rendering.bat)
 
 ```
     gst-launch-1.0 \
@@ -177,8 +195,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local Left/Depth stream + demux + double streams rendering
 
-* Linux: [`local-rgb_left_depth-fps_rendering.sh`](./scripts/local-rgb_left_depth-fps_rendering.sh)
-* Windows: [`local-rgb_left_depth-fps_rendering.bat`](./scripts/local-rgb_left_depth-fps_rendering.bat)
+* Linux: [`local-rgb_left_depth-fps_rendering.sh`](./scripts/linux/local-rgb_left_depth-fps_rendering.sh)
+* Windows: [`local-rgb_left_depth-fps_rendering.bat`](./scripts/windows/local-rgb_left_depth-fps_rendering.bat)
 
 ```
     gst-launch-1.0 \
@@ -190,8 +208,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local Left/Depth stream + demux + double streams rendering + data saving on CSV file
 
-* Linux: [`local-rgb-depth-sens-csv.sh`](./scripts/local-rgb-depth-sens-csv.sh)
-* Windows: [`local-rgb-depth-sens-csv.bat`](./scripts/local-rgb-depth-sens-csv.bat)
+* Linux: [`local-rgb-depth-sens-csv.sh`](./scripts/linux/local-rgb-depth-sens-csv.sh)
+* Windows: [`local-rgb-depth-sens-csv.bat`](./scripts/windows/local-rgb-depth-sens-csv.bat)
 
 ```
     gst-launch-1.0 \
@@ -204,8 +222,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local Left/Right stream + Multiclass Object Detection result displaying
 
-* Linux: [`local-rgb-od_multi-overlay.sh`](./scripts/local-rgb-od_multi-overlay.sh)
-* Windows: [`local-rgb-od_multi-overlay.bat`](./scripts/local-rgb-od_multi-overlay.bat)
+* Linux: [`local-rgb-od_multi-overlay.sh`](./scripts/linux/local-rgb-od_multi-overlay.sh)
+* Windows: [`local-rgb-od_multi-overlay.bat`](./scripts/windows/local-rgb-od_multi-overlay.bat)
     
 ```    
     gst-launch-1.0 \
@@ -216,8 +234,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local Left/Right stream + Fast Skeleton Tracking result displaying
 
-* Linux: [`local-rgb-skel_fast-overlay.sh`](./scripts/local-rgb-skel_fast-overlay.sh)
-* Windows: [`local-rgb-skel_fast-overlay.bat`](./scripts/local-rgb-skel_fast-overlay.bat)
+* Linux: [`local-rgb-skel_fast-overlay.sh`](./scripts/linux/local-rgb-skel_fast-overlay.sh)
+* Windows: [`local-rgb-skel_fast-overlay.bat`](./scripts/windows/local-rgb-skel_fast-overlay.bat)
 
 ```    
     gst-launch-1.0 \
@@ -228,8 +246,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local Left RGB stream + Accurate Skeleton Tracking result displaying
 
-* Linux: [`local-rgb-skel_accurate-overlay.sh`](./scripts/local-rgb-skel_accurate-overlay.sh)
-* Windows: [`local-rgb-skel_accurate-overlay.bat`](./scripts/local-rgb-skel_accurate-overlay.bat)
+* Linux: [`local-rgb-skel_accurate-overlay.sh`](./scripts/linux/local-rgb-skel_accurate-overlay.sh)
+* Windows: [`local-rgb-skel_accurate-overlay.bat`](./scripts/windows/local-rgb-skel_accurate-overlay.bat)
  
 ``` 
     gst-launch-1.0 \
@@ -240,8 +258,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + Skeleton Tracking result displaying + Depth displaying with FPS
 
-* Linux: [`local-od-fps_overlay.sh`](./scripts/local-od-fps_overlay.sh)
-* Windows: [`local-od-fps_overlay.bat`](./scripts/local-od-fps_overlay.bat)
+* Linux: [`local-od-fps_overlay.sh`](./scripts/linux/local-od-fps_overlay.sh)
+* Windows: [`local-od-fps_overlay.bat`](./scripts/windows/local-od-fps_overlay.bat)
 
 ```
     gst-launch-1.0 \
@@ -253,8 +271,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 ### Local Left/Depth stream + Fast Skeleton Tracking result displaying + demux + rescaling + remux + Skeleton Tracking result displaying + Depth displaying with FPS
 
-* Linux: [`local-rgb-rescale-od-overlay.sh`](./scripts/local-rgb-rescale-od-overlay.sh)
-* Windows: [`local-rgb-rescale-od-overlay.bat`](./scripts/local-rgb-rescale-od-overlay.bat)
+* Linux: [`local-rgb-rescale-od-overlay.sh`](./scripts/linux/local-rgb-rescale-od-overlay.sh)
+* Windows: [`local-rgb-rescale-od-overlay.bat`](./scripts/windows/local-rgb-rescale-od-overlay.bat)
 
 ```
     gst-launch-1.0 \

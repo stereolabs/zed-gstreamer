@@ -1,8 +1,31 @@
+// /////////////////////////////////////////////////////////////////////////
+
+//
+// Copyright (c) 2020, STEREOLABS.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// /////////////////////////////////////////////////////////////////////////
+
 #ifndef GSTZEDMETA_H
 #define GSTZEDMETA_H
 
 #include <gst/gst.h>
 #include <vector>
+
+G_BEGIN_DECLS
 
 typedef struct _GstZedSrcMeta GstZedSrcMeta;
 typedef struct _ZedInfo ZedInfo;
@@ -17,8 +40,8 @@ typedef struct _ZedObjectData ZedObjectData;
 struct _ZedInfo {
     gint cam_model;
     gint stream_type;
-    guint grab_frame_width;
-    guint grab_frame_height;
+    guint grab_single_frame_width;
+    guint grab_single_frame_height;
 };
 
 struct _ZedPose {
@@ -187,8 +210,9 @@ static const std::vector<std::pair< BODY_PARTS, BODY_PARTS>> BODY_BONES{
 GST_EXPORT
 GType gst_zed_src_meta_api_get_type (void);
 #define GST_ZED_SRC_META_API_TYPE (gst_zed_src_meta_api_get_type())
-#define gst_buffer_get_zed_src_meta(b) \
-    ((GstZedSrcMeta*)gst_buffer_get_meta((b),GST_ZED_SRC_META_API_TYPE))
+#define GST_ZED_SRC_META_INFO  (gst_zed_src_meta_get_info())
+
+#define gst_buffer_get_zed_src_meta(b) ((GstZedSrcMeta*)gst_buffer_get_meta((b),GST_ZED_SRC_META_API_TYPE))
 
 /* implementation */
 
@@ -204,5 +228,7 @@ GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
                                             gboolean od_enabled,
                                             guint8 obj_count,
                                             ZedObjectData* objects);
+
+G_END_DECLS
 
 #endif

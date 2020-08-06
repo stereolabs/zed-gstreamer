@@ -1,4 +1,25 @@
-﻿#include "gstzeddatacsvsink.h"
+﻿// /////////////////////////////////////////////////////////////////////////
+
+//
+// Copyright (c) 2020, STEREOLABS.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// /////////////////////////////////////////////////////////////////////////
+
+#include "gstzeddatacsvsink.h"
 
 #include <string>
 #include <iomanip>
@@ -272,12 +293,12 @@ GstFlowReturn gst_zeddatacsvsink_render( GstBaseSink * sink, GstBuffer* buf )
         // ----> Info
         *csvsink->out_file_ptr << meta->info.stream_type << CSV_SEP;
         *csvsink->out_file_ptr << meta->info.cam_model << CSV_SEP;
-        *csvsink->out_file_ptr << meta->info.grab_frame_width << CSV_SEP;
-        *csvsink->out_file_ptr << meta->info.grab_frame_height << CSV_SEP;
+        *csvsink->out_file_ptr << meta->info.grab_single_frame_width << CSV_SEP;
+        *csvsink->out_file_ptr << meta->info.grab_single_frame_height << CSV_SEP;
 
         GST_LOG (" * [META] Stream type: %d", meta->info.stream_type );
         GST_LOG (" * [META] Camera model: %d", meta->info.cam_model );
-        GST_LOG (" * [META] Grab frame size: %d x %d", meta->info.grab_frame_width,  meta->info.grab_frame_height );
+        GST_LOG (" * [META] Grab frame size: %d x %d", meta->info.grab_single_frame_width,  meta->info.grab_single_frame_height );
         // <---- Info
 
         // ----> Camera Pose

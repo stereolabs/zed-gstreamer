@@ -1,36 +1,23 @@
-﻿/*
- * GStreamer
- * Copyright (C) 2006 Stefan Kost <ensonic@users.sf.net>
- * Copyright (C) YEAR AUTHOR_NAME AUTHOR_EMAIL
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
- * Boston, MA 02111-1307, USA.
- */
+﻿// /////////////////////////////////////////////////////////////////////////
 
-/**
- * SECTION:element-plugin
- *
- * FIXME:Describe plugin here.
- *
- * <refsect2>
- * <title>Example launch line</title>
- * |[
- * gst-launch -v -m fakesrc ! zedodoverlay ! fakesink silent=TRUE
- * ]|
- * </refsect2>
- */
+//
+// Copyright (c) 2020, STEREOLABS.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// /////////////////////////////////////////////////////////////////////////
 
 #include <opencv2/opencv.hpp>
 #include <gst-zed-meta/gstzedmeta.h>
@@ -72,16 +59,52 @@ static GstStaticPadTemplate sink_template =
             GST_PAD_ALWAYS,
             GST_STATIC_CAPS(
                 ("video/x-raw, " // Double stream
-                 "format = (string) { BGRA }, "
-                 "width = (int) { 672, 1280, 1920, 2208 } , "
-                 "height =  (int) { 752, 1440, 2160, 2484 } , "
-                 "framerate =  (fraction) { 15, 30, 60, 100 }"
+                 "format = (string)BGRA, "
+                 "width = (int)672, "
+                 "height = (int)752 , "
+                 "framerate = (fraction) { 15, 30, 60, 100 }"
                  ";"
-                 "video/x-raw, " // Single stream
-                 "format = (string) { BGRA }, "
-                 "width = (int) { 672, 1280, 1920, 2208 } , "
-                 "height =  (int) { 376, 720, 1080, 1242 } , "
-                 "framerate =  (fraction) { 15, 30, 60, 100 }")  ) );
+                 "video/x-raw, " // Double stream
+                 "format = (string)BGRA, "
+                 "width = (int)1280, "
+                 "height = (int)1440, "
+                 "framerate = (fraction) { 15, 30, 60 }"
+                 ";"
+                 "video/x-raw, " // Double stream
+                 "format = (string)BGRA, "
+                 "width = (int)1920, "
+                 "height = (int)2160, "
+                 "framerate = (fraction) { 15, 30 }"
+                 ";"
+                 "video/x-raw, " // Double stream
+                 "format = (string)BGRA, "
+                 "width = (int)2208, "
+                 "height = (int)2484, "
+                 "framerate = (fraction)15"
+                 ";"
+                 "video/x-raw, "
+                 "format = (string)BGRA, "
+                 "width = (int)672, "
+                 "height =  (int)376, "
+                 "framerate = (fraction) { 15, 30, 60, 100 }"
+                 ";"
+                 "video/x-raw, "
+                 "format = (string)BGRA, "
+                 "width = (int)1280, "
+                 "height =  (int)720, "
+                 "framerate =  (fraction)  { 15, 30, 60}"
+                 ";"
+                 "video/x-raw, "
+                 "format = (string)BGRA, "
+                 "width = (int)1920, "
+                 "height = (int)1080, "
+                 "framerate = (fraction) { 15, 30 }"
+                 ";"
+                 "video/x-raw, "
+                 "format = (string)BGRA, "
+                 "width = (int)2208, "
+                 "height = (int)1242, "
+                 "framerate = (fraction)15")  ) );
 
 static GstStaticPadTemplate src_template =
         GST_STATIC_PAD_TEMPLATE (
@@ -90,16 +113,52 @@ static GstStaticPadTemplate src_template =
             GST_PAD_ALWAYS,
             GST_STATIC_CAPS(
                 ("video/x-raw, " // Double stream
-                 "format = (string) { BGRA }, "
-                 "width = (int) { 672, 1280, 1920, 2208 } , "
-                 "height =  (int) { 752, 1440, 2160, 2484 } , "
-                 "framerate =  (fraction) { 15, 30, 60, 100 }"
+                 "format = (string)BGRA, "
+                 "width = (int)672, "
+                 "height = (int)752 , "
+                 "framerate = (fraction) { 15, 30, 60, 100 }"
                  ";"
-                 "video/x-raw, " // Single stream
-                 "format = (string) { BGRA }, "
-                 "width = (int) { 672, 1280, 1920, 2208 } , "
-                 "height =  (int) { 376, 720, 1080, 1242 } , "
-                 "framerate =  (fraction) { 15, 30, 60, 100 }")  ) );
+                 "video/x-raw, " // Double stream
+                 "format = (string)BGRA, "
+                 "width = (int)1280, "
+                 "height = (int)1440, "
+                 "framerate = (fraction) { 15, 30, 60 }"
+                 ";"
+                 "video/x-raw, " // Double stream
+                 "format = (string)BGRA, "
+                 "width = (int)1920, "
+                 "height = (int)2160, "
+                 "framerate = (fraction) { 15, 30 }"
+                 ";"
+                 "video/x-raw, " // Double stream
+                 "format = (string)BGRA, "
+                 "width = (int)2208, "
+                 "height = (int)2484, "
+                 "framerate = (fraction)15"
+                 ";"
+                 "video/x-raw, "
+                 "format = (string)BGRA, "
+                 "width = (int)672, "
+                 "height =  (int)376, "
+                 "framerate = (fraction) { 15, 30, 60, 100 }"
+                 ";"
+                 "video/x-raw, "
+                 "format = (string)BGRA, "
+                 "width = (int)1280, "
+                 "height =  (int)720, "
+                 "framerate =  (fraction)  { 15, 30, 60}"
+                 ";"
+                 "video/x-raw, "
+                 "format = (string)BGRA, "
+                 "width = (int)1920, "
+                 "height = (int)1080, "
+                 "framerate = (fraction) { 15, 30 }"
+                 ";"
+                 "video/x-raw, "
+                 "format = (string)BGRA, "
+                 "width = (int)2208, "
+                 "height = (int)1242, "
+                 "framerate = (fraction)15")  ) );
 
 #define gst_zed_od_overlay_parent_class parent_class
 G_DEFINE_TYPE (GstZedOdOverlay, gst_zed_od_overlay, GST_TYPE_BASE_TRANSFORM);
@@ -255,17 +314,18 @@ gst_zed_od_overlay_transform_ip (GstBaseTransform * base, GstBuffer * outbuf)
 
     GST_TRACE_OBJECT( filter, "Cam. Model: %d",meta->info.cam_model );
     GST_TRACE_OBJECT( filter, "Stream type: %d",meta->info.stream_type );
-    GST_TRACE_OBJECT( filter, "Grab frame Size: %d x %d",meta->info.grab_frame_width,meta->info.grab_frame_height );
+    GST_TRACE_OBJECT( filter, "Grab frame Size: %d x %d",meta->info.grab_single_frame_width,meta->info.grab_single_frame_height );
+    GST_TRACE_OBJECT( filter, "Filter frame Size: %d x %d",filter->img_left_w,filter->img_left_h );
 
     gboolean rescaled = FALSE;
     gfloat scaleW = 1.0f;
     gfloat scaleH = 1.0f;
-    if(meta->info.grab_frame_width != filter->img_left_w ||
-            meta->info.grab_frame_height != filter->img_left_h)
+    if(meta->info.grab_single_frame_width != filter->img_left_w ||
+            meta->info.grab_single_frame_height != filter->img_left_h)
     {
         rescaled = TRUE;
-        scaleW = ((gfloat)filter->img_left_w)/meta->info.grab_frame_width;
-        scaleH = ((gfloat)filter->img_left_h)/meta->info.grab_frame_height;
+        scaleW = ((gfloat)filter->img_left_w)/meta->info.grab_single_frame_width;
+        scaleH = ((gfloat)filter->img_left_h)/meta->info.grab_single_frame_height;
     }
 
     if(meta->od_enabled)

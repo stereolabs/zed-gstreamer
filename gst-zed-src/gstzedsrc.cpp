@@ -1,3 +1,23 @@
+// /////////////////////////////////////////////////////////////////////////
+
+//
+// Copyright (c) 2020, STEREOLABS.
+//
+// All rights reserved.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// /////////////////////////////////////////////////////////////////////////
 
 #include <gst/gst.h>
 #include <gst/base/gstpushsrc.h>
@@ -240,23 +260,101 @@ static GstStaticPadTemplate gst_zedsrc_src_template =
         GST_STATIC_PAD_TEMPLATE ("src",
                                  GST_PAD_SRC,
                                  GST_PAD_ALWAYS,
-                                 GST_STATIC_CAPS( ("video/x-raw, " // Single color stream
-                                                   "format = (string) { BGRA }, "
-                                                   "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                   "height =  (int) { 376, 720, 1080, 1242 } , "
-                                                   "framerate =  (fraction) { 15, 30, 60, 100 }"
-                                                   ";"
-                                                   "video/x-raw, " // Single depth stream
-                                                   "format = (string) { GRAY16_LE }, "
-                                                   "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                   "height =  (int) { 376, 720, 1080, 1242 } , "
-                                                   "framerate =  (fraction)  { 15, 30, 60, 100 }"
+                                 GST_STATIC_CAPS( ("video/x-raw, " // Double stream
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)672, "
+                                                   "height = (int)752 , "
+                                                   "framerate = (fraction) { 15, 30, 60, 100 }"
                                                    ";"
                                                    "video/x-raw, " // Double stream
-                                                   "format = (string) { BGRA }, "
-                                                   "width = (int) { 672, 1280, 1920, 2208 } , "
-                                                   "height =  (int) { 752, 1440, 2160, 2484 } , "
-                                                   "framerate =  (fraction) { 15, 30, 60, 100 }") ) );
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)1280, "
+                                                   "height = (int)1440, "
+                                                   "framerate = (fraction) { 15, 30, 60 }"
+                                                   ";"
+                                                   "video/x-raw, " // Double stream
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)1920, "
+                                                   "height = (int)2160, "
+                                                   "framerate = (fraction) { 15, 30 }"
+                                                   ";"
+                                                   "video/x-raw, " // Double stream
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)2208, "
+                                                   "height = (int)2484, "
+                                                   "framerate = (fraction)15"
+                                                   ";"
+                                                   "video/x-raw, "
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)672, "
+                                                   "height =  (int)376, "
+                                                   "framerate = (fraction) { 15, 30, 60, 100 }"
+                                                   ";"
+                                                   "video/x-raw, "
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)1280, "
+                                                   "height =  (int)720, "
+                                                   "framerate =  (fraction)  { 15, 30, 60}"
+                                                   ";"
+                                                   "video/x-raw, "
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)1920, "
+                                                   "height = (int)1080, "
+                                                   "framerate = (fraction) { 15, 30 }"
+                                                   ";"
+                                                   "video/x-raw, "
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)2208, "
+                                                   "height = (int)1242, "
+                                                   "framerate = (fraction)15"
+                                                   ";"
+                                                   "video/x-raw, "
+                                                   "format = (string)GRAY16_LE, "
+                                                   "width = (int)672, "
+                                                   "height =  (int)376, "
+                                                   "framerate = (fraction) { 15, 30, 60, 100 }"
+                                                   ";"
+                                                   "video/x-raw, "
+                                                   "format = (string)GRAY16_LE, "
+                                                   "width = (int)1280, "
+                                                   "height =  (int)720, "
+                                                   "framerate =  (fraction)  { 15, 30, 60}"
+                                                   ";"
+                                                   "video/x-raw, "
+                                                   "format = (string)GRAY16_LE, "
+                                                   "width = (int)1920, "
+                                                   "height = (int)1080, "
+                                                   "framerate = (fraction) { 15, 30 }"
+                                                   ";"
+                                                   "video/x-raw, "
+                                                   "format = (string)GRAY16_LE, "
+                                                   "width = (int)2208, "
+                                                   "height = (int)1242, "
+                                                   "framerate = (fraction)15"
+                                                   ";"
+                                                   "video/x-raw, " // Double stream
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)672, "
+                                                   "height = (int)752 , "
+                                                   "framerate = (fraction) { 15, 30, 60, 100 }"
+                                                   ";"
+                                                   "video/x-raw, " // Double stream
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)1280, "
+                                                   "height = (int)1440, "
+                                                   "framerate = (fraction) { 15, 30, 60 }"
+                                                   ";"
+                                                   "video/x-raw, " // Double stream
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)1920, "
+                                                   "height = (int)2160, "
+                                                   "framerate = (fraction) { 15, 30 }"
+                                                   ";"
+                                                   "video/x-raw, " // Double stream
+                                                   "format = (string)BGRA, "
+                                                   "width = (int)2208, "
+                                                   "height = (int)2484, "
+                                                   "framerate = (fraction)15") ) );
 
 /* class initialization */
 G_DEFINE_TYPE( GstZedSrc, gst_zedsrc, GST_TYPE_PUSH_SRC );
@@ -1031,9 +1129,13 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     ZedInfo info;
     info.cam_model = (gint) cam_info.camera_model;
     info.stream_type = src->stream_type;
-    info.grab_frame_width = cam_info.camera_configuration.resolution.width;
-    info.grab_frame_height = cam_info.camera_configuration.resolution.height;
-    // <---- Info metadat
+    info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
+    info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
+    if(info.grab_single_frame_height==752 || info.grab_single_frame_height==1440 || info.grab_single_frame_height==2160 || info.grab_single_frame_height==2484)
+    {
+        info.grab_single_frame_height/=2; // Only half buffer size if the stream is composite
+    }
+    // <---- Info metadata
 
     // ----> Positional Tracking metadata
     ZedPose pose;
