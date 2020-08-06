@@ -142,6 +142,23 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
  * `location`: Location of the CSV file to write
  * `append`: Append data to an already existing CSV file
 
+## Metadata
+The `zedsrc` plugin add metadata to the video stream containing information about the original frame size,
+the camera position and orientatio, the sensors data and the object and skeleton detected by the Object Detection
+module.
+The `zeddatacsvsink` and `zedodoverlay` elements demonstrate how to handle, respectively, the sensors data and the
+detected object data.
+The `GstZedSrcMeta` structure is provided to handle the `zedmeta` metadata and it is available in the `gstzedmeta` library.
+
+### GstZedSrcMeta structure
+The GstZedSrcMeta is subdivided in four sub-structures:
+ * `ZedInfo`: info about camera model, stream type and original stream size
+ * `ZedPose`: position and orientation of the camera if positional tracking is enabled
+ * `ZedSensors`: sensors data (only ZED-Mini and ZED2)
+ * `ZedObjectData`: detected object information (only ZED2)
+
+More details about the sub-structures are available in the [`gstzedmeta.h` file](./gst-zed-meta/gstzedmeta.h)
+
 ## Example pipelines
 
 ### Local RGB stream + RGB rendering
