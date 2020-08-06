@@ -8,6 +8,7 @@
   <a href="#key-features">Key Features</a> •
   <a href="#build">Build</a> •
   <a href="#plugins-parameters">Plugins parameters</a> • 
+  <a href="#metadata">Metadata</a> • 
   <a href="#example-pipelines">Example pipelines</a> • 
   <a href="#related">Related</a> •
   <a href="#license">License</a>
