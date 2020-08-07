@@ -33,9 +33,6 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
  * Stereo camera: [ZED 2](https://www.stereolabs.com/zed-2/), [ZED](https://www.stereolabs.com/zed/), [ZED Mini](https://www.stereolabs.com/zed-mini/)
  * CMake (v3.1+)
  * GStreamer
-
-### GStreamer Installation
- * Follow the installation guide for GStreamer [here](https://gstreamer.freedesktop.org/documentation/installing/index.html?gi-language=c)
  
 ### Windows installation
 
@@ -94,7 +91,6 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
     $ cmake -DCMAKE_BUILD_TYPE=Release ..
     $ make # Note: do not use the `-j` flag because parallel build is not supported
     $ sudo make install 
-
 
 ### Installation test
 
