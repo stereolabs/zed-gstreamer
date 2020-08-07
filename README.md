@@ -42,7 +42,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
  * Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` plugin to acquire data from a ZED camera device]
  * Install [Git](https://git-scm.com/) or download a ZIP archive
  * Install [CMake](https://cmake.org/)
- * Install a [GStreamer distribution (both `runtime` and `development` installers)](https://gstreamer.freedesktop.org/download/). 
+ * Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/). 
  * The installer should set the installation path via the `GSTREAMER_1_0_ROOT_X86_64` environment variable.
  * Add the path `%GSTREAMER_1_0_ROOT_X86_64%\bin` to the system variable `PATH`
  * Run the following commands from a terminal or command prompt, assuming CMake and Git are in your `PATH`.
@@ -62,6 +62,10 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
 * Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/)
 
+* Update list of `apt` available packages 
+
+     `$ sudo apt update`
+
 * Install GCC compiler and build tools
 
      `$ sudo apt install build-essential`
@@ -70,13 +74,13 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
      `$ sudo apt install cmake`
      
-* To build on Linux, you also need to install the dev package with :
+* Install GStreamer, the development packages and useful tools:
      
-     `$ sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstrtspserver-1.0-0 libgstrtspserver-1.0-dev gstreamer1.0-libav gstreamer1.0-tools`
+     `$ sudo apt install libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav libgstrtspserver-1.0-0 gstreamer1.0-doc gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev  libgstrtspserver-1.0-dev`
      
 * [Optional] Install OpenCV to build the `zedodverlay` filter
 
-     `$ sudo apt install libopencv-dev`
+     `$ sudo apt install libopencv-dev libopencv-contrib-dev`
      
 #### Clone the repository
 
@@ -96,7 +100,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of two plugins
 
  * Check `ZED Video Source Plugin` installation inspecting its properties:
 
-      `gst-inspect-1.0 zedsrc`
+      `gst-inspect-1.0 zedgst-inspect-1.0 zedsrcsrc`
 
  * Check `ZED Video Demuxer` installation inspecting its properties:
 
