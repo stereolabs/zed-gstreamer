@@ -50,7 +50,7 @@ struct _GstZedSrc
     gint camera_resolution;     // Camera resolution [enum]
     gint camera_fps;            // Camera FPS [enum]
     gboolean sdk_verbose;
-    gboolean camera_image_flip;
+    gint camera_image_flip;
     gint camera_id;
     gint64 camera_sn;
     GString svo_file;
@@ -62,6 +62,7 @@ struct _GstZedSrc
     gfloat depth_max_dist;
     gboolean camera_disable_self_calib;
     gboolean depth_stabilization;
+    gboolean enable_right_side_measure;
     gboolean pos_tracking;
     gboolean camera_static;
     gint coord_sys;

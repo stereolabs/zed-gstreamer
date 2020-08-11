@@ -62,6 +62,7 @@ enum
     PROP_DEPTH_MIN,
     PROP_DEPTH_MAX,
     PROP_DIS_SELF_CALIB,
+    PROP_RIGHT_DEPTH_ENABLE,
     PROP_DEPTH_STAB,
     PROP_POS_TRACKING,
     PROP_CAMERA_STATIC,
@@ -81,6 +82,12 @@ typedef enum {
     GST_ZEDSRC_30FPS = 30,
     GST_ZEDSRC_15FPS = 15
 } GstZedSrcFPS;
+
+typedef enum {
+    GST_ZEDSRC_NO_FLIP = 0,
+    GST_ZEDSRC_FLIP = 1,
+    GST_ZEDSRC_AUTO = 2,
+} GstZedSrcFlip;
 
 typedef enum {
     GST_ZEDSRC_ONLY_LEFT = 0,
@@ -108,9 +115,9 @@ typedef enum {
 #define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::HD1080)
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_30FPS
 #define DEFAULT_PROP_SDK_VERBOSE    FALSE
-#define DEFAULT_PROP_CAM_FLIP       FALSE
-#define DEFAULT_PROP_CAM_ID         -1
-#define DEFAULT_PROP_CAM_SN         -1
+#define DEFAULT_PROP_CAM_FLIP       2
+#define DEFAULT_PROP_CAM_ID         0
+#define DEFAULT_PROP_CAM_SN         0
 #define DEFAULT_PROP_SVO_FILE       ""
 #define DEFAULT_PROP_STREAM_IP      ""
 #define DEFAULT_PROP_STREAM_PORT    30000
@@ -118,6 +125,7 @@ typedef enum {
 #define DEFAULT_PROP_DEPTH_MIN      300.f
 #define DEFAULT_PROP_DEPTH_MAX      20000.f
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
+#define DEFAULT_PROP_RIGHT_DEPTH    FALSE
 #define DEFAULT_PROP_DEPTH_STAB     TRUE
 #define DEFAULT_PROP_POS_TRACKING   TRUE
 #define DEFAULT_PROP_CAMERA_STATIC  FALSE
@@ -172,6 +180,26 @@ static GType gst_zedtsrc_fps_get_type (void)
     return zedsrc_fps_type;
 }
 
+#define GST_TYPE_ZED_FLIP (gst_zedtsrc_flip_get_type ())
+static GType gst_zedtsrc_flip_get_type (void)
+{
+    static GType zedsrc_flip_type = 0;
+
+    if (!zedsrc_flip_type) {
+        static GEnumValue pattern_types[] = {
+            { GST_ZEDSRC_NO_FLIP,    "Force no flip",             "No Flip" },
+            { GST_ZEDSRC_FLIP,     "Force flip",                  "Flip" },
+            { GST_ZEDSRC_AUTO,     "Auto mode (ZED2/ZED-M only)", "Auto" },
+            { 0, NULL, NULL },
+        };
+
+        zedsrc_flip_type = g_enum_register_static( "GstZedSrcFlip",
+                                                  pattern_types);
+    }
+
+    return zedsrc_flip_type;
+}
+
 #define GST_TYPE_ZED_STREAM_TYPE (gst_zedtsrc_stream_type_get_type ())
 static GType gst_zedtsrc_stream_type_get_type (void)
 {
@@ -179,11 +207,11 @@ static GType gst_zedtsrc_stream_type_get_type (void)
 
     if (!zedsrc_stream_type_type) {
         static GEnumValue pattern_types[] = {
-            { GST_ZEDSRC_ONLY_LEFT,    "32 bit Left image",     "Left image [BGRA]" },
-            { GST_ZEDSRC_ONLY_RIGHT,   "32 bit Right image",    "Right image [BGRA]"  },
-            { GST_ZEDSRC_LEFT_RIGHT,   "32 bit Left and Right", "Stereo couple up/down [BGRA]" },
-            { GST_ZEDSRC_DEPTH_16,     "16 bit depth",          "Depth image [GRAY16_LE]" },
-            { GST_ZEDSRC_LEFT_DEPTH,   "32 bit Left and Depth", "Left and Depth up/down [BGRA]" },
+            { GST_ZEDSRC_ONLY_LEFT,    "8 bits- 4 channels Left image",     "Left image [BGRA]" },
+            { GST_ZEDSRC_ONLY_RIGHT,   "8 bits- 4 channels Right image",    "Right image [BGRA]"  },
+            { GST_ZEDSRC_LEFT_RIGHT,   "8 bits- 4 channels bit Left and Right", "Stereo couple up/down [BGRA]" },
+            { GST_ZEDSRC_DEPTH_16,     "16 bits depth",          "Depth image [GRAY16_LE]" },
+            { GST_ZEDSRC_LEFT_DEPTH,   "8 bits- 4 channels Left and Depth(image)", "Left and Depth up/down [BGRA]" },
             { 0, NULL, NULL },
         };
 
@@ -391,12 +419,12 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
     /* Install GObject properties */
     g_object_class_install_property( gobject_class, PROP_CAM_RES,
-                                     g_param_spec_enum("resolution", "Camera Resolution",
+                                     g_param_spec_enum("camera-resolution", "Camera Resolution",
                                                        "Camera Resolution", GST_TYPE_ZED_RESOL, DEFAULT_PROP_CAM_RES,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAM_FPS,
-                                     g_param_spec_enum("framerate", "Camera frame rate",
+                                     g_param_spec_enum("camera-fps", "Camera frame rate",
                                                        "Camera frame rate", GST_TYPE_ZED_FPS, DEFAULT_PROP_CAM_FPS,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -407,24 +435,25 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_SDK_VERBOSE,
-                                     g_param_spec_boolean("verbose", "ZED SDK Verbose",
+                                     g_param_spec_boolean("sdk-verbose", "ZED SDK Verbose",
                                                           "ZED SDK Verbose", DEFAULT_PROP_SDK_VERBOSE,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAM_FLIP,
-                                     g_param_spec_boolean("flip", "Camera flip",
-                                                          "Flip images and depth info if camera is flipped",
+                                     g_param_spec_enum("camera-image-flip", "Camera image flip",
+                                                          "Use the camera in forced flip/no flip or automatic mode",GST_TYPE_ZED_FLIP,
                                                           DEFAULT_PROP_CAM_FLIP,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAM_ID,
                                      g_param_spec_int("camera-id", "Camera ID",
-                                                      "Camera ID",-1,255,-1,
+                                                      "Select camera from cameraID",0,255,
+                                                      DEFAULT_PROP_CAM_ID,
                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAM_SN,
                                      g_param_spec_int64("camera-sn", "Camera Serial Number",
-                                                        "Camera Serial Number",-1,G_MAXINT64,
+                                                        "Select camera from camera serial number",0,G_MAXINT64,
                                                         DEFAULT_PROP_CAM_SN,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -435,75 +464,82 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_STREAM_IP,
-                                     g_param_spec_string("in-stream-ip-addr", "Input Stream IP",
-                                                         "Input from remote source: IP ADDRESS",
+                                     g_param_spec_string("input-stream-ip", "Input Stream IP",
+                                                         "Specify IP adress when using streaming input",
                                                          DEFAULT_PROP_SVO_FILE,
                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_STREAM_PORT,
-                                     g_param_spec_int("in-stream-port", "Input Stream Port",
-                                                      "Input from remote source: PORT",1,G_MAXINT16,
+                                     g_param_spec_int("input-stream-port", "Input Stream Port",
+                                                      "Specify port when using streaming input",1,G_MAXUINT16,
                                                       DEFAULT_PROP_STREAM_PORT,
                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_DEPTH_MIN,
-                                     g_param_spec_float("min-depth", "Minimum depth value",
+                                     g_param_spec_float("depth-minimum-distance", "Minimum depth value",
                                                         "Minimum depth value", 100.f, 3000.f, DEFAULT_PROP_DEPTH_MIN,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_DEPTH_MAX,
-                                     g_param_spec_float("max-depth", "Maximum depth value",
+                                     g_param_spec_float("depth-maximum-distance", "Maximum depth value",
                                                         "Maximum depth value", 500.f, 40000.f, DEFAULT_PROP_DEPTH_MAX,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_DIS_SELF_CALIB,
-                                     g_param_spec_boolean("disable-self-calib", "Disable self calibration",
+                                     g_param_spec_boolean("camera-disable-self-calib", "Disable self calibration",
                                                           "Disable the self calibration processing when the camera is opened",
                                                           DEFAULT_PROP_DIS_SELF_CALIB,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property( gobject_class, PROP_RIGHT_DEPTH_ENABLE,
+                                     g_param_spec_boolean("enable-right-side-measure", "Enable right side measure",
+                                                          "Enable the MEASURE::DEPTH_RIGHT and other MEASURE::<XXX>_RIGHT at the cost of additional computation time",
+                                                          DEFAULT_PROP_RIGHT_DEPTH,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property( gobject_class, PROP_DEPTH_STAB,
-                                     g_param_spec_boolean("depth-stability", "Depth stabilization",
+                                     g_param_spec_boolean("depth-stabilization", "Depth stabilization",
                                                           "Enable depth stabilization",
                                                           DEFAULT_PROP_DEPTH_STAB,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_POS_TRACKING,
-                                     g_param_spec_boolean("pos-tracking", "Positional tracking",
+                                     g_param_spec_boolean("enable-positional-tracking", "Positional tracking",
                                                           "Enable positional tracking",
                                                           DEFAULT_PROP_POS_TRACKING,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAMERA_STATIC,
-                                     g_param_spec_boolean("cam-static", "Camera static",
+                                     g_param_spec_boolean("camera-is-static", "Camera static",
                                                           "Set to TRUE if the camera is static",
                                                           DEFAULT_PROP_CAMERA_STATIC,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_COORD_SYS,
-                                     g_param_spec_enum("coord-system", "3D Coordinate System",
+                                     g_param_spec_enum("coordinate-system", "SDK Coordinate System",
                                                        "3D Coordinate System", GST_TYPE_ZED_COORD_SYS,
                                                        DEFAULT_PROP_COORD_SYS,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_OD_ENABLE,
-                                     g_param_spec_boolean("od-enabled", "Object Detection enable",
+                                     g_param_spec_boolean("enable-object-detection", "Object Detection enable",
                                                           "Set to TRUE to enable Object Detection",
                                                           DEFAULT_PROP_OD_ENABLE,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    /*g_object_class_install_property( gobject_class, PROP_OD_IMAGE_SYNC,
-                                     g_param_spec_boolean("od-image-sync", "OD Image Sync",
+    g_object_class_install_property( gobject_class, PROP_OD_IMAGE_SYNC,
+                                     g_param_spec_boolean("object-detection-image-sync", "Object detection frame sync",
                                                           "Set to TRUE to enable Object Detection frame synchronization ",
                                                           DEFAULT_PROP_OD_SYNC,
-                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));*/
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_OD_TRACKING,
-                                     g_param_spec_boolean("od-tracking", "OD tracking",
+                                     g_param_spec_boolean("object-detection-tracking", "Object detection tracking",
                                                           "Set to TRUE to enable tracking for the detected objects",
                                                           DEFAULT_PROP_OD_TRACKING,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    //Not supported yet
     /*g_object_class_install_property( gobject_class, PROP_OD_MASK,
                                      g_param_spec_boolean("od-mask", "OD Mask output",
                                                           "Set to TRUE to enable mask output for the detected objects",
@@ -512,13 +548,13 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
 
     g_object_class_install_property( gobject_class, PROP_OD_DET_MODEL,
-                                     g_param_spec_enum("od-detection-model", "OD Detection Model",
+                                     g_param_spec_enum("object-detection-model", "Object detection model",
                                                        "Object Detection Model", GST_TYPE_ZED_OD_MODEL_TYPE,
                                                        DEFAULT_PROP_OD_MODEL,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_OD_CONFIDENCE,
-                                     g_param_spec_float("od-confidence", "Minimum Detection Confidence",
+                                     g_param_spec_float("object-detection-confidence", "Minimum Object detection confidence threshold",
                                                         "Minimum Detection Confidence", 0.0f, 100.0f, DEFAULT_PROP_OD_CONFIDENCE,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
@@ -603,7 +639,7 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
         src->sdk_verbose = g_value_get_boolean(value);
         break;
     case PROP_CAM_FLIP:
-        src->camera_image_flip = g_value_get_boolean(value);
+        src->camera_image_flip = g_value_get_enum(value);
         break;
     case PROP_CAM_ID:
         src->camera_id = g_value_get_int(value);
@@ -637,6 +673,9 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_DEPTH_STAB:
         src->depth_stabilization = g_value_get_boolean(value);
         break;
+    case PROP_RIGHT_DEPTH_ENABLE:
+        src->enable_right_side_measure =  g_value_get_boolean(value);
+        break;
     case PROP_POS_TRACKING:
         src->pos_tracking = g_value_get_boolean(value);
         break;
@@ -649,9 +688,9 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_OD_ENABLE:
         src->object_detection = g_value_get_boolean(value);
         break;
-        /*case PROP_OD_IMAGE_SYNC:
+     case PROP_OD_IMAGE_SYNC:
         src->od_image_sync = g_value_get_boolean(value);
-        break;*/
+        break;
     case PROP_OD_TRACKING:
         src->od_enable_tracking = g_value_get_boolean(value);
         break;
@@ -690,7 +729,7 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
         g_value_set_boolean( value, src->sdk_verbose );
         break;
     case PROP_CAM_FLIP:
-        g_value_set_boolean( value, src->camera_image_flip );
+        g_value_set_enum( value, src->camera_image_flip );
         break;
     case PROP_CAM_ID:
         g_value_set_int( value, src->camera_id );
@@ -719,6 +758,9 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_DIS_SELF_CALIB:
         g_value_set_boolean( value, src->camera_disable_self_calib );
         break;
+    case PROP_RIGHT_DEPTH_ENABLE:
+        g_value_set_boolean( value, src->enable_right_side_measure);
+        break;
     case PROP_DEPTH_STAB:
         g_value_set_boolean( value, src->depth_stabilization );
         break;
@@ -734,9 +776,9 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_OD_ENABLE:
         g_value_set_boolean( value, src->object_detection );
         break;
-        /*case PROP_OD_IMAGE_SYNC:
+    case PROP_OD_IMAGE_SYNC:
         g_value_set_boolean( value, src->od_image_sync );
-        break;*/
+        break;
     case PROP_OD_TRACKING:
         g_value_set_boolean( value, src->od_enable_tracking );
         break;
@@ -846,6 +888,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     init_params.depth_minimum_distance = src->depth_min_dist;
     init_params.depth_maximum_distance = src->depth_max_dist;
     init_params.depth_stabilization = src->depth_stabilization;
+    init_params.enable_right_side_measure= src->enable_right_side_measure==TRUE;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib==TRUE;
     init_params.coordinate_system = static_cast<sl::COORDINATE_SYSTEM>(src->coord_sys);
 
