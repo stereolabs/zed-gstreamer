@@ -16,7 +16,7 @@
 <br>
 
 # Key Features
-GStreamer plugin package for ZED Cameras. The package is composed of two plugins:
+GStreamer plugin package for ZED Cameras. The package is composed of several plugins:
 
 * `zedsrc`: acquires camera color image and depth map and pushes them in a GStreamer pipeline.
 * `zedmeta`: GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data).
