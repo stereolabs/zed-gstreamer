@@ -140,7 +140,7 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `enable-object-detection `: Enable Object Detection - {TRUE, FALSE}
  * `object-detection-image-sync `: Object detection frame sync - {TRUE, FALSE}
  * `object-detection-tracking `: Enable tracking for the detected objects - {TRUE, FALSE}
- * `object-detection-detection-model`: Object Detection Model - {Multi class (0), Skeleton tracking FAST (1), Skeleton tracking ACCURATE (2)}
+ * `object-detection-model`: Object Detection Model - {Multi class (0), Human Body Tracking FAST (1), Human Body Tracking ACCURATE (2)}
  * `object-detection-confidence`: Minimum Detection Confidence - [0,100]
 
 ### `ZED Video Demuxer Plugin` parameters
