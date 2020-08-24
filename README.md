@@ -10,7 +10,7 @@
   <a href="#plugins-parameters">Plugins parameters</a> •
   <a href="#metadata">Metadata</a> •
   <a href="#pipeline-examples">Example pipelines</a> • 
-  <a href="#pipeline-examples">RTSP Server</a> • 
+  <a href="#rtsp-server">RTSP Server</a> • 
   <a href="#related">Related</a> •
   <a href="#license">License</a>
 </p>
