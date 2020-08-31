@@ -121,29 +121,28 @@ GStreamer plugin package for ZED Cameras. The package is composed of several plu
 ### `ZED Video Source Plugin` parameters
 Most of the parameters follow the same name as the C++ API. Except that `_` is replaced by `-` to follow gstreamer common formatting.
 
- * `camera-resolution`: stream resolution - {VGA (3), HD270 (2), HD1080 (1), HD2K (0)}
- * `camera-fps`: stream framerate - {15, 30, 60, 100}
- * `sdk-verbose`: SDK verbose mode - {TRUE, FALSE}
- * `camera-image-flip`: flip streams vertically - {TRUE, FALSE, AUTO}
+ * `resolution`: stream resolution - {VGA (3), HD270 (2), HD1080 (1), HD2K (0)}
+ * `framerate`: stream framerate - {15, 30, 60, 100}
+ * `verbose`: SDK verbose mode - {TRUE, FALSE}
+ * `flip`: flip streams vertically - {TRUE, FALSE, AUTO}
  * `camera-id`: camera ID - [0, 256]
  * `camera-sn`: camera serial number
  * `svo-file-path`: SVO file path for SVO input
- * `input-stream-ip`: device(sender) IP address when using streaming input from ZED SDK
- * `input-stream-port`: IP port when using streaming input from ZED SDK
+ * `in-stream-ip-addr`: device(sender) IP address when using streaming input from ZED SDK
+ * `in-stream-port `: IP port when using streaming input from ZED SDK
  * `stream-type`: type of video stream - {Left image (0), Right image (1), Stereo couple (2), 16 bit depth (3), Left+Depth (4)}
- * `depth-minimum-distance`: Minimum depth value
- * `depth-maximum-distance `: Maximum depth value
+ * `min-depth`: Minimum depth value
+ * `max-depth`: Maximum depth value
  * `enable-right-side-measure `: Enable right side measures - {TRUE, FALSE}
- * `camera-disable-self-calib`: Disable the self calibration processing when the camera is opened - {TRUE, FALSE}
- * `depth-stabilization`: Enable depth stabilization - {TRUE, FALSE}
- * `enable-positional-tracking`: Enable positional tracking - {TRUE, FALSE}
- * `camera-is-static`: Set to TRUE if the camera is static - {TRUE, FALSE}
- * `coordinate-system`: ZED SDK Coordinate System - {Image (0) - Left handed, Y up (1) - Right handed, Y up (2) - Right handed, Z up (3) - Left handed, Z up (4) - Right handed, Z up, X fwd (5)}
- * `enable-object-detection `: Enable Object Detection - {TRUE, FALSE}
- * `object-detection-image-sync `: Object detection frame sync - {TRUE, FALSE}
- * `object-detection-tracking `: Enable tracking for the detected objects - {TRUE, FALSE}
- * `object-detection-model`: Object Detection Model - {Multi class (0), Human Body Tracking FAST (1), Human Body Tracking ACCURATE (2)}
- * `object-detection-confidence`: Minimum Detection Confidence - [0,100]
+ * `disable-self-calib`: Disable the self calibration processing when the camera is opened - {TRUE, FALSE}
+ * `depth-stability`: Enable depth stabilization - {TRUE, FALSE}
+ * `pos-tracking`: Enable positional tracking - {TRUE, FALSE}
+ * `cam-static `: Set to TRUE if the camera is static - {TRUE, FALSE}
+ * `coord-system`: ZED SDK Coordinate System - {Image (0) - Left handed, Y up (1) - Right handed, Y up (2) - Right handed, Z up (3) - Left handed, Z up (4) - Right handed, Z up, X fwd (5)}
+ * `coord-system `: Enable Object Detection - {TRUE, FALSE}
+ * `od-tracking`: Enable tracking for the detected objects - {TRUE, FALSE}
+ * `od-detection-model`: Object Detection Model - {Multi class (0), Human Body Tracking FAST (1), Human Body Tracking ACCURATE (2)}
+ * `od-confidence`: Minimum Detection Confidence - [0,100]
 
 ### `ZED Video Demuxer Plugin` parameters
 
@@ -238,7 +237,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 ```    
     gst-launch-1.0 \
-    zedsrc stream-type=0 enable-object-detection=true object-detection-model=0 camera-resolution=0 camera-fps=15 ! queue ! \
+    zedsrc stream-type=0 od-enabled=true od-detection-model=0 resolution=2 framerate=30 ! queue ! \
     zedodoverlay ! queue ! \
     autovideoconvert ! fpsdisplaysink
 ```
@@ -250,7 +249,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 ```    
     gst-launch-1.0 \
-    zedsrc stream-type=2 enable-object-detection=true object-detection-model=1 camera-resolution=0 camera-fps=15 ! queue ! \
+    zedsrc stream-type=2 od-enabled=true od-detection-model=1 resolution=0 camera-fps=15 ! queue ! \
     zedodoverlay ! queue ! \
     autovideoconvert ! fpsdisplaysink
 ```
@@ -262,7 +261,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 ```
     gst-launch-1.0 \
-    zedsrc stream-type=0 enable-object-detection=true object-detection-model=2 camera-resolution=0 camera-fps=15  ! queue ! \
+    zedsrc stream-type=0 od-enabled=true od-detection-model=2 resolution=0 camera-fps=15  ! queue ! \
     zedodoverlay ! queue ! \
     autovideoconvert ! fpsdisplaysink
 ```
@@ -274,7 +273,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 ```
     gst-launch-1.0 \
-    zedsrc stream-type=4 camera-resolution=2 camera-fps=30 enable-object-detection=true object-detection-model=1 ! \
+    zedsrc stream-type=4 resolution=2 camera-fps=30 od-enabled=true od-detection-model=1 ! \
     zeddemux name=demux \
     demux.src_left ! queue ! zedodoverlay ! queue ! autovideoconvert ! fpsdisplaysink \
     demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
@@ -288,7 +287,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 ```
     gst-launch-1.0 \
     zeddatamux name=mux \
-    zedsrc stream-type=4 camera-resolution=0 camera-fps=15 enable-object-detection=true object-detection-model=1 ! \
+    zedsrc stream-type=4 resolution=0 camera-fps=15 od-enabled=true od-detection-model=1 ! \
     zeddemux stream-data=true is-depth=true name=demux \
     demux.src_aux ! queue ! autovideoconvert ! videoscale ! video/x-raw,width=672,height=376 ! queue ! fpsdisplaysink \
     demux.src_data ! mux.sink_data \
