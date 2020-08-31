@@ -419,12 +419,12 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
     /* Install GObject properties */
     g_object_class_install_property( gobject_class, PROP_CAM_RES,
-                                     g_param_spec_enum("camera-resolution", "Camera Resolution",
+                                     g_param_spec_enum("resolution", "Camera Resolution",
                                                        "Camera Resolution", GST_TYPE_ZED_RESOL, DEFAULT_PROP_CAM_RES,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAM_FPS,
-                                     g_param_spec_enum("camera-fps", "Camera frame rate",
+                                     g_param_spec_enum("framerate", "Camera frame rate",
                                                        "Camera frame rate", GST_TYPE_ZED_FPS, DEFAULT_PROP_CAM_FPS,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -522,7 +522,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_OD_ENABLE,
-                                     g_param_spec_boolean("enable-object-detection", "Object Detection enable",
+                                     g_param_spec_boolean("od-enabled", "Object Detection enable",
                                                           "Set to TRUE to enable Object Detection",
                                                           DEFAULT_PROP_OD_ENABLE,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
@@ -548,7 +548,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
 
     g_object_class_install_property( gobject_class, PROP_OD_DET_MODEL,
-                                     g_param_spec_enum("object-detection-model", "Object detection model",
+                                     g_param_spec_enum("od-detection-model", "Object detection model",
                                                        "Object Detection Model", GST_TYPE_ZED_OD_MODEL_TYPE,
                                                        DEFAULT_PROP_OD_MODEL,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
