@@ -408,7 +408,32 @@ static void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs,
             double font_scale = 0.75;
 
             std::stringstream txt_info;
-            txt_info << "Id: " << objs[i].id << " - " << ((objs[i].label==OBJECT_CLASS::PERSON)?"PERSON":"VEHICLE");
+            txt_info << "Id: " << objs[i].id << " - ";
+
+            switch (objs[i].label) {
+            case OBJECT_CLASS::PERSON:
+                txt_info << "PERSON";
+                break;
+            case OBJECT_CLASS::VEHICLE:
+                txt_info << "VEHICLE";
+                break;
+            case OBJECT_CLASS::ANIMAL:
+                txt_info << "ANIMAL";
+                break;
+            case OBJECT_CLASS::BAG:
+                txt_info << "BAG";
+                break;
+            case OBJECT_CLASS::ELECTRONICS:
+                txt_info << "ELECTRONICS";
+                break;
+            case OBJECT_CLASS::FRUIT_VEGETABLE:
+                txt_info << "FRUIT_VEGETABLE";
+                break;
+            case OBJECT_CLASS::LAST:
+            default:
+                txt_info << "UNDEFINED";
+                break;
+            }
 
             cv::Size txt_size = cv::getTextSize( txt_info.str(), font_face, font_scale, 1, &baseline );
 
