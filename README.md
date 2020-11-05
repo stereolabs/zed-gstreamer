@@ -322,7 +322,7 @@ Application Options:
 Example: 
 
 ```
-   gst-zed-rtsp-server zedsrc ! videoconvert ! 'video/x-raw, format=(string)I420' ! x264enc ! rtph264pay pt=96 name=pay0
+   gst-zed-rtsp-launch zedsrc ! videoconvert ! 'video/x-raw, format=(string)I420' ! x264enc ! rtph264pay pt=96 name=pay0
 ```
 
 It is mandatory to define at least one payload named `pay0`; it is possible to define multiple payloads using an increasing index (i.e. `pay1`, `pay2`, ...).
