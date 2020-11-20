@@ -351,3 +351,6 @@ Ready to use scripts are available in the scripts/ folder for windows and linux.
 ## License
 
 This library is licensed under the LGPL License.
+
+## Support
+If you need assistance go to our Community site at https://community.stereolabs.com/
