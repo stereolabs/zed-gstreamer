@@ -108,8 +108,9 @@ typedef enum {
 
 typedef enum {
     GST_ZEDSRC_OD_MULTI_CLASS_BOX = 0,
-    GST_ZEDSRC_OD_HUMAN_BODY_FAST = 1,
-    GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE  = 2
+    GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE = 1,
+    GST_ZEDSRC_OD_HUMAN_BODY_FAST = 2,
+    GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE  = 3
 } GstZedSrcOdModel;
 
 #define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::HD1080)
@@ -267,6 +268,9 @@ static GType gst_zedtsrc_od_model_get_type (void)
             { GST_ZEDSRC_OD_MULTI_CLASS_BOX,
               "Any objects, bounding box based",
               "Object Detection Multi class" },
+            { GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE,
+              "Any objects, bounding box based, state of the art accuracy, requires powerful GPU",
+              "Object Detection Multi class ACCURATE" },
             { GST_ZEDSRC_OD_HUMAN_BODY_FAST,
               "Keypoints based, specific to human skeleton, real time performance even on Jetson or low end GPU cards",
               "Skeleton tracking FAST" },
@@ -871,7 +875,12 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc* src)
 }
 
 static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
-{
+{   
+#if ZED_SDK_MAJOR_VERSION!=3 && ZED_SDK_MINOR_VERSION!=3
+    GST_ELEMENT_ERROR (src, LIBRARY, FAILED,
+                       ("Wrong ZED SDK version. SDK v3.3.x required "), (NULL));
+#endif
+
     GstZedSrc *src = GST_ZED_SRC (bsrc);
     sl::ERROR_CODE ret;
 

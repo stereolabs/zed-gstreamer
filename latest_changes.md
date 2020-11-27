@@ -1,6 +1,12 @@
 LATEST CHANGES
 ==============
 
+ZED SDK v3.3 (2020-11-27)
+---------------------
+- Add compatibility fix for ZED SDK v3.3
+- Add support for multiple OD class
+- Add support for MULTICLASS ACCURATE
+
 Release v0.1 (2020-08-24)
 --------------------------
 - ZED GStreamer package for Linux and Windows
