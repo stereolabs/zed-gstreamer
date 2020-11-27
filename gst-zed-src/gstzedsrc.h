@@ -62,7 +62,7 @@ struct _GstZedSrc
     gfloat depth_max_dist;
     gboolean camera_disable_self_calib;
     gboolean depth_stabilization;
-    gboolean enable_right_side_measure;
+    //gboolean enable_right_side_measure;
     gboolean pos_tracking;
     gboolean camera_static;
     gint coord_sys;

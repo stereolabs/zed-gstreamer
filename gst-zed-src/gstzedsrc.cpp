@@ -62,7 +62,7 @@ enum
     PROP_DEPTH_MIN,
     PROP_DEPTH_MAX,
     PROP_DIS_SELF_CALIB,
-    PROP_RIGHT_DEPTH_ENABLE,
+    //PROP_RIGHT_DEPTH_ENABLE,
     PROP_DEPTH_STAB,
     PROP_POS_TRACKING,
     PROP_CAMERA_STATIC,
@@ -195,7 +195,7 @@ static GType gst_zedtsrc_flip_get_type (void)
         };
 
         zedsrc_flip_type = g_enum_register_static( "GstZedSrcFlip",
-                                                  pattern_types);
+                                                   pattern_types);
     }
 
     return zedsrc_flip_type;
@@ -445,9 +445,9 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
     g_object_class_install_property( gobject_class, PROP_CAM_FLIP,
                                      g_param_spec_enum("camera-image-flip", "Camera image flip",
-                                                          "Use the camera in forced flip/no flip or automatic mode",GST_TYPE_ZED_FLIP,
-                                                          DEFAULT_PROP_CAM_FLIP,
-                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                                                       "Use the camera in forced flip/no flip or automatic mode",GST_TYPE_ZED_FLIP,
+                                                       DEFAULT_PROP_CAM_FLIP,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAM_ID,
                                      g_param_spec_int("camera-id", "Camera ID",
@@ -495,11 +495,11 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           DEFAULT_PROP_DIS_SELF_CALIB,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property( gobject_class, PROP_RIGHT_DEPTH_ENABLE,
+    /*g_object_class_install_property( gobject_class, PROP_RIGHT_DEPTH_ENABLE,
                                      g_param_spec_boolean("enable-right-side-measure", "Enable right side measure",
                                                           "Enable the MEASURE::DEPTH_RIGHT and other MEASURE::<XXX>_RIGHT at the cost of additional computation time",
                                                           DEFAULT_PROP_RIGHT_DEPTH,
-                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));*/
 
     g_object_class_install_property( gobject_class, PROP_DEPTH_STAB,
                                      g_param_spec_boolean("depth-stabilization", "Depth stabilization",
@@ -677,9 +677,9 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_DEPTH_STAB:
         src->depth_stabilization = g_value_get_boolean(value);
         break;
-    case PROP_RIGHT_DEPTH_ENABLE:
+    /*case PROP_RIGHT_DEPTH_ENABLE:
         src->enable_right_side_measure =  g_value_get_boolean(value);
-        break;
+        break;*/
     case PROP_POS_TRACKING:
         src->pos_tracking = g_value_get_boolean(value);
         break;
@@ -692,7 +692,7 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_OD_ENABLE:
         src->object_detection = g_value_get_boolean(value);
         break;
-     case PROP_OD_IMAGE_SYNC:
+    case PROP_OD_IMAGE_SYNC:
         src->od_image_sync = g_value_get_boolean(value);
         break;
     case PROP_OD_TRACKING:
@@ -762,9 +762,9 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_DIS_SELF_CALIB:
         g_value_set_boolean( value, src->camera_disable_self_calib );
         break;
-    case PROP_RIGHT_DEPTH_ENABLE:
+    /*case PROP_RIGHT_DEPTH_ENABLE:
         g_value_set_boolean( value, src->enable_right_side_measure);
-        break;
+        break;*/
     case PROP_DEPTH_STAB:
         g_value_set_boolean( value, src->depth_stabilization );
         break;
@@ -897,7 +897,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     init_params.depth_minimum_distance = src->depth_min_dist;
     init_params.depth_maximum_distance = src->depth_max_dist;
     init_params.depth_stabilization = src->depth_stabilization;
-    init_params.enable_right_side_measure= src->enable_right_side_measure==TRUE;
+    init_params.enable_right_side_measure = false; //src->enable_right_side_measure==TRUE;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib==TRUE;
     init_params.coordinate_system = static_cast<sl::COORDINATE_SYSTEM>(src->coord_sys);
 
@@ -1125,7 +1125,11 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     }
     else if(src->stream_type== GST_ZEDSRC_DEPTH_16)
     {
+#if(ZED_SDK_MAJOR_VERSION==3 && ZED_SDK_MINOR_VERSION<4)
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU );
+#else
+        ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU );
+#endif
     }
     else if(src->stream_type== GST_ZEDSRC_LEFT_DEPTH)
     {
@@ -1144,6 +1148,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     // ----> Memory copy
     if(src->stream_type== GST_ZEDSRC_DEPTH_16)
     {
+#if(ZED_SDK_MAJOR_VERSION==3 && ZED_SDK_MINOR_VERSION<4)
         uint16_t* gst_data = (uint16_t*)(&minfo.data[0]);
         unsigned long dataSize = minfo.size;
 
@@ -1152,16 +1157,25 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         for (unsigned long i = 0; i < dataSize/2; i++) {
             *(gst_data++) = static_cast<uint16_t>(*(depthDataPtr++));
         }
+#else
+        memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
+#endif
+
     }
     else if(src->stream_type== GST_ZEDSRC_LEFT_RIGHT)
     {
+        // Left RGB data on half top
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size/2);
-        memcpy((minfo.data+ minfo.size/2), right_img.getPtr<sl::uchar4>(), minfo.size/2);
+
+        // Right RGB data on half bottom
+        memcpy((minfo.data + minfo.size/2), right_img.getPtr<sl::uchar4>(), minfo.size/2);
     }
     else if(src->stream_type== GST_ZEDSRC_LEFT_DEPTH)
     {
+        // RGB data on half top
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size/2);
 
+        // Depth data on half bottom
         uint32_t* gst_data = (uint32_t*)(minfo.data + minfo.size/2);
 
         sl::float1* depthDataPtr = depth_data.getPtr<sl::float1>();

@@ -1,8 +1,13 @@
 LATEST CHANGES
 ==============
 
+ZED SDK v3.4
+-------------
+- Add compatibility fix for ZED SDK v3.4
+- Add support for UINT16 Depth map
+
 ZED SDK v3.3 (2020-11-27)
----------------------
+--------------------------
 - Add compatibility fix for ZED SDK v3.3
 - Add support for multiple OD class
 - Add support for MULTICLASS ACCURATE
