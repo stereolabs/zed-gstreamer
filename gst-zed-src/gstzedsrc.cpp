@@ -108,8 +108,9 @@ typedef enum {
 
 typedef enum {
     GST_ZEDSRC_OD_MULTI_CLASS_BOX = 0,
-    GST_ZEDSRC_OD_HUMAN_BODY_FAST = 1,
-    GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE  = 2
+    GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE = 1,
+    GST_ZEDSRC_OD_HUMAN_BODY_FAST = 2,
+    GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE  = 3
 } GstZedSrcOdModel;
 
 #define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::HD1080)
@@ -267,6 +268,9 @@ static GType gst_zedtsrc_od_model_get_type (void)
             { GST_ZEDSRC_OD_MULTI_CLASS_BOX,
               "Any objects, bounding box based",
               "Object Detection Multi class" },
+            { GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE,
+              "Any objects, bounding box based, state of the art accuracy, requires powerful GPU",
+              "Object Detection Multi class ACCURATE" },
             { GST_ZEDSRC_OD_HUMAN_BODY_FAST,
               "Keypoints based, specific to human skeleton, real time performance even on Jetson or low end GPU cards",
               "Skeleton tracking FAST" },
@@ -419,12 +423,12 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
     /* Install GObject properties */
     g_object_class_install_property( gobject_class, PROP_CAM_RES,
-                                     g_param_spec_enum("camera-resolution", "Camera Resolution",
+                                     g_param_spec_enum("resolution", "Camera Resolution",
                                                        "Camera Resolution", GST_TYPE_ZED_RESOL, DEFAULT_PROP_CAM_RES,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAM_FPS,
-                                     g_param_spec_enum("camera-fps", "Camera frame rate",
+                                     g_param_spec_enum("framerate", "Camera frame rate",
                                                        "Camera frame rate", GST_TYPE_ZED_FPS, DEFAULT_PROP_CAM_FPS,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -522,7 +526,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_OD_ENABLE,
-                                     g_param_spec_boolean("enable-object-detection", "Object Detection enable",
+                                     g_param_spec_boolean("od-enabled", "Object Detection enable",
                                                           "Set to TRUE to enable Object Detection",
                                                           DEFAULT_PROP_OD_ENABLE,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
@@ -548,7 +552,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
 
     g_object_class_install_property( gobject_class, PROP_OD_DET_MODEL,
-                                     g_param_spec_enum("object-detection-model", "Object detection model",
+                                     g_param_spec_enum("od-detection-model", "Object detection model",
                                                        "Object Detection Model", GST_TYPE_ZED_OD_MODEL_TYPE,
                                                        DEFAULT_PROP_OD_MODEL,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
@@ -871,7 +875,12 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc* src)
 }
 
 static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
-{
+{   
+#if ZED_SDK_MAJOR_VERSION!=3 && ZED_SDK_MINOR_VERSION!=3
+    GST_ELEMENT_ERROR (src, LIBRARY, FAILED,
+                       ("Wrong ZED SDK version. SDK v3.3.x required "), (NULL));
+#endif
+
     GstZedSrc *src = GST_ZED_SRC (bsrc);
     sl::ERROR_CODE ret;
 

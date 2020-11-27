@@ -6,6 +6,6 @@
 :: 3) Convert the stream and display it with FPS information
 
 gst-launch-1.0 ^
-zedsrc stream-type=0 enable-object-detection=true object-detection-model=1 camera-resolution=2 camera-fps=30 ! queue ! ^
+zedsrc stream-type=0 od-enabled=true od-detection-model=1 resolution=2 framerate=30 ! queue ! ^
 zedodoverlay ! queue ! ^
 autovideoconvert ! fpsdisplaysink

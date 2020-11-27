@@ -84,8 +84,12 @@ struct _ZedSensors {
 };
 
 enum class OBJECT_CLASS {
-    PERSON = 0, /**< For people detection */
-    VEHICLE = 1, /**< For vehicles detection. It can be cars, trucks, buses, motorcycles etc */
+    PERSON = 0,
+    VEHICLE = 1,
+    BAG = 2,
+    ANIMAL = 3,
+    ELECTRONICS = 4,
+    FRUIT_VEGETABLE = 5,
     LAST
 };
 
