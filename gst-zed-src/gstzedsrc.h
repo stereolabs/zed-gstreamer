@@ -73,6 +73,24 @@ struct _GstZedSrc
     gboolean od_enable_mask_output;
     gint od_detection_model;
     gfloat od_det_conf;
+
+    gint brightness;
+    gint contrast;
+    gint hue;
+    gint saturation;
+    gint sharpness;
+    gint gamma;
+    gint gain;
+    gint exposure;
+    gboolean aec_agc;
+    gint aec_agc_roi_x;
+    gint aec_agc_roi_y;
+    gint aec_agc_roi_w;
+    gint aec_agc_roi_h;
+    gint aec_agc_roi_side;
+    gint whitebalance_temperature;
+    gboolean whitebalance_temperature_auto;
+    gboolean led_status;
     // <---- Properties
 
 
