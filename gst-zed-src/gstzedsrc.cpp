@@ -179,7 +179,7 @@ typedef enum {
 #define DEFAULT_PROP_WHITEBALANCE_AUTO  1
 #define DEFAULT_PROP_LEDSTATUS          1
 
-#define GST_TYPE_ZED_SIZE (gst_zedsrc_side_get_type ())
+#define GST_TYPE_ZED_SIDE (gst_zedsrc_side_get_type ())
 static GType gst_zedsrc_side_get_type (void)
 {
     static GType zedsrc_side_type = 0;
@@ -678,6 +678,11 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                       "Auto gain/exposure ROI height (-1 to not set ROI)",
                                                       -1, 1242, DEFAULT_PROP_AEG_AGC_ROI_H,
                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_AEC_AGC_ROI_SIDE,
+                                     g_param_spec_enum("aec-agc-roi-side", "Camera control: auto gain/exposure ROI side",
+                                                       "Auto gain/exposure ROI side", GST_TYPE_ZED_SIDE,
+                                                       DEFAULT_PROP_AEG_AGC_ROI_SIDE,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property( gobject_class, PROP_WHITEBALANCE,
                                      g_param_spec_int("whitebalance-temperature", "Camera control: white balance temperature",
                                                       "Image white balance temperature", 2800, 6500, DEFAULT_PROP_WHITEBALANCE,
@@ -1206,6 +1211,24 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     } else {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc );
         std::cout << "AEC_AGC: " << src->aec_agc << std::endl;
+
+        if( src->aec_agc_roi_x!=-1 &&
+                src->aec_agc_roi_y!=-1 &&
+                src->aec_agc_roi_w!=-1 &&
+                src->aec_agc_roi_h!=-1) {
+            sl::Rect roi;
+            roi.x=src->aec_agc_roi_x;
+            roi.y=src->aec_agc_roi_y;
+            roi.width=src->aec_agc_roi_w;
+            roi.height=src->aec_agc_roi_h;
+
+            sl::SIDE side =  static_cast<sl::SIDE>(src->aec_agc_roi_side);
+
+            std::cout << "AEC_AGC_ROI: (" << src->aec_agc_roi_x << "," << src->aec_agc_roi_y << ") " <<
+                         src->aec_agc_roi_w << "x" << src->aec_agc_roi_h << " - Side: " << src->aec_agc_roi_side << std::endl;
+
+            src->zed.setCameraSettings( sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side );
+        }
     }
     if(src->whitebalance_temperature_auto==FALSE) {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->whitebalance_temperature_auto );
@@ -1221,6 +1244,8 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     }
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::LED_STATUS, src->led_status );
     std::cout << "LED_STATUS: " << src->led_status << std::endl;
+
+
     // <---- Camera Controls
 
     // ----> Positional tracking
