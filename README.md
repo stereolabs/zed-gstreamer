@@ -141,7 +141,24 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `od-enabled`: Enable Object Detection - {TRUE, FALSE}
  * `od-tracking`: Enable tracking for the detected objects - {TRUE, FALSE}
  * `od-detection-model`: Object Detection Model - {Multi class (0), Human Body Tracking FAST (1), Human Body Tracking ACCURATE (2)}
- * `od-confidence`: Minimum Detection Confidence - [0,100]
+ * `od-confidence`: Minimum Detection Confidence - {0,100}
+ * `brightness`: Image brightness - {0,8}
+ * `contrast`: Image contrast - {0,8}
+ * `hue`: Image hue - {0,11}
+ * `saturation`: Image saturation - {0,8}
+ * `sharpness`: Image sharpness - {0,8}
+ * `gamma`: Image gamma - {1,9}
+ * `gain`: Camera gain - {0,100}
+ * `exposure`: Camera exposure - {0,100}
+ * `aec-agc`: Automatic camera gain and exposure - {TRUE, FALSE}
+ * `aec-agc-roi-x`: Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI) - {-1,2208}
+ * `aec-agc-roi-y`: Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI) - {-1,1242}
+ * `aec-agc-roi-w`: Auto gain/exposure ROI width (-1 to not set ROI) - {-1,2208}
+ * `aec-agc-roi-h`: Auto gain/exposure ROI height (-1 to not set ROI) - {-1,1242}
+ * `aec-agc-roi-side`: Auto gain/exposure ROI side - {LEFT (0), RIGHT (1), BOTH (2)}
+ * `whitebalance-temperature`: Image white balance temperature - {2800,6500}
+ * `whitebalance-auto`: Image automatic white balance - {TRUE, FALSE}
+ * `led-status`: Camera LED on/off - {TRUE, FALSE} 
 
 ### `ZED Video Demuxer Plugin` parameters
 

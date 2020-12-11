@@ -62,7 +62,7 @@ enum
     PROP_DEPTH_MIN,
     PROP_DEPTH_MAX,
     PROP_DIS_SELF_CALIB,
-    PROP_RIGHT_DEPTH_ENABLE,
+    //PROP_RIGHT_DEPTH_ENABLE,
     PROP_DEPTH_STAB,
     PROP_POS_TRACKING,
     PROP_CAMERA_STATIC,
@@ -73,6 +73,23 @@ enum
     PROP_OD_MASK,
     PROP_OD_DET_MODEL,
     PROP_OD_CONFIDENCE,
+    PROP_BRIGHTNESS,
+    PROP_CONTRAST,
+    PROP_HUE,
+    PROP_SATURATION,
+    PROP_SHARPNESS,
+    PROP_GAMMA,
+    PROP_GAIN,
+    PROP_EXPOSURE,
+    PROP_AEC_AGC,
+    PROP_AEC_AGC_ROI_X,
+    PROP_AEC_AGC_ROI_Y,
+    PROP_AEC_AGC_ROI_W,
+    PROP_AEC_AGC_ROI_H,
+    PROP_AEC_AGC_ROI_SIDE,
+    PROP_WHITEBALANCE,
+    PROP_WHITEBALANCE_AUTO,
+    PROP_LEDSTATUS,
     N_PROPERTIES
 };
 
@@ -113,6 +130,12 @@ typedef enum {
     GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE  = 3
 } GstZedSrcOdModel;
 
+typedef enum {
+    GST_ZEDSRC_SIDE_LEFT= 0,
+    GST_ZEDSRC_SIDE_RIGHT = 1,
+    GST_ZEDSRC_SIDE_BOTH = 2
+} GstZedSrcSide;
+
 #define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::HD1080)
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_30FPS
 #define DEFAULT_PROP_SDK_VERBOSE    FALSE
@@ -138,9 +161,46 @@ typedef enum {
 #define DEFAULT_PROP_OD_MODEL       GST_ZEDSRC_OD_MULTI_CLASS_BOX
 #define DEFAULT_PROP_OD_CONFIDENCE  50.0
 
+#define DEFAULT_PROP_BRIGHTNESS         4
+#define DEFAULT_PROP_CONTRAST           4
+#define DEFAULT_PROP_HUE                0
+#define DEFAULT_PROP_SATURATION         4
+#define DEFAULT_PROP_SHARPNESS          4
+#define DEFAULT_PROP_GAMMA              8
+#define DEFAULT_PROP_GAIN               60
+#define DEFAULT_PROP_EXPOSURE           80
+#define DEFAULT_PROP_AEG_AGC            1
+#define DEFAULT_PROP_AEG_AGC_ROI_X      -1
+#define DEFAULT_PROP_AEG_AGC_ROI_Y      -1
+#define DEFAULT_PROP_AEG_AGC_ROI_W      -1
+#define DEFAULT_PROP_AEG_AGC_ROI_H      -1
+#define DEFAULT_PROP_AEG_AGC_ROI_SIDE   GST_ZEDSRC_SIDE_BOTH
+#define DEFAULT_PROP_WHITEBALANCE       4600
+#define DEFAULT_PROP_WHITEBALANCE_AUTO  1
+#define DEFAULT_PROP_LEDSTATUS          1
 
-#define GST_TYPE_ZED_RESOL (gst_zedtsrc_resol_get_type ())
-static GType gst_zedtsrc_resol_get_type (void)
+#define GST_TYPE_ZED_SIDE (gst_zedsrc_side_get_type ())
+static GType gst_zedsrc_side_get_type (void)
+{
+    static GType zedsrc_side_type = 0;
+
+    if (!zedsrc_side_type) {
+        static GEnumValue pattern_types[] = {
+            { static_cast<gint>(sl::SIDE::LEFT),  "LEFT",  "Left side only" },
+            { static_cast<gint>(sl::SIDE::RIGHT), "RIGHT", "Right side only"  },
+            { static_cast<gint>(sl::SIDE::BOTH),  "BOTH",  "Left and Right side" },
+            { 0, NULL, NULL },
+        };
+
+        zedsrc_side_type = g_enum_register_static( "GstZedsrcSide",
+                                                   pattern_types);
+    }
+
+    return zedsrc_side_type;
+}
+
+#define GST_TYPE_ZED_RESOL (gst_zedsrc_resol_get_type ())
+static GType gst_zedsrc_resol_get_type (void)
 {
     static GType zedsrc_resol_type = 0;
 
@@ -160,8 +220,8 @@ static GType gst_zedtsrc_resol_get_type (void)
     return zedsrc_resol_type;
 }
 
-#define GST_TYPE_ZED_FPS (gst_zedtsrc_fps_get_type ())
-static GType gst_zedtsrc_fps_get_type (void)
+#define GST_TYPE_ZED_FPS (gst_zedsrc_fps_get_type ())
+static GType gst_zedsrc_fps_get_type (void)
 {
     static GType zedsrc_fps_type = 0;
 
@@ -181,8 +241,8 @@ static GType gst_zedtsrc_fps_get_type (void)
     return zedsrc_fps_type;
 }
 
-#define GST_TYPE_ZED_FLIP (gst_zedtsrc_flip_get_type ())
-static GType gst_zedtsrc_flip_get_type (void)
+#define GST_TYPE_ZED_FLIP (gst_zedsrc_flip_get_type ())
+static GType gst_zedsrc_flip_get_type (void)
 {
     static GType zedsrc_flip_type = 0;
 
@@ -195,14 +255,14 @@ static GType gst_zedtsrc_flip_get_type (void)
         };
 
         zedsrc_flip_type = g_enum_register_static( "GstZedSrcFlip",
-                                                  pattern_types);
+                                                   pattern_types);
     }
 
     return zedsrc_flip_type;
 }
 
-#define GST_TYPE_ZED_STREAM_TYPE (gst_zedtsrc_stream_type_get_type ())
-static GType gst_zedtsrc_stream_type_get_type (void)
+#define GST_TYPE_ZED_STREAM_TYPE (gst_zedsrc_stream_type_get_type ())
+static GType gst_zedsrc_stream_type_get_type (void)
 {
     static GType zedsrc_stream_type_type = 0;
 
@@ -223,8 +283,8 @@ static GType gst_zedtsrc_stream_type_get_type (void)
     return zedsrc_stream_type_type;
 }
 
-#define GST_TYPE_ZED_COORD_SYS (gst_zedtsrc_coord_sys_get_type ())
-static GType gst_zedtsrc_coord_sys_get_type (void)
+#define GST_TYPE_ZED_COORD_SYS (gst_zedsrc_coord_sys_get_type ())
+static GType gst_zedsrc_coord_sys_get_type (void)
 {
     static GType zedsrc_coord_sys_type = 0;
 
@@ -258,8 +318,8 @@ static GType gst_zedtsrc_coord_sys_get_type (void)
     return zedsrc_coord_sys_type;
 }
 
-#define GST_TYPE_ZED_OD_MODEL_TYPE (gst_zedtsrc_od_model_get_type ())
-static GType gst_zedtsrc_od_model_get_type (void)
+#define GST_TYPE_ZED_OD_MODEL_TYPE (gst_zedsrc_od_model_get_type ())
+static GType gst_zedsrc_od_model_get_type (void)
 {
     static GType zedsrc_od_model_type = 0;
 
@@ -445,9 +505,9 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
     g_object_class_install_property( gobject_class, PROP_CAM_FLIP,
                                      g_param_spec_enum("camera-image-flip", "Camera image flip",
-                                                          "Use the camera in forced flip/no flip or automatic mode",GST_TYPE_ZED_FLIP,
-                                                          DEFAULT_PROP_CAM_FLIP,
-                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                                                       "Use the camera in forced flip/no flip or automatic mode",GST_TYPE_ZED_FLIP,
+                                                       DEFAULT_PROP_CAM_FLIP,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAM_ID,
                                      g_param_spec_int("camera-id", "Camera ID",
@@ -495,11 +555,11 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           DEFAULT_PROP_DIS_SELF_CALIB,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property( gobject_class, PROP_RIGHT_DEPTH_ENABLE,
+    /*g_object_class_install_property( gobject_class, PROP_RIGHT_DEPTH_ENABLE,
                                      g_param_spec_boolean("enable-right-side-measure", "Enable right side measure",
                                                           "Enable the MEASURE::DEPTH_RIGHT and other MEASURE::<XXX>_RIGHT at the cost of additional computation time",
                                                           DEFAULT_PROP_RIGHT_DEPTH,
-                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));*/
 
     g_object_class_install_property( gobject_class, PROP_DEPTH_STAB,
                                      g_param_spec_boolean("depth-stabilization", "Depth stabilization",
@@ -561,6 +621,80 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                      g_param_spec_float("object-detection-confidence", "Minimum Object detection confidence threshold",
                                                         "Minimum Detection Confidence", 0.0f, 100.0f, DEFAULT_PROP_OD_CONFIDENCE,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_BRIGHTNESS,
+                                     g_param_spec_int("brightness", "Camera control: brightness",
+                                                      "Image brightness", 0, 8, DEFAULT_PROP_BRIGHTNESS,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_CONTRAST,
+                                     g_param_spec_int("contrast", "Camera control: contrast",
+                                                      "Image contrast", 0, 8, DEFAULT_PROP_CONTRAST,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_HUE,
+                                     g_param_spec_int("hue", "Camera control: hue",
+                                                      "Image hue", 0, 11, DEFAULT_PROP_HUE,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_SATURATION,
+                                     g_param_spec_int("saturation", "Camera control: saturation",
+                                                      "Image saturation", 0, 8, DEFAULT_PROP_SATURATION,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_SHARPNESS,
+                                     g_param_spec_int("sharpness", "Camera control: sharpness",
+                                                      "Image sharpness", 0, 8, DEFAULT_PROP_SHARPNESS,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_GAMMA,
+                                     g_param_spec_int("gamma", "Camera control: gamma",
+                                                      "Image gamma", 1, 9, DEFAULT_PROP_GAMMA,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_GAIN,
+                                     g_param_spec_int("gain", "Camera control: gain",
+                                                      "Camera gain", 0, 100, DEFAULT_PROP_GAIN,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_EXPOSURE,
+                                     g_param_spec_int("exposure", "Camera control: exposure",
+                                                      "Camera exposure", 0, 100, DEFAULT_PROP_EXPOSURE,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_AEC_AGC,
+                                     g_param_spec_boolean("aec-agc", "Camera control: automatic gain and exposure",
+                                                          "Camera automatic gain and exposure", DEFAULT_PROP_AEG_AGC,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_AEC_AGC_ROI_X,
+                                     g_param_spec_int("aec-agc-roi-x", "Camera control: auto gain/exposure ROI top left 'X' coordinate",
+                                                      "Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)",
+                                                      -1, 2208, DEFAULT_PROP_AEG_AGC_ROI_X,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_AEC_AGC_ROI_Y,
+                                     g_param_spec_int("aec-agc-roi-y", "Camera control: auto gain/exposure ROI top left 'Y' coordinate",
+                                                      "Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)",
+                                                      -1, 1242, DEFAULT_PROP_AEG_AGC_ROI_Y,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_AEC_AGC_ROI_W,
+                                     g_param_spec_int("aec-agc-roi-w", "Camera control: auto gain/exposure ROI width",
+                                                      "Auto gain/exposure ROI width (-1 to not set ROI)",
+                                                      -1, 2208, DEFAULT_PROP_AEG_AGC_ROI_W,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_AEC_AGC_ROI_H,
+                                     g_param_spec_int("aec-agc-roi-h", "Camera control: auto gain/exposure ROI height",
+                                                      "Auto gain/exposure ROI height (-1 to not set ROI)",
+                                                      -1, 1242, DEFAULT_PROP_AEG_AGC_ROI_H,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_AEC_AGC_ROI_SIDE,
+                                     g_param_spec_enum("aec-agc-roi-side", "Camera control: auto gain/exposure ROI side",
+                                                       "Auto gain/exposure ROI side", GST_TYPE_ZED_SIDE,
+                                                       DEFAULT_PROP_AEG_AGC_ROI_SIDE,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_WHITEBALANCE,
+                                     g_param_spec_int("whitebalance-temperature", "Camera control: white balance temperature",
+                                                      "Image white balance temperature", 2800, 6500, DEFAULT_PROP_WHITEBALANCE,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_WHITEBALANCE_AUTO,
+                                     g_param_spec_boolean("whitebalance-auto", "Camera control: automatic whitebalance",
+                                                          "Image automatic white balance", DEFAULT_PROP_WHITEBALANCE_AUTO,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_LEDSTATUS,
+                                     g_param_spec_boolean("led-status", "Camera control: led status",
+                                                          "Camera LED on/off", DEFAULT_PROP_LEDSTATUS,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_zedsrc_reset (GstZedSrc * src)
@@ -616,6 +750,24 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->od_enable_mask_output = DEFAULT_PROP_OD_MASK;
     src->od_detection_model = DEFAULT_PROP_OD_MODEL;
     src->od_det_conf = DEFAULT_PROP_OD_CONFIDENCE;
+
+    src->brightness = DEFAULT_PROP_BRIGHTNESS;
+    src->contrast = DEFAULT_PROP_CONTRAST;
+    src->hue = DEFAULT_PROP_HUE;
+    src->saturation = DEFAULT_PROP_SATURATION;
+    src->sharpness = DEFAULT_PROP_SHARPNESS;
+    src->gamma = DEFAULT_PROP_GAMMA;
+    src->gain = DEFAULT_PROP_GAIN;
+    src->exposure = DEFAULT_PROP_EXPOSURE;
+    src->aec_agc = DEFAULT_PROP_AEG_AGC;
+    src->aec_agc_roi_x = DEFAULT_PROP_AEG_AGC_ROI_X;
+    src->aec_agc_roi_y = DEFAULT_PROP_AEG_AGC_ROI_Y;
+    src->aec_agc_roi_w = DEFAULT_PROP_AEG_AGC_ROI_W;
+    src->aec_agc_roi_h = DEFAULT_PROP_AEG_AGC_ROI_H;
+    src->aec_agc_roi_side = DEFAULT_PROP_AEG_AGC_ROI_SIDE;
+    src->whitebalance_temperature = DEFAULT_PROP_WHITEBALANCE;
+    src->whitebalance_temperature_auto = DEFAULT_PROP_WHITEBALANCE_AUTO;
+    src->led_status = DEFAULT_PROP_LEDSTATUS;
     // <---- Parameters initialization
 
     src->stop_requested = FALSE;
@@ -677,9 +829,9 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_DEPTH_STAB:
         src->depth_stabilization = g_value_get_boolean(value);
         break;
-    case PROP_RIGHT_DEPTH_ENABLE:
+        /*case PROP_RIGHT_DEPTH_ENABLE:
         src->enable_right_side_measure =  g_value_get_boolean(value);
-        break;
+        break;*/
     case PROP_POS_TRACKING:
         src->pos_tracking = g_value_get_boolean(value);
         break;
@@ -692,7 +844,7 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_OD_ENABLE:
         src->object_detection = g_value_get_boolean(value);
         break;
-     case PROP_OD_IMAGE_SYNC:
+    case PROP_OD_IMAGE_SYNC:
         src->od_image_sync = g_value_get_boolean(value);
         break;
     case PROP_OD_TRACKING:
@@ -706,6 +858,57 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
         break;
     case PROP_OD_CONFIDENCE:
         src->od_det_conf = g_value_get_float(value);
+        break;
+    case PROP_BRIGHTNESS:
+        src->brightness = g_value_get_int(value);
+        break;
+    case PROP_CONTRAST:
+        src->contrast = g_value_get_int(value);
+        break;
+    case PROP_HUE:
+        src->hue = g_value_get_int(value);
+        break;
+    case PROP_SATURATION:
+        src->saturation = g_value_get_int(value);
+        break;
+    case PROP_SHARPNESS:
+        src->sharpness = g_value_get_int(value);
+        break;
+    case PROP_GAMMA:
+        src->gamma = g_value_get_int(value);
+        break;
+    case PROP_GAIN:
+        src->gain = g_value_get_int(value);
+        break;
+    case PROP_EXPOSURE:
+        src->exposure = g_value_get_int(value);
+        break;
+    case PROP_AEC_AGC:
+        src->aec_agc = g_value_get_boolean(value);
+        break;
+    case PROP_AEC_AGC_ROI_X:
+        src->aec_agc_roi_x = g_value_get_int(value);
+        break;
+    case PROP_AEC_AGC_ROI_Y:
+        src->aec_agc_roi_y = g_value_get_int(value);
+        break;
+    case PROP_AEC_AGC_ROI_W:
+        src->aec_agc_roi_w = g_value_get_int(value);
+        break;
+    case PROP_AEC_AGC_ROI_H:
+        src->aec_agc_roi_h = g_value_get_int(value);
+        break;
+    case PROP_AEC_AGC_ROI_SIDE:
+        src->aec_agc_roi_side = g_value_get_enum(value);
+        break;
+    case PROP_WHITEBALANCE:
+        src->whitebalance_temperature = g_value_get_int(value);
+        break;
+    case PROP_WHITEBALANCE_AUTO:
+        src->whitebalance_temperature_auto = g_value_get_boolean(value);
+        break;
+    case PROP_LEDSTATUS:
+        src->led_status = g_value_get_boolean(value);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -762,9 +965,9 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_DIS_SELF_CALIB:
         g_value_set_boolean( value, src->camera_disable_self_calib );
         break;
-    case PROP_RIGHT_DEPTH_ENABLE:
+        /*case PROP_RIGHT_DEPTH_ENABLE:
         g_value_set_boolean( value, src->enable_right_side_measure);
-        break;
+        break;*/
     case PROP_DEPTH_STAB:
         g_value_set_boolean( value, src->depth_stabilization );
         break;
@@ -795,6 +998,59 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_OD_CONFIDENCE:
         g_value_set_float( value, src->od_det_conf );
         break;
+
+    case PROP_BRIGHTNESS:
+        g_value_set_int( value, src->brightness);
+        break;
+    case PROP_CONTRAST:
+        g_value_set_int( value, src->contrast);
+        break;
+    case PROP_HUE:
+        g_value_set_int( value, src->hue);
+        break;
+    case PROP_SATURATION:
+        g_value_set_int( value, src->saturation);
+        break;
+    case PROP_SHARPNESS:
+        g_value_set_int( value, src->sharpness);
+        break;
+    case PROP_GAMMA:
+        g_value_set_int( value, src->gamma);
+        break;
+    case PROP_GAIN:
+        g_value_set_int( value, src->gain);
+        break;
+    case PROP_EXPOSURE:
+        g_value_set_int( value, src->exposure);
+        break;
+    case PROP_AEC_AGC:
+        g_value_set_boolean( value, src->aec_agc);
+        break;
+    case PROP_AEC_AGC_ROI_X:
+        g_value_set_int( value, src->aec_agc_roi_x);
+        break;
+    case PROP_AEC_AGC_ROI_Y:
+        g_value_set_int( value, src->aec_agc_roi_y);
+        break;
+    case PROP_AEC_AGC_ROI_W:
+        g_value_set_int( value, src->aec_agc_roi_w);
+        break;
+    case PROP_AEC_AGC_ROI_H:
+        g_value_set_int( value, src->aec_agc_roi_h);
+        break;
+    case PROP_AEC_AGC_ROI_SIDE:
+        g_value_set_enum( value, src->aec_agc_roi_side);
+        break;
+    case PROP_WHITEBALANCE:
+        g_value_set_int( value, src->whitebalance_temperature);
+        break;
+    case PROP_WHITEBALANCE_AUTO:
+        g_value_set_boolean( value, src->whitebalance_temperature_auto);
+        break;
+    case PROP_LEDSTATUS:
+        g_value_set_boolean( value, src->led_status);
+        break;
+
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
         break;
@@ -897,7 +1153,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     init_params.depth_minimum_distance = src->depth_min_dist;
     init_params.depth_maximum_distance = src->depth_max_dist;
     init_params.depth_stabilization = src->depth_stabilization;
-    init_params.enable_right_side_measure= src->enable_right_side_measure==TRUE;
+    init_params.enable_right_side_measure = false; //src->enable_right_side_measure==TRUE;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib==TRUE;
     init_params.coordinate_system = static_cast<sl::COORDINATE_SYSTEM>(src->coord_sys);
 
@@ -931,6 +1187,66 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         return FALSE;
     }
     // <---- Open camera
+
+    // ----> Camera Controls
+    src->zed.setCameraSettings((sl::VIDEO_SETTINGS::BRIGHTNESS), (src->brightness));
+    std::cout << "Brightness: " << src->brightness << std::endl;
+    src->zed.setCameraSettings(sl::VIDEO_SETTINGS::CONTRAST, src->contrast );
+    std::cout << "Contrast: " << src->contrast << std::endl;
+    src->zed.setCameraSettings(sl::VIDEO_SETTINGS::HUE, src->hue );
+    std::cout << "Hue: " << src->hue << std::endl;
+    src->zed.setCameraSettings(sl::VIDEO_SETTINGS::SATURATION, src->saturation );
+    std::cout << "Saturation: " << src->saturation << std::endl;
+    src->zed.setCameraSettings(sl::VIDEO_SETTINGS::SHARPNESS, src->sharpness );
+    std::cout << "Sharpness: " << src->sharpness << std::endl;
+    src->zed.setCameraSettings(sl::VIDEO_SETTINGS::GAMMA, src->gamma );
+    std::cout << "Gamma: " << src->gamma << std::endl;
+    if(src->aec_agc==FALSE) {
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc );
+        std::cout << "AEC_AGC: " << src->aec_agc << std::endl;
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE, src->exposure );
+        std::cout << "EXPOSURE: " << src->exposure << std::endl;
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::GAIN, src->gain );
+        std::cout << "GAIN: " << src->gain << std::endl;
+    } else {
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc );
+        std::cout << "AEC_AGC: " << src->aec_agc << std::endl;
+
+        if( src->aec_agc_roi_x!=-1 &&
+                src->aec_agc_roi_y!=-1 &&
+                src->aec_agc_roi_w!=-1 &&
+                src->aec_agc_roi_h!=-1) {
+            sl::Rect roi;
+            roi.x=src->aec_agc_roi_x;
+            roi.y=src->aec_agc_roi_y;
+            roi.width=src->aec_agc_roi_w;
+            roi.height=src->aec_agc_roi_h;
+
+            sl::SIDE side =  static_cast<sl::SIDE>(src->aec_agc_roi_side);
+
+            std::cout << "AEC_AGC_ROI: (" << src->aec_agc_roi_x << "," << src->aec_agc_roi_y << ") " <<
+                         src->aec_agc_roi_w << "x" << src->aec_agc_roi_h << " - Side: " << src->aec_agc_roi_side << std::endl;
+
+            src->zed.setCameraSettings( sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side );
+        }
+    }
+    if(src->whitebalance_temperature_auto==FALSE) {
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->whitebalance_temperature_auto );
+        std::cout << "WHITEBALANCE_AUTO: " << src->whitebalance_temperature_auto << std::endl;
+        src->whitebalance_temperature /=100;
+        src->whitebalance_temperature *=100;
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE, src->whitebalance_temperature );
+        std::cout << "WHITEBALANCE_TEMPERATURE: " << src->whitebalance_temperature << std::endl;
+
+    } else {
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->whitebalance_temperature_auto );
+        std::cout << "WHITEBALANCE_AUTO: " << src->whitebalance_temperature_auto << std::endl;
+    }
+    src->zed.setCameraSettings(sl::VIDEO_SETTINGS::LED_STATUS, src->led_status );
+    std::cout << "LED_STATUS: " << src->led_status << std::endl;
+
+
+    // <---- Camera Controls
 
     // ----> Positional tracking
     if( src->pos_tracking )
@@ -1125,7 +1441,11 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     }
     else if(src->stream_type== GST_ZEDSRC_DEPTH_16)
     {
+#if(ZED_SDK_MAJOR_VERSION==3 && ZED_SDK_MINOR_VERSION<4)
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU );
+#else
+        ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU );
+#endif
     }
     else if(src->stream_type== GST_ZEDSRC_LEFT_DEPTH)
     {
@@ -1144,6 +1464,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     // ----> Memory copy
     if(src->stream_type== GST_ZEDSRC_DEPTH_16)
     {
+#if(ZED_SDK_MAJOR_VERSION==3 && ZED_SDK_MINOR_VERSION<4)
         uint16_t* gst_data = (uint16_t*)(&minfo.data[0]);
         unsigned long dataSize = minfo.size;
 
@@ -1152,16 +1473,25 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         for (unsigned long i = 0; i < dataSize/2; i++) {
             *(gst_data++) = static_cast<uint16_t>(*(depthDataPtr++));
         }
+#else
+        memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
+#endif
+
     }
     else if(src->stream_type== GST_ZEDSRC_LEFT_RIGHT)
     {
+        // Left RGB data on half top
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size/2);
-        memcpy((minfo.data+ minfo.size/2), right_img.getPtr<sl::uchar4>(), minfo.size/2);
+
+        // Right RGB data on half bottom
+        memcpy((minfo.data + minfo.size/2), right_img.getPtr<sl::uchar4>(), minfo.size/2);
     }
     else if(src->stream_type== GST_ZEDSRC_LEFT_DEPTH)
     {
+        // RGB data on half top
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size/2);
 
+        // Depth data on half bottom
         uint32_t* gst_data = (uint32_t*)(minfo.data + minfo.size/2);
 
         sl::float1* depthDataPtr = depth_data.getPtr<sl::float1>();
