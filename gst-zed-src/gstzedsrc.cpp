@@ -367,7 +367,7 @@ static GType gst_zedsrc_depth_mode_get_type (void)
               "PERFORMANCE" },
             { static_cast<gint>(sl::DEPTH_MODE::NONE),
               "This mode does not compute any depth map. Only rectified stereo images will be available.",
-              "NONE" }
+              "NONE" },
             { 0, NULL, NULL },
         };
 
