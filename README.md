@@ -124,24 +124,26 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `resolution`: stream resolution - {VGA (3), HD270 (2), HD1080 (1), HD2K (0)}
  * `framerate`: stream framerate - {15, 30, 60, 100}
  * `stream-type`: type of video stream - {Left image (0), Right image (1), Stereo couple (2), 16 bit depth (3), Left+Depth (4)}
- * `verbose`: SDK verbose mode - {TRUE, FALSE}
- * `flip`: flip streams vertically - {TRUE, FALSE, AUTO}
- * `camera-id`: camera ID - [0, 256]
- * `camera-sn`: camera serial number
+ * `sdk-verbose`: SDK verbose mode - {TRUE, FALSE}
+ * `camera-image-flip`: Use the camera in forced flip/no flip or automatic mode - {No Flip (0), Flip (1), Auto (2)}
+ * `camera-id`: Select camera from cameraID - [0, 256]
+ * `camera-sn`: Select camera from camera serial number
  * `svo-file-path`: SVO file path for SVO input
- * `in-stream-ip-addr`: device(sender) IP address when using streaming input from ZED SDK
- * `in-stream-port `: IP port when using streaming input from ZED SDK
- * `min-depth`: Minimum depth value
- * `max-depth`: Maximum depth value
- * `disable-self-calib`: Disable the self calibration processing when the camera is opened - {TRUE, FALSE}
- * `depth-stability`: Enable depth stabilization - {TRUE, FALSE}
- * `pos-tracking`: Enable positional tracking - {TRUE, FALSE}
- * `cam-static `: Set to TRUE if the camera is static - {TRUE, FALSE}
- * `coord-system`: ZED SDK Coordinate System - {Image (0) - Left handed, Y up (1) - Right handed, Y up (2) - Right handed, Z up (3) - Left handed, Z up (4) - Right handed, Z up, X fwd (5)}
+ * `input-stream-ip`: Specify IP adress when using streaming input
+ * `input-stream-port`: Specify port when using streaming input
+ * `depth-minimum-distance`: Minimum depth value
+ * `depth-maximum-distance`: Maximum depth value
+ * `depth-mode`: Depth Mode - {NONE (0), PERFORMANCE (1), QUALITY (2), ULTRA (3)}
+ * `camera-disable-self-calib`: Disable the self calibration processing when the camera is opened - {TRUE, FALSE}
+ * `depth-stabilization`: Enable depth stabilization - {TRUE, FALSE}
+ * `enable-positional-tracking`: Enable positional tracking - {TRUE, FALSE}
+ * `camera-is-static`: Set to TRUE if the camera is static - {TRUE, FALSE}
+ * `coordinate-system`: 3D Coordinate System - {Image (0) - Left handed, Y up (1) - Right handed, Y up (2) - Right handed, Z up (3) - Left handed, Z up (4) - Right handed, Z up, X fwd (5)}
  * `od-enabled`: Enable Object Detection - {TRUE, FALSE}
- * `od-tracking`: Enable tracking for the detected objects - {TRUE, FALSE}
+ * `object-detection-image-sync`: Set to TRUE to enable Object Detection frame synchronization - {TRUE, FALSE}
+ * `object-detection-tracking`: Set to TRUE to enable tracking for the detected objects - {TRUE, FALSE}
  * `od-detection-model`: Object Detection Model - {Multi class (0), Human Body Tracking FAST (1), Human Body Tracking ACCURATE (2)}
- * `od-confidence`: Minimum Detection Confidence - {0,100}
+ * `object-detection-confidence`: Minimum Detection Confidence - {0,100}
  * `brightness`: Image brightness - {0,8}
  * `contrast`: Image contrast - {0,8}
  * `hue`: Image hue - {0,11}
