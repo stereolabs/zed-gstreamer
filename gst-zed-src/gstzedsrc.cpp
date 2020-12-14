@@ -61,6 +61,7 @@ enum
     PROP_STREAM_PORT,
     PROP_DEPTH_MIN,
     PROP_DEPTH_MAX,
+    PROP_DEPTH_MODE,
     PROP_DIS_SELF_CALIB,
     //PROP_RIGHT_DEPTH_ENABLE,
     PROP_DEPTH_STAB,
@@ -148,6 +149,7 @@ typedef enum {
 #define DEFAULT_PROP_STREAM_TYPE    0
 #define DEFAULT_PROP_DEPTH_MIN      300.f
 #define DEFAULT_PROP_DEPTH_MAX      20000.f
+#define DEFAULT_PROP_DEPTH_MODE     static_cast<gint>(sl::DEPTH_MODE::ULTRA)
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
 #define DEFAULT_PROP_RIGHT_DEPTH    FALSE
 #define DEFAULT_PROP_DEPTH_STAB     TRUE
@@ -345,6 +347,35 @@ static GType gst_zedsrc_od_model_get_type (void)
     }
 
     return zedsrc_od_model_type;
+}
+
+#define GST_TYPE_ZED_DEPTH_MODE (gst_zedsrc_depth_mode_get_type ())
+static GType gst_zedsrc_depth_mode_get_type (void)
+{
+    static GType zedsrc_depth_mode_type = 0;
+
+    if (!zedsrc_depth_mode_type) {
+        static GEnumValue pattern_types[] = {
+            { static_cast<gint>(sl::DEPTH_MODE::ULTRA),
+              "Computation mode favorising edges and sharpness. Requires more GPU memory and computation power.",
+              "ULTRA" },
+            { static_cast<gint>(sl::DEPTH_MODE::QUALITY),
+              "Computation mode designed for challenging areas with untextured surfaces.",
+              "QUALITY" },
+            { static_cast<gint>(sl::DEPTH_MODE::PERFORMANCE),
+              "Computation mode optimized for speed.",
+              "PERFORMANCE" },
+            { static_cast<gint>(sl::DEPTH_MODE::NONE),
+              "This mode does not compute any depth map. Only rectified stereo images will be available.",
+              "NONE" },
+            { 0, NULL, NULL },
+        };
+
+        zedsrc_depth_mode_type = g_enum_register_static( "GstZedsrcDepthMode",
+                                                         pattern_types);
+    }
+
+    return zedsrc_depth_mode_type;
 }
 
 /* pad templates */
@@ -549,6 +580,11 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                         "Maximum depth value", 500.f, 40000.f, DEFAULT_PROP_DEPTH_MAX,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property( gobject_class, PROP_DEPTH_MODE,
+                                     g_param_spec_enum("depth-mode", "Depth Mode",
+                                                       "Depth Mode", GST_TYPE_ZED_DEPTH_MODE, DEFAULT_PROP_DEPTH_MODE,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property( gobject_class, PROP_DIS_SELF_CALIB,
                                      g_param_spec_boolean("camera-disable-self-calib", "Disable self calibration",
                                                           "Disable the self calibration processing when the camera is opened",
@@ -738,6 +774,7 @@ static void gst_zedsrc_init (GstZedSrc * src)
 
     src->depth_min_dist = DEFAULT_PROP_DEPTH_MIN;
     src->depth_max_dist = DEFAULT_PROP_DEPTH_MAX;
+    src->depth_mode = DEFAULT_PROP_DEPTH_MODE;
     src->camera_disable_self_calib = DEFAULT_PROP_DIS_SELF_CALIB;
     src->depth_stabilization = DEFAULT_PROP_DEPTH_STAB;
 
@@ -822,6 +859,9 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
         break;
     case PROP_DEPTH_MAX:
         src->depth_max_dist = g_value_get_float(value);
+        break;
+    case PROP_DEPTH_MODE:
+        src->depth_mode = g_value_get_enum(value);
         break;
     case PROP_DIS_SELF_CALIB:
         src->camera_disable_self_calib = g_value_get_boolean(value);
@@ -961,6 +1001,9 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
         break;
     case PROP_DEPTH_MAX:
         g_value_set_float( value, src->depth_max_dist );
+        break;
+    case PROP_DEPTH_MODE:
+        g_value_set_enum( value, src->depth_mode );
         break;
     case PROP_DIS_SELF_CALIB:
         g_value_set_boolean( value, src->camera_disable_self_calib );
@@ -1152,10 +1195,13 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 
     init_params.depth_minimum_distance = src->depth_min_dist;
     init_params.depth_maximum_distance = src->depth_max_dist;
+    init_params.depth_mode = static_cast<sl::DEPTH_MODE>(src->depth_mode);
     init_params.depth_stabilization = src->depth_stabilization;
     init_params.enable_right_side_measure = false; //src->enable_right_side_measure==TRUE;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib==TRUE;
     init_params.coordinate_system = static_cast<sl::COORDINATE_SYSTEM>(src->coord_sys);
+
+    std::cout << "Setting depth_mode to " << init_params.depth_mode << std::endl;
 
     if( src->svo_file.len != 0 )
     {
