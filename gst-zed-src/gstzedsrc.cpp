@@ -149,7 +149,7 @@ typedef enum {
 #define DEFAULT_PROP_STREAM_TYPE    0
 #define DEFAULT_PROP_DEPTH_MIN      300.f
 #define DEFAULT_PROP_DEPTH_MAX      20000.f
-#define DEFAULT_PROP_DEPTH_MODE     static_cast<gint>(sl::DEPTH_MODE::ULTRA)
+#define DEFAULT_PROP_DEPTH_MODE     static_cast<gint>(sl::DEPTH_MODE::NONE)
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
 #define DEFAULT_PROP_RIGHT_DEPTH    FALSE
 #define DEFAULT_PROP_DEPTH_STAB     TRUE
