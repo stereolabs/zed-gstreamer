@@ -654,7 +654,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_OD_CONFIDENCE,
-                                     g_param_spec_float("object-detection-confidence", "Minimum Object detection confidence threshold",
+                                     g_param_spec_float("od-confidence", "Minimum Object detection confidence threshold",
                                                         "Minimum Detection Confidence", 0.0f, 100.0f, DEFAULT_PROP_OD_CONFIDENCE,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
