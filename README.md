@@ -143,7 +143,7 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `od-image-sync`: Set to TRUE to enable Object Detection frame synchronization - {TRUE, FALSE}
  * `od-enable-tracking`: Set to TRUE to enable tracking for the detected objects - {TRUE, FALSE}
  * `od-detection-model`: Object Detection Model - {Multi class (0), Human Body Tracking FAST (1), Human Body Tracking ACCURATE (2)}
- * `object-detection-confidence`: Minimum Detection Confidence - {0,100}
+ * `od-confidence`: Minimum Detection Confidence - {0,100}
  * `brightness`: Image brightness - {0,8}
  * `contrast`: Image contrast - {0,8}
  * `hue`: Image hue - {0,11}
