@@ -1,5 +1,14 @@
 LATEST CHANGES
 ==============
+Name fixes (2021-01-18)
+-----------------------
+- Change parameters names in `zedsrc` to match the names in the ZED SDK:
+  * resolution -> camera-resolution
+  * framerate -> camera-fps
+  * camera-is-static -> set-as-static
+  * object-detection-image-sync -> od-image-sync
+  * object-detection-tracking -> od-enable-tracking
+  * object-detection-confidence -> od-confidence
 
 ZED SDK v3.4
 -------------
