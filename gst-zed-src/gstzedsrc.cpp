@@ -514,12 +514,12 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
     /* Install GObject properties */
     g_object_class_install_property( gobject_class, PROP_CAM_RES,
-                                     g_param_spec_enum("resolution", "Camera Resolution",
+                                     g_param_spec_enum("camera-resolution", "Camera Resolution",
                                                        "Camera Resolution", GST_TYPE_ZED_RESOL, DEFAULT_PROP_CAM_RES,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAM_FPS,
-                                     g_param_spec_enum("framerate", "Camera frame rate",
+                                     g_param_spec_enum("camera-fps", "Camera frame rate",
                                                        "Camera frame rate", GST_TYPE_ZED_FPS, DEFAULT_PROP_CAM_FPS,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -610,7 +610,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CAMERA_STATIC,
-                                     g_param_spec_boolean("camera-is-static", "Camera static",
+                                     g_param_spec_boolean("set-as-static", "Camera static",
                                                           "Set to TRUE if the camera is static",
                                                           DEFAULT_PROP_CAMERA_STATIC,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
@@ -628,13 +628,13 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_OD_IMAGE_SYNC,
-                                     g_param_spec_boolean("object-detection-image-sync", "Object detection frame sync",
+                                     g_param_spec_boolean("od-image-sync", "Object detection frame sync",
                                                           "Set to TRUE to enable Object Detection frame synchronization ",
                                                           DEFAULT_PROP_OD_SYNC,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_OD_TRACKING,
-                                     g_param_spec_boolean("object-detection-tracking", "Object detection tracking",
+                                     g_param_spec_boolean("od-enable-tracking", "Object detection tracking",
                                                           "Set to TRUE to enable tracking for the detected objects",
                                                           DEFAULT_PROP_OD_TRACKING,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
