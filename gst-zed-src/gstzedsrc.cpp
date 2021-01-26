@@ -1203,7 +1203,16 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     if(src->pos_tracking && init_params.depth_mode==sl::DEPTH_MODE::NONE)
     {
         init_params.depth_mode=sl::DEPTH_MODE::ULTRA;
+        src->depth_mode = static_cast<gint>(init_params.depth_mode);
+
         GST_WARNING_OBJECT(src, "Positional tracking requires DEPTH_MODE!=NONE. Depth mode value forced to ULTRA");
+    }
+    if((src->stream_type==GST_ZEDSRC_LEFT_DEPTH || src->stream_type==GST_ZEDSRC_DEPTH_16)
+            && init_params.depth_mode==sl::DEPTH_MODE::NONE)
+    {
+        init_params.depth_mode=sl::DEPTH_MODE::ULTRA;
+        src->depth_mode = static_cast<gint>(init_params.depth_mode);
+        GST_WARNING_OBJECT(src, "'stream-type' setting requires depth calculation. Depth mode value forced to ULTRA");
     }
     GST_INFO(" * Depth Mode: %s", sl::toString(init_params.depth_mode).c_str());
     init_params.coordinate_units = sl::UNIT::MILLIMETER; // ready for 16bit depth image
