@@ -1200,6 +1200,11 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     GST_INFO(" * Camera flipped: %s", sl::toString(static_cast<sl::FLIP_MODE>(init_params.camera_image_flip)).c_str());
 
     init_params.depth_mode = static_cast<sl::DEPTH_MODE>(src->depth_mode);
+    if(src->pos_tracking && init_params.depth_mode==sl::DEPTH_MODE::NONE)
+    {
+        init_params.depth_mode=sl::DEPTH_MODE::ULTRA;
+        GST_WARNING_OBJECT(src, "Positional tracking requires DEPTH_MODE!=NONE. Depth mode value forced to ULTRA");
+    }
     GST_INFO(" * Depth Mode: %s", sl::toString(init_params.depth_mode).c_str());
     init_params.coordinate_units = sl::UNIT::MILLIMETER; // ready for 16bit depth image
     GST_INFO(" * Coordinate units: %s", sl::toString(init_params.coordinate_units).c_str());
