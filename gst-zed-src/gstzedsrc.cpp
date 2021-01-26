@@ -149,11 +149,11 @@ typedef enum {
 #define DEFAULT_PROP_STREAM_TYPE    0
 #define DEFAULT_PROP_DEPTH_MIN      300.f
 #define DEFAULT_PROP_DEPTH_MAX      20000.f
-#define DEFAULT_PROP_DEPTH_MODE     static_cast<gint>(sl::DEPTH_MODE::ULTRA)
+#define DEFAULT_PROP_DEPTH_MODE     static_cast<gint>(sl::DEPTH_MODE::NONE)
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
 #define DEFAULT_PROP_RIGHT_DEPTH    FALSE
 #define DEFAULT_PROP_DEPTH_STAB     TRUE
-#define DEFAULT_PROP_POS_TRACKING   TRUE
+#define DEFAULT_PROP_POS_TRACKING   FALSE
 #define DEFAULT_PROP_CAMERA_STATIC  FALSE
 #define DEFAULT_PROP_COORD_SYS      static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
 #define DEFAULT_PROP_OD_ENABLE      FALSE
@@ -1187,40 +1187,64 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 
     // ----> Set init parameters
     sl::InitParameters init_params;
-    init_params.coordinate_units = sl::UNIT::MILLIMETER; // ready for 16bit depth image
-    init_params.camera_resolution = static_cast<sl::RESOLUTION>(src->camera_resolution);
-    init_params.camera_fps = src->camera_fps;
-    init_params.sdk_verbose = src->sdk_verbose==TRUE;
-    init_params.camera_image_flip = src->camera_image_flip;
 
-    init_params.depth_minimum_distance = src->depth_min_dist;
-    init_params.depth_maximum_distance = src->depth_max_dist;
+    GST_INFO("CAMERA INITIALIZATION PARAMETERS");
+
+    init_params.camera_resolution = static_cast<sl::RESOLUTION>(src->camera_resolution);
+    GST_INFO(" * Camera resolution: %s", sl::toString(init_params.camera_resolution).c_str());
+    init_params.camera_fps = src->camera_fps;
+    GST_INFO(" * Camera FPS: %d", init_params.camera_fps);
+    init_params.sdk_verbose = src->sdk_verbose==TRUE;
+    GST_INFO(" * SDK verbose: %s", (init_params.sdk_verbose?"TRUE":"FALSE"));
+    init_params.camera_image_flip = src->camera_image_flip;
+    GST_INFO(" * Camera flipped: %s", sl::toString(static_cast<sl::FLIP_MODE>(init_params.camera_image_flip)).c_str());
+
     init_params.depth_mode = static_cast<sl::DEPTH_MODE>(src->depth_mode);
+    GST_INFO(" * Depth Mode: %s", sl::toString(init_params.depth_mode).c_str());
+    init_params.coordinate_units = sl::UNIT::MILLIMETER; // ready for 16bit depth image
+    GST_INFO(" * Coordinate units: %s", sl::toString(init_params.coordinate_units).c_str());
+    init_params.coordinate_system = static_cast<sl::COORDINATE_SYSTEM>(src->coord_sys);
+    GST_INFO(" * Coordinate system: %s", sl::toString(init_params.coordinate_system).c_str());
+    init_params.depth_minimum_distance = src->depth_min_dist;
+    GST_INFO(" * MIN depth: %g", init_params.depth_minimum_distance);
+    init_params.depth_maximum_distance = src->depth_max_dist;
+    GST_INFO(" * MAX depth: %g", init_params.depth_maximum_distance);
     init_params.depth_stabilization = src->depth_stabilization;
+    GST_INFO(" * Depth Stabilization: %s", (init_params.depth_stabilization?"TRUE":"FALSE"));
     init_params.enable_right_side_measure = false; //src->enable_right_side_measure==TRUE;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib==TRUE;
-    init_params.coordinate_system = static_cast<sl::COORDINATE_SYSTEM>(src->coord_sys);
-
-    std::cout << "Setting depth_mode to " << init_params.depth_mode << std::endl;
+    GST_INFO(" * Disable self calibration: %s", (init_params.camera_disable_self_calib?"TRUE":"FALSE"));
 
     if( src->svo_file.len != 0 )
     {
         sl::String svo( static_cast<char*>(src->svo_file.str) );
         init_params.input.setFromSVOFile(svo);
         init_params.svo_real_time_mode = true;
+
+        GST_INFO(" * Input SVO filename: %s", src->svo_file.str);
     }
     else if( src->camera_id != DEFAULT_PROP_CAM_ID )
     {
         init_params.input.setFromCameraID(src->camera_id);
+
+        GST_INFO(" * Input Camera ID: %d", src->camera_id);
     }
     else if( src->camera_sn != DEFAULT_PROP_CAM_SN )
     {
         init_params.input.setFromSerialNumber(src->camera_sn);
+
+        GST_INFO(" * Input Camera SN: %ld", src->camera_sn);
     }
     else if( src->stream_ip.len != 0 )
     {
         sl::String ip( static_cast<char*>(src->stream_ip.str) );
         init_params.input.setFromStream(ip,src->stream_port);
+
+        GST_INFO(" * Input Stream: %s:%d", src->stream_ip.str,src->stream_port );
+    }
+    else
+    {
+        GST_INFO(" * Input from default device");
     }
     // <---- Set init parameters
 
@@ -1235,28 +1259,29 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     // <---- Open camera
 
     // ----> Camera Controls
+    GST_INFO("CAMERA CONTROLS");
     src->zed.setCameraSettings((sl::VIDEO_SETTINGS::BRIGHTNESS), (src->brightness));
-    std::cout << "Brightness: " << src->brightness << std::endl;
+    GST_INFO(" * BRIGHTNESS: %d", src->brightness);
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::CONTRAST, src->contrast );
-    std::cout << "Contrast: " << src->contrast << std::endl;
+    GST_INFO(" * CONTRAST: %d", src->contrast);
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::HUE, src->hue );
-    std::cout << "Hue: " << src->hue << std::endl;
+    GST_INFO(" * HUE: %d", src->hue);
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::SATURATION, src->saturation );
-    std::cout << "Saturation: " << src->saturation << std::endl;
+    GST_INFO(" * SATURATION: %d", src->saturation);
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::SHARPNESS, src->sharpness );
-    std::cout << "Sharpness: " << src->sharpness << std::endl;
+    GST_INFO(" * SHARPNESS: %d", src->sharpness);
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::GAMMA, src->gamma );
-    std::cout << "Gamma: " << src->gamma << std::endl;
+    GST_INFO(" * GAMMA: %d", src->gamma);
     if(src->aec_agc==FALSE) {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc );
-        std::cout << "AEC_AGC: " << src->aec_agc << std::endl;
+        GST_INFO(" * AEC_AGC: %s", (src->aec_agc?"TRUE":"FALSE"));
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE, src->exposure );
-        std::cout << "EXPOSURE: " << src->exposure << std::endl;
+        GST_INFO(" * EXPOSURE: %d", src->exposure);
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::GAIN, src->gain );
-        std::cout << "GAIN: " << src->gain << std::endl;
+        GST_INFO(" * GAIN: %d", src->gain);
     } else {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc );
-        std::cout << "AEC_AGC: " << src->aec_agc << std::endl;
+        GST_INFO(" * AEC_AGC: %s", (src->aec_agc?"TRUE":"FALSE"));
 
         if( src->aec_agc_roi_x!=-1 &&
                 src->aec_agc_roi_y!=-1 &&
@@ -1270,37 +1295,70 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 
             sl::SIDE side =  static_cast<sl::SIDE>(src->aec_agc_roi_side);
 
-            std::cout << "AEC_AGC_ROI: (" << src->aec_agc_roi_x << "," << src->aec_agc_roi_y << ") " <<
-                         src->aec_agc_roi_w << "x" << src->aec_agc_roi_h << " - Side: " << src->aec_agc_roi_side << std::endl;
+            GST_INFO(" * AEC_AGC_ROI: (%d,%d)-%dx%d - Side: %d",
+                     src->aec_agc_roi_x, src->aec_agc_roi_y, src->aec_agc_roi_w, src->aec_agc_roi_h,
+                     src->aec_agc_roi_side);
 
             src->zed.setCameraSettings( sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side );
         }
     }
     if(src->whitebalance_temperature_auto==FALSE) {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->whitebalance_temperature_auto );
-        std::cout << "WHITEBALANCE_AUTO: " << src->whitebalance_temperature_auto << std::endl;
+        GST_INFO(" * WHITEBALANCE_AUTO: %s", (src->whitebalance_temperature_auto?"TRUE":"FALSE"));
         src->whitebalance_temperature /=100;
         src->whitebalance_temperature *=100;
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE, src->whitebalance_temperature );
-        std::cout << "WHITEBALANCE_TEMPERATURE: " << src->whitebalance_temperature << std::endl;
+        GST_INFO(" * WHITEBALANCE_TEMPERATURE: %d", src->whitebalance_temperature);
 
     } else {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->whitebalance_temperature_auto );
-        std::cout << "WHITEBALANCE_AUTO: " << src->whitebalance_temperature_auto << std::endl;
+        GST_INFO(" * WHITEBALANCE_AUTO: %s", (src->whitebalance_temperature_auto?"TRUE":"FALSE"));
     }
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::LED_STATUS, src->led_status );
-    std::cout << "LED_STATUS: " << src->led_status << std::endl;
-
-
+    GST_INFO(" * LED_STATUS: %s", (src->led_status?"ON":"OFF"));
     // <---- Camera Controls
 
+    // ----> Set runtime parameters
+    GST_INFO("CAMERA RUNTIME PARAMETERS");
+    if( src->depth_mode==static_cast<gint>(sl::DEPTH_MODE::NONE)
+            && !src->pos_tracking)
+    {
+        src->zedRtParams.enable_depth = false;
+    }
+    else
+    {
+        src->zedRtParams.enable_depth = true;
+    }
+    GST_INFO(" * Depth calculation: %s", (src->zedRtParams.enable_depth?"ON":"OFF"));
+    //    src->zedRtParams.confidence_threshold;
+    GST_INFO(" * Depth Confidence threshold: %d", src->zedRtParams.confidence_threshold );
+    //    src->zedRtParams.texture_confidence_threshold;
+    GST_INFO(" * Depth Texture Confidence threshold: %d", src->zedRtParams.texture_confidence_threshold );
+    //    src->zedRtParams.measure3D_reference_frame;
+    GST_INFO(" * 3D Reference Frame: %s",  sl::toString(src->zedRtParams.measure3D_reference_frame).c_str());
+    //    src->zedRtParams.sensing_mode;
+    GST_INFO(" * Sensing Mode: %s",  sl::toString(src->zedRtParams.sensing_mode).c_str());
+    // <---- Set runtime parameters
+
     // ----> Positional tracking
+    GST_INFO("POSITIONAL TRACKING PARAMETERS");
+    GST_INFO(" * Positional tracking status: %s", (src->pos_tracking?"ON":"OFF"));
     if( src->pos_tracking )
     {
         sl::PositionalTrackingParameters pos_trk_params;
         pos_trk_params.set_as_static = (src->camera_static==TRUE);
-        // TODO add other parameters
-        ret = src->zed.enablePositionalTracking( pos_trk_params);
+        GST_INFO(" * Camera static: %s", (pos_trk_params.set_as_static?"TRUE":"FALSE"));
+
+        //        // TODO add other parameters
+        //        pos_trk_params.area_file_path;
+        //        pos_trk_params.enable_area_memory;
+        //        pos_trk_params.enable_imu_fusion;
+        //        pos_trk_params.enable_pose_smoothing;
+        //        pos_trk_params.initial_world_transform;
+        //        pos_trk_params.set_floor_as_origin;
+
+
+        ret = src->zed.enablePositionalTracking(pos_trk_params);
         if (ret!=sl::ERROR_CODE::SUCCESS) {
             GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
                                ("Failed to start positional tracking, '%s'", sl::toString(ret).c_str() ), (NULL));
@@ -1442,7 +1500,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     }
 
     // ----> ZED grab
-    ret = src->zed.grab(); // TODO set runtime parameters
+    ret = src->zed.grab(src->zedRtParams);
 
     if( ret!=sl::ERROR_CODE::SUCCESS )
     {
