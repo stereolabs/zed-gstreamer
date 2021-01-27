@@ -47,11 +47,6 @@ enum
     PROP_0
 };
 
-/* the capabilities of the inputs and outputs.
- *
- * FIXME:describe the real formats here.
- */
-
 static GstStaticPadTemplate sink_template =
         GST_STATIC_PAD_TEMPLATE (
             "sink",
@@ -354,10 +349,6 @@ plugin_init (GstPlugin * plugin)
                                  GST_TYPE_ZED_OD_OVERLAY);
 }
 
-/* gstreamer looks for this structure to register plugins
-         *
-         * FIXME:exchange the string 'Template plugin' with you plugin description
-         */
 GST_PLUGIN_DEFINE (
         GST_VERSION_MAJOR,
         GST_VERSION_MINOR,
