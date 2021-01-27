@@ -65,6 +65,10 @@ enum
     PROP_DIS_SELF_CALIB,
     //PROP_RIGHT_DEPTH_ENABLE,
     PROP_DEPTH_STAB,
+    PROP_CONFIDENCE_THRESH,
+    PROP_TEXTURE_CONF_THRESH,
+    PROP_3D_REF_FRAME,
+    PROP_SENSING_MODE,
     PROP_POS_TRACKING,
     PROP_CAMERA_STATIC,
     PROP_COORD_SYS,
@@ -74,6 +78,8 @@ enum
     PROP_OD_MASK,
     PROP_OD_DET_MODEL,
     PROP_OD_CONFIDENCE,
+    PROP_OD_MAX_RANGE,
+    PROP_OD_BODY_FITTING,
     PROP_BRIGHTNESS,
     PROP_CONTRAST,
     PROP_HUE,
@@ -137,31 +143,37 @@ typedef enum {
     GST_ZEDSRC_SIDE_BOTH = 2
 } GstZedSrcSide;
 
-#define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::HD1080)
-#define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_30FPS
-#define DEFAULT_PROP_SDK_VERBOSE    FALSE
-#define DEFAULT_PROP_CAM_FLIP       2
-#define DEFAULT_PROP_CAM_ID         0
-#define DEFAULT_PROP_CAM_SN         0
-#define DEFAULT_PROP_SVO_FILE       ""
-#define DEFAULT_PROP_STREAM_IP      ""
-#define DEFAULT_PROP_STREAM_PORT    30000
-#define DEFAULT_PROP_STREAM_TYPE    0
-#define DEFAULT_PROP_DEPTH_MIN      300.f
-#define DEFAULT_PROP_DEPTH_MAX      20000.f
-#define DEFAULT_PROP_DEPTH_MODE     static_cast<gint>(sl::DEPTH_MODE::NONE)
-#define DEFAULT_PROP_DIS_SELF_CALIB FALSE
-#define DEFAULT_PROP_RIGHT_DEPTH    FALSE
-#define DEFAULT_PROP_DEPTH_STAB     TRUE
-#define DEFAULT_PROP_POS_TRACKING   FALSE
-#define DEFAULT_PROP_CAMERA_STATIC  FALSE
-#define DEFAULT_PROP_COORD_SYS      static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
-#define DEFAULT_PROP_OD_ENABLE      FALSE
-#define DEFAULT_PROP_OD_SYNC        TRUE
-#define DEFAULT_PROP_OD_TRACKING    TRUE
-#define DEFAULT_PROP_OD_MASK        FALSE // NOTE for the future
-#define DEFAULT_PROP_OD_MODEL       GST_ZEDSRC_OD_MULTI_CLASS_BOX
-#define DEFAULT_PROP_OD_CONFIDENCE  50.0
+#define DEFAULT_PROP_CAM_RES                static_cast<gint>(sl::RESOLUTION::HD1080)
+#define DEFAULT_PROP_CAM_FPS                GST_ZEDSRC_30FPS
+#define DEFAULT_PROP_SDK_VERBOSE            FALSE
+#define DEFAULT_PROP_CAM_FLIP               2
+#define DEFAULT_PROP_CAM_ID                 0
+#define DEFAULT_PROP_CAM_SN                 0
+#define DEFAULT_PROP_SVO_FILE               ""
+#define DEFAULT_PROP_STREAM_IP              ""
+#define DEFAULT_PROP_STREAM_PORT            30000
+#define DEFAULT_PROP_STREAM_TYPE            0
+#define DEFAULT_PROP_DEPTH_MIN              300.f
+#define DEFAULT_PROP_DEPTH_MAX              20000.f
+#define DEFAULT_PROP_DEPTH_MODE             static_cast<gint>(sl::DEPTH_MODE::NONE)
+#define DEFAULT_PROP_DIS_SELF_CALIB         FALSE
+#define DEFAULT_PROP_RIGHT_DEPTH            FALSE
+#define DEFAULT_PROP_DEPTH_STAB             TRUE
+#define DEFAULT_PROP_CONFIDENCE_THRESH      80
+#define DEFAULT_PROP_TEXTURE_CONF_THRESH    100
+#define DEFAULT_PROP_3D_REF_FRAME           static_cast<gint>(sl::REFERENCE_FRAME::WORLD)
+#define DEFAULT_PROP_SENSING_MODE           static_cast<gint>(sl::SENSING_MODE::STANDARD)
+#define DEFAULT_PROP_POS_TRACKING       FALSE
+#define DEFAULT_PROP_CAMERA_STATIC      FALSE
+#define DEFAULT_PROP_COORD_SYS          static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
+#define DEFAULT_PROP_OD_ENABLE          FALSE
+#define DEFAULT_PROP_OD_SYNC            TRUE
+#define DEFAULT_PROP_OD_TRACKING        TRUE
+#define DEFAULT_PROP_OD_MASK            FALSE // NOTE for the future
+#define DEFAULT_PROP_OD_MODEL           GST_ZEDSRC_OD_MULTI_CLASS_BOX
+#define DEFAULT_PROP_OD_CONFIDENCE      50.0
+#define DEFAULT_PROP_OD_MAX_RANGE       DEFAULT_PROP_DEPTH_MAX
+#define DEFAULT_PROP_OD_BODY_FITTING    TRUE
 
 #define DEFAULT_PROP_BRIGHTNESS         4
 #define DEFAULT_PROP_CONTRAST           4
@@ -377,6 +389,56 @@ static GType gst_zedsrc_depth_mode_get_type (void)
 
     return zedsrc_depth_mode_type;
 }
+
+#define GST_TYPE_ZED_3D_REF_FRAME (gst_zedsrc_3d_meas_ref_frame_get_type ())
+static GType gst_zedsrc_3d_meas_ref_frame_get_type (void)
+{
+    static GType zedsrc_3d_meas_ref_frame_type = 0;
+
+    if (!zedsrc_3d_meas_ref_frame_type) {
+        static GEnumValue pattern_types[] = {
+            { static_cast<gint>(sl::REFERENCE_FRAME::WORLD),
+              "The positional tracking pose transform will contains the motion with reference to the world frame.",
+              "WORLD" },
+            { static_cast<gint>(sl::REFERENCE_FRAME::CAMERA),
+              "The  pose transform will contains the motion with reference to the previous camera frame.",
+              "CAMERA" },
+            { 0, NULL, NULL },
+        };
+
+        zedsrc_3d_meas_ref_frame_type = g_enum_register_static( "GstZedsrc3dMeasRefFrame",
+                                                         pattern_types);
+    }
+
+    return zedsrc_3d_meas_ref_frame_type;
+}
+
+#define GST_TYPE_ZED_SENSING_MODE (gst_zedsrc_sensing_mode_get_type ())
+static GType gst_zedsrc_sensing_mode_get_type (void)
+{
+    static GType zedsrc_sensing_mode_type = 0;
+
+    if (!zedsrc_sensing_mode_type) {
+        static GEnumValue pattern_types[] = {
+            { static_cast<gint>(sl::SENSING_MODE::STANDARD),
+              "This mode outputs ZED standard depth map that preserves edges and depth accuracy. Applications example: "
+              "Obstacle detection, Automated navigation, People detection, 3D reconstruction, measurements.",
+              "STANDARD" },
+            { static_cast<gint>(sl::SENSING_MODE::FILL),
+              "This mode outputs a smooth and fully dense depth map. Applications example: AR/VR, Mixed-reality capture, "
+              "Image post-processing.",
+              "FILL" },
+            { 0, NULL, NULL },
+        };
+
+        zedsrc_sensing_mode_type = g_enum_register_static( "GstZedsrcSensingMode",
+                                                         pattern_types);
+    }
+
+    return zedsrc_sensing_mode_type;
+}
+
+
 
 /* pad templates */
 static GstStaticPadTemplate gst_zedsrc_src_template =
@@ -603,6 +665,34 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           DEFAULT_PROP_DEPTH_STAB,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+
+
+    g_object_class_install_property( gobject_class, PROP_CONFIDENCE_THRESH,
+                                     g_param_spec_int("confidence-threshold", "Depth Confidence Threshold",
+                                                      "Specify the Depth Confidence Threshold",0,100,
+                                                      DEFAULT_PROP_CONFIDENCE_THRESH,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_TEXTURE_CONF_THRESH,
+                                     g_param_spec_int("texture-confidence-threshold", "Texture Confidence Threshold",
+                                                      "Specify the Texture Confidence Threshold",0,100,
+                                                      DEFAULT_PROP_TEXTURE_CONF_THRESH,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_3D_REF_FRAME,
+                                     g_param_spec_enum("measure3D-reference-frame", "3D Measures Reference Frame",
+                                                       "Specify the 3D Reference Frame", GST_TYPE_ZED_3D_REF_FRAME,
+                                                       DEFAULT_PROP_3D_REF_FRAME,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_SENSING_MODE,
+                                     g_param_spec_enum("sensing-mode", "Depth Sensing Mode",
+                                                       "Specify the Depth Sensing Mode", GST_TYPE_ZED_SENSING_MODE,
+                                                       DEFAULT_PROP_SENSING_MODE,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+
+
     g_object_class_install_property( gobject_class, PROP_POS_TRACKING,
                                      g_param_spec_boolean("enable-positional-tracking", "Positional tracking",
                                                           "Enable positional tracking",
@@ -656,6 +746,17 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
     g_object_class_install_property( gobject_class, PROP_OD_CONFIDENCE,
                                      g_param_spec_float("od-confidence", "Minimum Object detection confidence threshold",
                                                         "Minimum Detection Confidence", 0.0f, 100.0f, DEFAULT_PROP_OD_CONFIDENCE,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_OD_MAX_RANGE,
+                                     g_param_spec_float("od-max-range", "Defines if the body fitting will be applied when using Skeleton Tracking",
+                                                        "Maximum Detection Range", -1.0f, 20000.0f, DEFAULT_PROP_OD_MAX_RANGE,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_OD_BODY_FITTING,
+                                     g_param_spec_boolean("od-body-fitting", "Minimum Object detection confidence threshold",
+                                                        "Set to TRUE to enable body fitting for skeleton tracking",
+                                                        DEFAULT_PROP_OD_BODY_FITTING,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_BRIGHTNESS,
@@ -777,9 +878,10 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->depth_mode = DEFAULT_PROP_DEPTH_MODE;
     src->camera_disable_self_calib = DEFAULT_PROP_DIS_SELF_CALIB;
     src->depth_stabilization = DEFAULT_PROP_DEPTH_STAB;
+    src->coord_sys = DEFAULT_PROP_COORD_SYS;
 
     src->pos_tracking = DEFAULT_PROP_POS_TRACKING;
-    src->coord_sys = DEFAULT_PROP_COORD_SYS;
+
 
     src->object_detection = DEFAULT_PROP_OD_ENABLE;
     src->od_image_sync = DEFAULT_PROP_OD_SYNC;
@@ -787,6 +889,8 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->od_enable_mask_output = DEFAULT_PROP_OD_MASK;
     src->od_detection_model = DEFAULT_PROP_OD_MODEL;
     src->od_det_conf = DEFAULT_PROP_OD_CONFIDENCE;
+    src->od_max_range = DEFAULT_PROP_OD_MAX_RANGE;
+    src->od_body_fitting = DEFAULT_PROP_OD_BODY_FITTING;
 
     src->brightness = DEFAULT_PROP_BRIGHTNESS;
     src->contrast = DEFAULT_PROP_CONTRAST;
@@ -872,6 +976,18 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
         /*case PROP_RIGHT_DEPTH_ENABLE:
         src->enable_right_side_measure =  g_value_get_boolean(value);
         break;*/
+    case PROP_CONFIDENCE_THRESH:
+        src->confidence_threshold = g_value_get_int(value);
+        break;
+    case PROP_TEXTURE_CONF_THRESH:
+        src->texture_confidence_threshold = g_value_get_int(value);
+        break;
+    case PROP_3D_REF_FRAME:
+        src->measure3D_reference_frame = g_value_get_enum(value);
+        break;
+    case PROP_SENSING_MODE:
+        src->sensing_mode = g_value_get_enum(value);
+        break;
     case PROP_POS_TRACKING:
         src->pos_tracking = g_value_get_boolean(value);
         break;
@@ -898,6 +1014,12 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
         break;
     case PROP_OD_CONFIDENCE:
         src->od_det_conf = g_value_get_float(value);
+        break;
+    case PROP_OD_MAX_RANGE:
+        src->od_max_range = g_value_get_float(value);
+        break;
+    case PROP_OD_BODY_FITTING:
+        src->od_body_fitting = g_value_get_boolean(value);
         break;
     case PROP_BRIGHTNESS:
         src->brightness = g_value_get_int(value);
@@ -1014,6 +1136,18 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_DEPTH_STAB:
         g_value_set_boolean( value, src->depth_stabilization );
         break;
+    case PROP_CONFIDENCE_THRESH:
+        g_value_set_int(value, src->confidence_threshold);
+        break;
+    case PROP_TEXTURE_CONF_THRESH:
+        g_value_set_int(value, src->texture_confidence_threshold);
+        break;
+    case PROP_3D_REF_FRAME:
+        g_value_set_enum( value, src->measure3D_reference_frame);
+        break;
+    case PROP_SENSING_MODE:
+        g_value_set_enum( value, src->sensing_mode);
+        break;
     case PROP_POS_TRACKING:
         g_value_set_boolean( value, src->pos_tracking );
         break;
@@ -1040,6 +1174,12 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
         break;
     case PROP_OD_CONFIDENCE:
         g_value_set_float( value, src->od_det_conf );
+        break;
+    case PROP_OD_MAX_RANGE:
+        g_value_set_float( value, src->od_max_range );
+        break;
+    case PROP_OD_BODY_FITTING:
+        g_value_set_boolean( value, src->od_body_fitting );
         break;
 
     case PROP_BRIGHTNESS:
@@ -1357,13 +1497,13 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         src->zedRtParams.enable_depth = true;
     }
     GST_INFO(" * Depth calculation: %s", (src->zedRtParams.enable_depth?"ON":"OFF"));
-    //    src->zedRtParams.confidence_threshold;
+    src->zedRtParams.confidence_threshold = src->confidence_threshold;
     GST_INFO(" * Depth Confidence threshold: %d", src->zedRtParams.confidence_threshold );
-    //    src->zedRtParams.texture_confidence_threshold;
+    src->zedRtParams.texture_confidence_threshold = src->texture_confidence_threshold;
     GST_INFO(" * Depth Texture Confidence threshold: %d", src->zedRtParams.texture_confidence_threshold );
-    //    src->zedRtParams.measure3D_reference_frame;
+    src->zedRtParams.measure3D_reference_frame = static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
     GST_INFO(" * 3D Reference Frame: %s",  sl::toString(src->zedRtParams.measure3D_reference_frame).c_str());
-    //    src->zedRtParams.sensing_mode;
+    src->zedRtParams.sensing_mode = static_cast<sl::SENSING_MODE>(src->sensing_mode);
     GST_INFO(" * Sensing Mode: %s",  sl::toString(src->zedRtParams.sensing_mode).c_str());
     // <---- Set runtime parameters
 
@@ -1395,15 +1535,22 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     // <---- Positional tracking
 
     // ----> Object Detection
+    GST_INFO("OBJECT DETECTION PARAMETERS");
     if( src->object_detection )
     {
         sl::ObjectDetectionParameters od_params;
         od_params.image_sync = (src->od_image_sync==TRUE);
+        GST_INFO(" * Image sync: %s", (od_params.image_sync?"TRUE":"FALSE"));
         od_params.enable_tracking = (src->od_enable_tracking==TRUE);
+        GST_INFO(" * Object tracking: %s", (od_params.enable_tracking?"TRUE":"FALSE"));
         od_params.enable_mask_output = (src->od_enable_mask_output==TRUE);
+        GST_INFO(" * Mask output: %s", (od_params.enable_mask_output?"TRUE":"FALSE"));
         od_params.detection_model = static_cast<sl::DETECTION_MODEL>(src->od_detection_model);
-        // od_params.enable_body_fitting;
-        // od_params.max_range;
+        GST_INFO(" * Detection model: %s", sl::toString(od_params.detection_model).c_str());
+        od_params.max_range = src->od_max_range;
+        GST_INFO(" * Max range: %g", od_params.max_range);
+        od_params.enable_body_fitting = src->od_body_fitting;
+        GST_INFO(" * Body fitting: %s", (od_params.enable_body_fitting?"TRUE":"FALSE"));
 
         ret = src->zed.enableObjectDetection( od_params );
         if (ret!=sl::ERROR_CODE::SUCCESS) {
@@ -1426,8 +1573,6 @@ static gboolean gst_zedsrc_stop (GstBaseSrc * bsrc)
     GstZedSrc *src = GST_ZED_SRC (bsrc);
 
     GST_DEBUG_OBJECT (src, "stop");
-
-    // TODO stop any started modules
 
     gst_zedsrc_reset( src );
 
@@ -1521,7 +1666,6 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     GST_LOG_OBJECT (src, "fill");
 
     if (!src->is_started) {
-        /* TODO: check timestamps on buffers vs start time */
         src->acq_start_time =
                 gst_clock_get_time(gst_element_get_clock (GST_ELEMENT (src)));
 

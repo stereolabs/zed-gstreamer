@@ -49,7 +49,7 @@ struct _GstZedSrc
 
     // ----> Properties
     gint camera_resolution;     // Camera resolution [enum]
-    gint camera_fps;            // Camera FPS [enum]
+    gint camera_fps;            // Camera FPS
     gboolean sdk_verbose;
     gint camera_image_flip;
     gint camera_id;
@@ -57,17 +57,22 @@ struct _GstZedSrc
     GString svo_file;
     GString stream_ip;
     gint stream_port;
-    gint stream_type;
-
+    gint stream_type;    
     gfloat depth_min_dist;
     gfloat depth_max_dist;
     gint depth_mode;            // Depth mode [enum]
     gboolean camera_disable_self_calib;
     gboolean depth_stabilization;
-    //gboolean enable_right_side_measure;
-    gboolean pos_tracking;
-    gboolean camera_static;
     gint coord_sys;
+    //gboolean enable_right_side_measure;
+
+    gint confidence_threshold;
+    gint texture_confidence_threshold;
+    gint measure3D_reference_frame;
+    gint sensing_mode;
+
+    gboolean pos_tracking;
+    gboolean camera_static;    
 
     gboolean object_detection;
     gboolean od_image_sync;
@@ -75,6 +80,8 @@ struct _GstZedSrc
     gboolean od_enable_mask_output;
     gint od_detection_model;
     gfloat od_det_conf;
+    gfloat od_max_range;
+    gboolean od_body_fitting;
 
     gint brightness;
     gint contrast;
@@ -93,6 +100,8 @@ struct _GstZedSrc
     gint whitebalance_temperature;
     gboolean whitebalance_temperature_auto;
     gboolean led_status;
+
+
     // <---- Properties
 
     GstClockTime acq_start_time;

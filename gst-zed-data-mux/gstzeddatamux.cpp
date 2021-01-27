@@ -550,7 +550,6 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad* pad, GstObject * parent, 
         // ----> Release incoming buffer
         GST_TRACE ("Input buffer unmap" );
         gst_buffer_unmap( buf, &map_in );
-        //gst_buffer_unref(buf); // NOTE: required to not increase memory consumption exponentially
         // <---- Release incoming buffer
     }
     else
@@ -704,7 +703,6 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad* pad, GstObject * parent,
 
         // ----> Release incoming buffer
         gst_buffer_unmap( buf, &map_in );
-        //gst_buffer_unref(buf); // NOTE: required to not increase memory consumption exponentially
         // <---- Release incoming buffer
     }
     else
