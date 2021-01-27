@@ -1200,6 +1200,19 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     GST_INFO(" * Camera flipped: %s", sl::toString(static_cast<sl::FLIP_MODE>(init_params.camera_image_flip)).c_str());
 
     init_params.depth_mode = static_cast<sl::DEPTH_MODE>(src->depth_mode);
+    if(src->object_detection && init_params.depth_mode==sl::DEPTH_MODE::NONE)
+    {
+        init_params.depth_mode=sl::DEPTH_MODE::ULTRA;
+        src->depth_mode = static_cast<gint>(init_params.depth_mode);
+
+        GST_WARNING_OBJECT(src, "Object detection requires DEPTH_MODE!=NONE. Depth mode value forced to ULTRA");
+
+        if(!src->pos_tracking)
+        {
+            src->pos_tracking=TRUE;
+            GST_WARNING_OBJECT(src, "Object detection requires Positional Tracking to be active. Positional Tracking automatically activated");
+        }
+    }
     if(src->pos_tracking && init_params.depth_mode==sl::DEPTH_MODE::NONE)
     {
         init_params.depth_mode=sl::DEPTH_MODE::ULTRA;
@@ -1389,6 +1402,8 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         od_params.enable_tracking = (src->od_enable_tracking==TRUE);
         od_params.enable_mask_output = (src->od_enable_mask_output==TRUE);
         od_params.detection_model = static_cast<sl::DETECTION_MODEL>(src->od_detection_model);
+        // od_params.enable_body_fitting;
+        // od_params.max_range;
 
         ret = src->zed.enableObjectDetection( od_params );
         if (ret!=sl::ERROR_CODE::SUCCESS) {
