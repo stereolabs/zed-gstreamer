@@ -157,7 +157,7 @@ typedef enum {
 #define DEFAULT_PROP_DEPTH_MAX              20000.f
 #define DEFAULT_PROP_DEPTH_MODE             static_cast<gint>(sl::DEPTH_MODE::NONE)
 #define DEFAULT_PROP_DIS_SELF_CALIB         FALSE
-#define DEFAULT_PROP_RIGHT_DEPTH            FALSE
+//#define DEFAULT_PROP_RIGHT_DEPTH            FALSE
 #define DEFAULT_PROP_DEPTH_STAB             TRUE
 #define DEFAULT_PROP_CONFIDENCE_THRESH      80
 #define DEFAULT_PROP_TEXTURE_CONF_THRESH    100
@@ -174,7 +174,6 @@ typedef enum {
 #define DEFAULT_PROP_OD_CONFIDENCE      50.0
 #define DEFAULT_PROP_OD_MAX_RANGE       DEFAULT_PROP_DEPTH_MAX
 #define DEFAULT_PROP_OD_BODY_FITTING    TRUE
-
 #define DEFAULT_PROP_BRIGHTNESS         4
 #define DEFAULT_PROP_CONTRAST           4
 #define DEFAULT_PROP_HUE                0
@@ -879,9 +878,13 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->camera_disable_self_calib = DEFAULT_PROP_DIS_SELF_CALIB;
     src->depth_stabilization = DEFAULT_PROP_DEPTH_STAB;
     src->coord_sys = DEFAULT_PROP_COORD_SYS;
+    src->confidence_threshold = DEFAULT_PROP_CONFIDENCE_THRESH;
+    src->texture_confidence_threshold = DEFAULT_PROP_TEXTURE_CONF_THRESH;
+    src->measure3D_reference_frame = DEFAULT_PROP_3D_REF_FRAME;
+    src->sensing_mode = DEFAULT_PROP_SENSING_MODE;
 
     src->pos_tracking = DEFAULT_PROP_POS_TRACKING;
-
+    src->camera_static = DEFAULT_PROP_CAMERA_STATIC;
 
     src->object_detection = DEFAULT_PROP_OD_ENABLE;
     src->od_image_sync = DEFAULT_PROP_OD_SYNC;
@@ -1498,7 +1501,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     }
     GST_INFO(" * Depth calculation: %s", (src->zedRtParams.enable_depth?"ON":"OFF"));
     src->zedRtParams.confidence_threshold = src->confidence_threshold;
-    GST_INFO(" * Depth Confidence threshold: %d", src->zedRtParams.confidence_threshold );
+    GST_INFO(" * Depth Confidence threshold: %d", src->zedRtParams.confidence_threshold);
     src->zedRtParams.texture_confidence_threshold = src->texture_confidence_threshold;
     GST_INFO(" * Depth Texture Confidence threshold: %d", src->zedRtParams.texture_confidence_threshold );
     src->zedRtParams.measure3D_reference_frame = static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
@@ -1536,6 +1539,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 
     // ----> Object Detection
     GST_INFO("OBJECT DETECTION PARAMETERS");
+    GST_INFO(" * Object Detection status: %s", (src->object_detection?"ON":"OFF"));
     if( src->object_detection )
     {
         sl::ObjectDetectionParameters od_params;
