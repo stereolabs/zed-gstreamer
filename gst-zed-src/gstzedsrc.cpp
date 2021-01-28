@@ -199,9 +199,15 @@ static GType gst_zedsrc_side_get_type (void)
 
     if (!zedsrc_side_type) {
         static GEnumValue pattern_types[] = {
-            { static_cast<gint>(sl::SIDE::LEFT),  "LEFT",  "Left side only" },
-            { static_cast<gint>(sl::SIDE::RIGHT), "RIGHT", "Right side only"  },
-            { static_cast<gint>(sl::SIDE::BOTH),  "BOTH",  "Left and Right side" },
+            { static_cast<gint>(sl::SIDE::LEFT),
+              "Left side only",
+              "LEFT" },
+            { static_cast<gint>(sl::SIDE::RIGHT),
+              "Right side only",
+              "RIGHT"  },
+            { static_cast<gint>(sl::SIDE::BOTH),
+              "Left and Right side",
+              "BOTH"},
             { 0, NULL, NULL },
         };
 
@@ -219,10 +225,18 @@ static GType gst_zedsrc_resol_get_type (void)
 
     if (!zedsrc_resol_type) {
         static GEnumValue pattern_types[] = {
-            { static_cast<gint>(sl::RESOLUTION::VGA),    "672x376",     "VGA" },
-            { static_cast<gint>(sl::RESOLUTION::HD720),  "1280x720",    "HD720"  },
-            { static_cast<gint>(sl::RESOLUTION::HD1080), "1920x1080",   "HD1080" },
-            { static_cast<gint>(sl::RESOLUTION::HD2K),   "2208x1242",   "HD2K" },
+            { static_cast<gint>(sl::RESOLUTION::VGA),
+              "672x376",
+              "VGA" },
+            { static_cast<gint>(sl::RESOLUTION::HD720),
+              "1280x720",
+              "HD720"  },
+            { static_cast<gint>(sl::RESOLUTION::HD1080),
+              "1920x1080",
+              "HD1080" },
+            { static_cast<gint>(sl::RESOLUTION::HD2K),
+              "2208x1242",
+              "HD2K" },
             { 0, NULL, NULL },
         };
 
@@ -240,10 +254,18 @@ static GType gst_zedsrc_fps_get_type (void)
 
     if (!zedsrc_fps_type) {
         static GEnumValue pattern_types[] = {
-            { GST_ZEDSRC_100FPS,    "only VGA resolution",                    "100 FPS" },
-            { GST_ZEDSRC_60FPS,     "only VGA and HD720 resolutions",         "60  FPS" },
-            { GST_ZEDSRC_30FPS,     "only VGA, HD720 and HD1080 resolutions", "30  FPS" },
-            { GST_ZEDSRC_15FPS,     "all resolutions",                        "15  FPS" },
+            { GST_ZEDSRC_100FPS,
+              "only VGA resolution",
+              "100 FPS" },
+            { GST_ZEDSRC_60FPS,
+              "only VGA and HD720 resolutions",
+              "60  FPS" },
+            { GST_ZEDSRC_30FPS,
+              "only VGA, HD720 and HD1080 resolutions",
+              "30  FPS" },
+            { GST_ZEDSRC_15FPS,
+              "all resolutions",
+              "15  FPS" },
             { 0, NULL, NULL },
         };
 
@@ -261,9 +283,15 @@ static GType gst_zedsrc_flip_get_type (void)
 
     if (!zedsrc_flip_type) {
         static GEnumValue pattern_types[] = {
-            { GST_ZEDSRC_NO_FLIP,    "Force no flip",             "No Flip" },
-            { GST_ZEDSRC_FLIP,     "Force flip",                  "Flip" },
-            { GST_ZEDSRC_AUTO,     "Auto mode (ZED2/ZED-M only)", "Auto" },
+            { GST_ZEDSRC_NO_FLIP,
+              "Force no flip",
+              "No Flip" },
+            { GST_ZEDSRC_FLIP,
+              "Force flip",
+              "Flip" },
+            { GST_ZEDSRC_AUTO,
+              "Auto mode (ZED2/ZED-M only)",
+              "Auto" },
             { 0, NULL, NULL },
         };
 
@@ -281,11 +309,21 @@ static GType gst_zedsrc_stream_type_get_type (void)
 
     if (!zedsrc_stream_type_type) {
         static GEnumValue pattern_types[] = {
-            { GST_ZEDSRC_ONLY_LEFT,    "8 bits- 4 channels Left image",     "Left image [BGRA]" },
-            { GST_ZEDSRC_ONLY_RIGHT,   "8 bits- 4 channels Right image",    "Right image [BGRA]"  },
-            { GST_ZEDSRC_LEFT_RIGHT,   "8 bits- 4 channels bit Left and Right", "Stereo couple up/down [BGRA]" },
-            { GST_ZEDSRC_DEPTH_16,     "16 bits depth",          "Depth image [GRAY16_LE]" },
-            { GST_ZEDSRC_LEFT_DEPTH,   "8 bits- 4 channels Left and Depth(image)", "Left and Depth up/down [BGRA]" },
+            { GST_ZEDSRC_ONLY_LEFT,
+              "8 bits- 4 channels Left image",
+              "Left image [BGRA]" },
+            { GST_ZEDSRC_ONLY_RIGHT,
+              "8 bits- 4 channels Right image",
+              "Right image [BGRA]"  },
+            { GST_ZEDSRC_LEFT_RIGHT,
+              "8 bits- 4 channels bit Left and Right",
+              "Stereo couple up/down [BGRA]" },
+            { GST_ZEDSRC_DEPTH_16,
+              "16 bits depth",
+              "Depth image [GRAY16_LE]" },
+            { GST_ZEDSRC_LEFT_DEPTH,
+              "8 bits- 4 channels Left and Depth(image)",
+              "Left and Depth up/down [BGRA]" },
             { 0, NULL, NULL },
         };
 
@@ -406,7 +444,7 @@ static GType gst_zedsrc_3d_meas_ref_frame_get_type (void)
         };
 
         zedsrc_3d_meas_ref_frame_type = g_enum_register_static( "GstZedsrc3dMeasRefFrame",
-                                                         pattern_types);
+                                                                pattern_types);
     }
 
     return zedsrc_3d_meas_ref_frame_type;
@@ -431,7 +469,7 @@ static GType gst_zedsrc_sensing_mode_get_type (void)
         };
 
         zedsrc_sensing_mode_type = g_enum_register_static( "GstZedsrcSensingMode",
-                                                         pattern_types);
+                                                           pattern_types);
     }
 
     return zedsrc_sensing_mode_type;
@@ -754,9 +792,9 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
 
     g_object_class_install_property( gobject_class, PROP_OD_BODY_FITTING,
                                      g_param_spec_boolean("od-body-fitting", "Minimum Object detection confidence threshold",
-                                                        "Set to TRUE to enable body fitting for skeleton tracking",
-                                                        DEFAULT_PROP_OD_BODY_FITTING,
-                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                                                          "Set to TRUE to enable body fitting for skeleton tracking",
+                                                          DEFAULT_PROP_OD_BODY_FITTING,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_BRIGHTNESS,
                                      g_param_spec_int("brightness", "Camera control: brightness",
