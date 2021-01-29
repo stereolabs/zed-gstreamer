@@ -134,16 +134,33 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `depth-minimum-distance`: Minimum depth value
  * `depth-maximum-distance`: Maximum depth value
  * `depth-mode`: Depth Mode - {NONE (0), PERFORMANCE (1), QUALITY (2), ULTRA (3)}
+ * `coordinate-system`: 3D Coordinate System - {Image (0) - Left handed, Y up (1) - Right handed, Y up (2) - Right handed, Z up (3) - Left handed, Z up (4) - Right handed, Z up, X fwd (5)}
  * `camera-disable-self-calib`: Disable the self calibration processing when the camera is opened - {TRUE, FALSE}
  * `depth-stabilization`: Enable depth stabilization - {TRUE, FALSE}
+ * `confidence-threshold`: Specify the Depth Confidence Threshold - [0,100]
+ * `texture-confidence-threshold`: Specify the Texture Confidence Threshold - [0,100]
+ * `measure3D-reference-frame` : Specify the 3D Reference Frame - {WORLD (0), CAMERA (1)}
+ * `sensing-mode`: Specify the Depth Sensing Mode - {STANDARD (0), FILL (1)}
  * `enable-positional-tracking`: Enable positional tracking - {TRUE, FALSE}
  * `set-as-static`: Set to TRUE if the camera is static - {TRUE, FALSE}
- * `coordinate-system`: 3D Coordinate System - {Image (0) - Left handed, Y up (1) - Right handed, Y up (2) - Right handed, Z up (3) - Left handed, Z up (4) - Right handed, Z up, X fwd (5)}
+ * `area-file-path`: Area localization file that describes the surroundings, saved from a previous tracking session
+ * `enable-area-memory`: This mode enables the camera to remember its surroundings. This helps correct positional tracking drift, and can be helpful for positioning different cameras relative to one other in space - {TRUE, FALSE}
+ * `enable-imu-fusion`: This setting allows you to enable or disable IMU fusion. When set to false, only the optical odometry will be used - {TRUE, FALSE}
+ * `enable-pose-smoothing`: This mode enables smooth pose correction for small drift correction - {TRUE, FALSE}
+ * `set-floor-as-origin`: This mode initializes the tracking to be aligned with the floor plane to better position the camera in space.
+ * `initial-world-transform-x`: X position of the camera in the world frame when the camera is started.
+ * `initial-world-transform-y`: Y position of the camera in the world frame when the camera is started.
+ * `initial-world-transform-z`: Z position of the camera in the world frame when the camera is started.
+ * `initial-world-transform-roll`: Roll orientation of the camera in the world frame when the camera is started.
+ * `initial-world-transform-pitch`: Pitch orientation position of the camera in the world frame when the camera is started.
+ * `initial-world-transform-yaw`: Yaw orientation of the camera in the world frame when the camera is started.
  * `od-enabled`: Enable Object Detection - {TRUE, FALSE}
  * `od-image-sync`: Set to TRUE to enable Object Detection frame synchronization - {TRUE, FALSE}
  * `od-enable-tracking`: Set to TRUE to enable tracking for the detected objects - {TRUE, FALSE}
  * `od-detection-model`: Object Detection Model - {Multi class (0), Human Body Tracking FAST (1), Human Body Tracking ACCURATE (2)}
  * `od-confidence`: Minimum Detection Confidence - {0,100}
+ * `od-max-range`: Maximum Detection Range - [-1,20000]
+ * `od-body-fitting`: Set to TRUE to enable body fitting for skeleton tracking - {TRUE, FALSE}
  * `brightness`: Image brightness - {0,8}
  * `contrast`: Image contrast - {0,8}
  * `hue`: Image hue - {0,11}
