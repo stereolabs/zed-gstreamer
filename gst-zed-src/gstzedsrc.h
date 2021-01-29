@@ -72,7 +72,18 @@ struct _GstZedSrc
     gint sensing_mode;
 
     gboolean pos_tracking;
-    gboolean camera_static;    
+    gboolean camera_static;
+    GString area_file_path;
+    gboolean enable_area_memory;
+    gboolean enable_imu_fusion;
+    gboolean enable_pose_smoothing;
+    gboolean set_floor_as_origin;
+    gfloat init_pose_x;
+    gfloat init_pose_y;
+    gfloat init_pose_z;
+    gfloat init_orient_roll;
+    gfloat init_orient_pitch;
+    gfloat init_orient_yaw;
 
     gboolean object_detection;
     gboolean od_image_sync;
