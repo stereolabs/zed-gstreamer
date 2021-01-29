@@ -821,7 +821,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                      g_param_spec_float("initial-world-transform-x",
                                                         "Initial X coordinate",
                                                         "X position of the camera in the world frame when the camera is started",
-                                                        G_MINFLOAT, G_MAXFLOAT,
+                                                        -G_MAXFLOAT, G_MAXFLOAT,
                                                         DEFAULT_PROP_POS_INIT_X,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -829,7 +829,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                      g_param_spec_float("initial-world-transform-y",
                                                         "Initial Y coordinate",
                                                         "Y position of the camera in the world frame when the camera is started",
-                                                        G_MINFLOAT, G_MAXFLOAT,
+                                                        -G_MAXFLOAT, G_MAXFLOAT,
                                                         DEFAULT_PROP_POS_INIT_Y,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -837,7 +837,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                      g_param_spec_float("initial-world-transform-z",
                                                         "Initial Z coordinate",
                                                         "Z position of the camera in the world frame when the camera is started",
-                                                        G_MINFLOAT, G_MAXFLOAT,
+                                                        -G_MAXFLOAT, G_MAXFLOAT,
                                                         DEFAULT_PROP_POS_INIT_Z,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
