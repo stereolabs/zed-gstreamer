@@ -65,8 +65,23 @@ enum
     PROP_DIS_SELF_CALIB,
     //PROP_RIGHT_DEPTH_ENABLE,
     PROP_DEPTH_STAB,
+    PROP_CONFIDENCE_THRESH,
+    PROP_TEXTURE_CONF_THRESH,
+    PROP_3D_REF_FRAME,
+    PROP_SENSING_MODE,
     PROP_POS_TRACKING,
     PROP_CAMERA_STATIC,
+    PROP_POS_AREA_FILE_PATH,
+    PROP_POS_ENABLE_AREA_MEMORY,
+    PROP_POS_ENABLE_IMU_FUSION,
+    PROP_POS_ENABLE_POSE_SMOOTHING,
+    PROP_POS_SET_FLOOR_AS_ORIGIN,
+    PROP_POS_INIT_X,
+    PROP_POS_INIT_Y,
+    PROP_POS_INIT_Z,
+    PROP_POS_INIT_ROLL,
+    PROP_POS_INIT_PITCH,
+    PROP_POS_INIT_YAW,
     PROP_COORD_SYS,
     PROP_OD_ENABLE,
     PROP_OD_IMAGE_SYNC,
@@ -74,6 +89,8 @@ enum
     PROP_OD_MASK,
     PROP_OD_DET_MODEL,
     PROP_OD_CONFIDENCE,
+    PROP_OD_MAX_RANGE,
+    PROP_OD_BODY_FITTING,
     PROP_BRIGHTNESS,
     PROP_CONTRAST,
     PROP_HUE,
@@ -137,49 +154,77 @@ typedef enum {
     GST_ZEDSRC_SIDE_BOTH = 2
 } GstZedSrcSide;
 
-#define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::HD1080)
-#define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_30FPS
-#define DEFAULT_PROP_SDK_VERBOSE    FALSE
-#define DEFAULT_PROP_CAM_FLIP       2
-#define DEFAULT_PROP_CAM_ID         0
-#define DEFAULT_PROP_CAM_SN         0
-#define DEFAULT_PROP_SVO_FILE       ""
-#define DEFAULT_PROP_STREAM_IP      ""
-#define DEFAULT_PROP_STREAM_PORT    30000
-#define DEFAULT_PROP_STREAM_TYPE    0
-#define DEFAULT_PROP_DEPTH_MIN      300.f
-#define DEFAULT_PROP_DEPTH_MAX      20000.f
-#define DEFAULT_PROP_DEPTH_MODE     static_cast<gint>(sl::DEPTH_MODE::ULTRA)
-#define DEFAULT_PROP_DIS_SELF_CALIB FALSE
-#define DEFAULT_PROP_RIGHT_DEPTH    FALSE
-#define DEFAULT_PROP_DEPTH_STAB     TRUE
-#define DEFAULT_PROP_POS_TRACKING   TRUE
-#define DEFAULT_PROP_CAMERA_STATIC  FALSE
-#define DEFAULT_PROP_COORD_SYS      static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
-#define DEFAULT_PROP_OD_ENABLE      FALSE
-#define DEFAULT_PROP_OD_SYNC        TRUE
-#define DEFAULT_PROP_OD_TRACKING    TRUE
-#define DEFAULT_PROP_OD_MASK        FALSE // NOTE for the future
-#define DEFAULT_PROP_OD_MODEL       GST_ZEDSRC_OD_MULTI_CLASS_BOX
-#define DEFAULT_PROP_OD_CONFIDENCE  50.0
+//////////////// DEFAULT PARAMETERS //////////////////////////////////////////////////////////////////////////
 
-#define DEFAULT_PROP_BRIGHTNESS         4
-#define DEFAULT_PROP_CONTRAST           4
-#define DEFAULT_PROP_HUE                0
-#define DEFAULT_PROP_SATURATION         4
-#define DEFAULT_PROP_SHARPNESS          4
-#define DEFAULT_PROP_GAMMA              8
-#define DEFAULT_PROP_GAIN               60
-#define DEFAULT_PROP_EXPOSURE           80
-#define DEFAULT_PROP_AEG_AGC            1
-#define DEFAULT_PROP_AEG_AGC_ROI_X      -1
-#define DEFAULT_PROP_AEG_AGC_ROI_Y      -1
-#define DEFAULT_PROP_AEG_AGC_ROI_W      -1
-#define DEFAULT_PROP_AEG_AGC_ROI_H      -1
-#define DEFAULT_PROP_AEG_AGC_ROI_SIDE   GST_ZEDSRC_SIDE_BOTH
-#define DEFAULT_PROP_WHITEBALANCE       4600
-#define DEFAULT_PROP_WHITEBALANCE_AUTO  1
-#define DEFAULT_PROP_LEDSTATUS          1
+// INITIALIZATION
+#define DEFAULT_PROP_CAM_RES                    static_cast<gint>(sl::RESOLUTION::HD1080)
+#define DEFAULT_PROP_CAM_FPS                    GST_ZEDSRC_30FPS
+#define DEFAULT_PROP_SDK_VERBOSE                FALSE
+#define DEFAULT_PROP_CAM_FLIP                   2
+#define DEFAULT_PROP_CAM_ID                     0
+#define DEFAULT_PROP_CAM_SN                     0
+#define DEFAULT_PROP_SVO_FILE                   ""
+#define DEFAULT_PROP_STREAM_IP                  ""
+#define DEFAULT_PROP_STREAM_PORT                30000
+#define DEFAULT_PROP_STREAM_TYPE                0
+#define DEFAULT_PROP_DEPTH_MIN                  300.f
+#define DEFAULT_PROP_DEPTH_MAX                  20000.f
+#define DEFAULT_PROP_DEPTH_MODE                 static_cast<gint>(sl::DEPTH_MODE::NONE)
+#define DEFAULT_PROP_COORD_SYS                  static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
+#define DEFAULT_PROP_DIS_SELF_CALIB             FALSE
+#define DEFAULT_PROP_DEPTH_STAB                 TRUE
+//#define DEFAULT_PROP_RIGHT_DEPTH              FALSE
+
+// RUNTIME
+#define DEFAULT_PROP_CONFIDENCE_THRESH          80
+#define DEFAULT_PROP_TEXTURE_CONF_THRESH        100
+#define DEFAULT_PROP_3D_REF_FRAME               static_cast<gint>(sl::REFERENCE_FRAME::WORLD)
+#define DEFAULT_PROP_SENSING_MODE               static_cast<gint>(sl::SENSING_MODE::STANDARD)
+
+// POSITIONAL TRACKING
+#define DEFAULT_PROP_POS_TRACKING               FALSE
+#define DEFAULT_PROP_CAMERA_STATIC              FALSE
+#define DEFAULT_PROP_POS_AREA_FILE_PATH         ""
+#define DEFAULT_PROP_POS_ENABLE_AREA_MEMORY     TRUE
+#define DEFAULT_PROP_POS_ENABLE_IMU_FUSION      TRUE
+#define DEFAULT_PROP_POS_ENABLE_POSE_SMOOTHING  TRUE
+#define DEFAULT_PROP_POS_SET_FLOOR_AS_ORIGIN    FALSE
+#define DEFAULT_PROP_POS_INIT_X                 0.0
+#define DEFAULT_PROP_POS_INIT_Y                 0.0
+#define DEFAULT_PROP_POS_INIT_Z                 0.0
+#define DEFAULT_PROP_POS_INIT_ROLL              0.0
+#define DEFAULT_PROP_POS_INIT_PITCH             0.0
+#define DEFAULT_PROP_POS_INIT_YAW               0.0
+
+//OBJECT DETECTION
+#define DEFAULT_PROP_OD_ENABLE                  FALSE
+#define DEFAULT_PROP_OD_SYNC                    TRUE
+#define DEFAULT_PROP_OD_TRACKING                TRUE
+#define DEFAULT_PROP_OD_MASK                    FALSE // NOTE for the future
+#define DEFAULT_PROP_OD_MODEL                   GST_ZEDSRC_OD_MULTI_CLASS_BOX
+#define DEFAULT_PROP_OD_CONFIDENCE              50.0
+#define DEFAULT_PROP_OD_MAX_RANGE               DEFAULT_PROP_DEPTH_MAX
+#define DEFAULT_PROP_OD_BODY_FITTING            TRUE
+
+// CAMERA CONTROLS
+#define DEFAULT_PROP_BRIGHTNESS                 4
+#define DEFAULT_PROP_CONTRAST                   4
+#define DEFAULT_PROP_HUE                        0
+#define DEFAULT_PROP_SATURATION                 4
+#define DEFAULT_PROP_SHARPNESS                  4
+#define DEFAULT_PROP_GAMMA                      8
+#define DEFAULT_PROP_GAIN                       60
+#define DEFAULT_PROP_EXPOSURE                   80
+#define DEFAULT_PROP_AEG_AGC                    1
+#define DEFAULT_PROP_AEG_AGC_ROI_X              -1
+#define DEFAULT_PROP_AEG_AGC_ROI_Y              -1
+#define DEFAULT_PROP_AEG_AGC_ROI_W              -1
+#define DEFAULT_PROP_AEG_AGC_ROI_H              -1
+#define DEFAULT_PROP_AEG_AGC_ROI_SIDE           GST_ZEDSRC_SIDE_BOTH
+#define DEFAULT_PROP_WHITEBALANCE               4600
+#define DEFAULT_PROP_WHITEBALANCE_AUTO          1
+#define DEFAULT_PROP_LEDSTATUS                  1
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define GST_TYPE_ZED_SIDE (gst_zedsrc_side_get_type ())
 static GType gst_zedsrc_side_get_type (void)
@@ -188,9 +233,15 @@ static GType gst_zedsrc_side_get_type (void)
 
     if (!zedsrc_side_type) {
         static GEnumValue pattern_types[] = {
-            { static_cast<gint>(sl::SIDE::LEFT),  "LEFT",  "Left side only" },
-            { static_cast<gint>(sl::SIDE::RIGHT), "RIGHT", "Right side only"  },
-            { static_cast<gint>(sl::SIDE::BOTH),  "BOTH",  "Left and Right side" },
+            { static_cast<gint>(sl::SIDE::LEFT),
+              "Left side only",
+              "LEFT" },
+            { static_cast<gint>(sl::SIDE::RIGHT),
+              "Right side only",
+              "RIGHT"  },
+            { static_cast<gint>(sl::SIDE::BOTH),
+              "Left and Right side",
+              "BOTH"},
             { 0, NULL, NULL },
         };
 
@@ -208,10 +259,18 @@ static GType gst_zedsrc_resol_get_type (void)
 
     if (!zedsrc_resol_type) {
         static GEnumValue pattern_types[] = {
-            { static_cast<gint>(sl::RESOLUTION::VGA),    "672x376",     "VGA" },
-            { static_cast<gint>(sl::RESOLUTION::HD720),  "1280x720",    "HD720"  },
-            { static_cast<gint>(sl::RESOLUTION::HD1080), "1920x1080",   "HD1080" },
-            { static_cast<gint>(sl::RESOLUTION::HD2K),   "2208x1242",   "HD2K" },
+            { static_cast<gint>(sl::RESOLUTION::VGA),
+              "672x376",
+              "VGA" },
+            { static_cast<gint>(sl::RESOLUTION::HD720),
+              "1280x720",
+              "HD720"  },
+            { static_cast<gint>(sl::RESOLUTION::HD1080),
+              "1920x1080",
+              "HD1080" },
+            { static_cast<gint>(sl::RESOLUTION::HD2K),
+              "2208x1242",
+              "HD2K" },
             { 0, NULL, NULL },
         };
 
@@ -229,10 +288,18 @@ static GType gst_zedsrc_fps_get_type (void)
 
     if (!zedsrc_fps_type) {
         static GEnumValue pattern_types[] = {
-            { GST_ZEDSRC_100FPS,    "only VGA resolution",                    "100 FPS" },
-            { GST_ZEDSRC_60FPS,     "only VGA and HD720 resolutions",         "60  FPS" },
-            { GST_ZEDSRC_30FPS,     "only VGA, HD720 and HD1080 resolutions", "30  FPS" },
-            { GST_ZEDSRC_15FPS,     "all resolutions",                        "15  FPS" },
+            { GST_ZEDSRC_100FPS,
+              "only VGA resolution",
+              "100 FPS" },
+            { GST_ZEDSRC_60FPS,
+              "only VGA and HD720 resolutions",
+              "60  FPS" },
+            { GST_ZEDSRC_30FPS,
+              "only VGA, HD720 and HD1080 resolutions",
+              "30  FPS" },
+            { GST_ZEDSRC_15FPS,
+              "all resolutions",
+              "15  FPS" },
             { 0, NULL, NULL },
         };
 
@@ -250,9 +317,15 @@ static GType gst_zedsrc_flip_get_type (void)
 
     if (!zedsrc_flip_type) {
         static GEnumValue pattern_types[] = {
-            { GST_ZEDSRC_NO_FLIP,    "Force no flip",             "No Flip" },
-            { GST_ZEDSRC_FLIP,     "Force flip",                  "Flip" },
-            { GST_ZEDSRC_AUTO,     "Auto mode (ZED2/ZED-M only)", "Auto" },
+            { GST_ZEDSRC_NO_FLIP,
+              "Force no flip",
+              "No Flip" },
+            { GST_ZEDSRC_FLIP,
+              "Force flip",
+              "Flip" },
+            { GST_ZEDSRC_AUTO,
+              "Auto mode (ZED2/ZED-M only)",
+              "Auto" },
             { 0, NULL, NULL },
         };
 
@@ -270,11 +343,21 @@ static GType gst_zedsrc_stream_type_get_type (void)
 
     if (!zedsrc_stream_type_type) {
         static GEnumValue pattern_types[] = {
-            { GST_ZEDSRC_ONLY_LEFT,    "8 bits- 4 channels Left image",     "Left image [BGRA]" },
-            { GST_ZEDSRC_ONLY_RIGHT,   "8 bits- 4 channels Right image",    "Right image [BGRA]"  },
-            { GST_ZEDSRC_LEFT_RIGHT,   "8 bits- 4 channels bit Left and Right", "Stereo couple up/down [BGRA]" },
-            { GST_ZEDSRC_DEPTH_16,     "16 bits depth",          "Depth image [GRAY16_LE]" },
-            { GST_ZEDSRC_LEFT_DEPTH,   "8 bits- 4 channels Left and Depth(image)", "Left and Depth up/down [BGRA]" },
+            { GST_ZEDSRC_ONLY_LEFT,
+              "8 bits- 4 channels Left image",
+              "Left image [BGRA]" },
+            { GST_ZEDSRC_ONLY_RIGHT,
+              "8 bits- 4 channels Right image",
+              "Right image [BGRA]"  },
+            { GST_ZEDSRC_LEFT_RIGHT,
+              "8 bits- 4 channels bit Left and Right",
+              "Stereo couple up/down [BGRA]" },
+            { GST_ZEDSRC_DEPTH_16,
+              "16 bits depth",
+              "Depth image [GRAY16_LE]" },
+            { GST_ZEDSRC_LEFT_DEPTH,
+              "8 bits- 4 channels Left and Depth(image)",
+              "Left and Depth up/down [BGRA]" },
             { 0, NULL, NULL },
         };
 
@@ -376,6 +459,54 @@ static GType gst_zedsrc_depth_mode_get_type (void)
     }
 
     return zedsrc_depth_mode_type;
+}
+
+#define GST_TYPE_ZED_3D_REF_FRAME (gst_zedsrc_3d_meas_ref_frame_get_type ())
+static GType gst_zedsrc_3d_meas_ref_frame_get_type (void)
+{
+    static GType zedsrc_3d_meas_ref_frame_type = 0;
+
+    if (!zedsrc_3d_meas_ref_frame_type) {
+        static GEnumValue pattern_types[] = {
+            { static_cast<gint>(sl::REFERENCE_FRAME::WORLD),
+              "The positional tracking pose transform will contains the motion with reference to the world frame.",
+              "WORLD" },
+            { static_cast<gint>(sl::REFERENCE_FRAME::CAMERA),
+              "The  pose transform will contains the motion with reference to the previous camera frame.",
+              "CAMERA" },
+            { 0, NULL, NULL },
+        };
+
+        zedsrc_3d_meas_ref_frame_type = g_enum_register_static( "GstZedsrc3dMeasRefFrame",
+                                                                pattern_types);
+    }
+
+    return zedsrc_3d_meas_ref_frame_type;
+}
+
+#define GST_TYPE_ZED_SENSING_MODE (gst_zedsrc_sensing_mode_get_type ())
+static GType gst_zedsrc_sensing_mode_get_type (void)
+{
+    static GType zedsrc_sensing_mode_type = 0;
+
+    if (!zedsrc_sensing_mode_type) {
+        static GEnumValue pattern_types[] = {
+            { static_cast<gint>(sl::SENSING_MODE::STANDARD),
+              "This mode outputs ZED standard depth map that preserves edges and depth accuracy. Applications example: "
+              "Obstacle detection, Automated navigation, People detection, 3D reconstruction, measurements.",
+              "STANDARD" },
+            { static_cast<gint>(sl::SENSING_MODE::FILL),
+              "This mode outputs a smooth and fully dense depth map. Applications example: AR/VR, Mixed-reality capture, "
+              "Image post-processing.",
+              "FILL" },
+            { 0, NULL, NULL },
+        };
+
+        zedsrc_sensing_mode_type = g_enum_register_static( "GstZedsrcSensingMode",
+                                                           pattern_types);
+    }
+
+    return zedsrc_sensing_mode_type;
 }
 
 /* pad templates */
@@ -603,6 +734,40 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           DEFAULT_PROP_DEPTH_STAB,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property( gobject_class, PROP_COORD_SYS,
+                                     g_param_spec_enum("coordinate-system", "SDK Coordinate System",
+                                                       "3D Coordinate System", GST_TYPE_ZED_COORD_SYS,
+                                                       DEFAULT_PROP_COORD_SYS,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+
+
+    g_object_class_install_property( gobject_class, PROP_CONFIDENCE_THRESH,
+                                     g_param_spec_int("confidence-threshold", "Depth Confidence Threshold",
+                                                      "Specify the Depth Confidence Threshold",0,100,
+                                                      DEFAULT_PROP_CONFIDENCE_THRESH,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_TEXTURE_CONF_THRESH,
+                                     g_param_spec_int("texture-confidence-threshold", "Texture Confidence Threshold",
+                                                      "Specify the Texture Confidence Threshold",0,100,
+                                                      DEFAULT_PROP_TEXTURE_CONF_THRESH,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_3D_REF_FRAME,
+                                     g_param_spec_enum("measure3D-reference-frame", "3D Measures Reference Frame",
+                                                       "Specify the 3D Reference Frame", GST_TYPE_ZED_3D_REF_FRAME,
+                                                       DEFAULT_PROP_3D_REF_FRAME,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_SENSING_MODE,
+                                     g_param_spec_enum("sensing-mode", "Depth Sensing Mode",
+                                                       "Specify the Depth Sensing Mode", GST_TYPE_ZED_SENSING_MODE,
+                                                       DEFAULT_PROP_SENSING_MODE,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+
+
     g_object_class_install_property( gobject_class, PROP_POS_TRACKING,
                                      g_param_spec_boolean("enable-positional-tracking", "Positional tracking",
                                                           "Enable positional tracking",
@@ -615,11 +780,91 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           DEFAULT_PROP_CAMERA_STATIC,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property( gobject_class, PROP_COORD_SYS,
-                                     g_param_spec_enum("coordinate-system", "SDK Coordinate System",
-                                                       "3D Coordinate System", GST_TYPE_ZED_COORD_SYS,
-                                                       DEFAULT_PROP_COORD_SYS,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property( gobject_class, PROP_POS_AREA_FILE_PATH,
+                                     g_param_spec_string("area-file-path", "Area file path",
+                                                         "Area localization file that describes the surroundings, saved"
+                                                         " from a previous tracking session.",
+                                                         DEFAULT_PROP_POS_AREA_FILE_PATH,
+                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_ENABLE_AREA_MEMORY,
+                                     g_param_spec_boolean("enable-area-memory", "Enable area memory",
+                                                          "This mode enables the camera to remember its surroundings. "
+                                                          "This helps correct positional tracking drift, and can be "
+                                                          "helpful for positioning different cameras relative to one "
+                                                          "other in space.",
+                                                          DEFAULT_PROP_POS_ENABLE_AREA_MEMORY,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_ENABLE_IMU_FUSION,
+                                     g_param_spec_boolean("enable-imu-fusion", "Enable IMU fusion",
+                                                          "This setting allows you to enable or disable IMU fusion. "
+                                                          "When set to false, only the optical odometry will be used.",
+                                                          DEFAULT_PROP_POS_ENABLE_IMU_FUSION,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_ENABLE_POSE_SMOOTHING,
+                                     g_param_spec_boolean("enable-pose-smoothing", "Enable Pose Smoothing",
+                                                          "This mode enables smooth pose correction for small drift "
+                                                          "correction.",
+                                                          DEFAULT_PROP_POS_ENABLE_POSE_SMOOTHING,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_SET_FLOOR_AS_ORIGIN,
+                                     g_param_spec_boolean("set-floor-as-origin", "Set floor as pose origin",
+                                                          "This mode initializes the tracking to be aligned with the "
+                                                          "floor plane to better position the camera in space.",
+                                                          DEFAULT_PROP_POS_SET_FLOOR_AS_ORIGIN,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_INIT_X,
+                                     g_param_spec_float("initial-world-transform-x",
+                                                        "Initial X coordinate",
+                                                        "X position of the camera in the world frame when the camera is started",
+                                                        -G_MAXFLOAT, G_MAXFLOAT,
+                                                        DEFAULT_PROP_POS_INIT_X,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_INIT_Y,
+                                     g_param_spec_float("initial-world-transform-y",
+                                                        "Initial Y coordinate",
+                                                        "Y position of the camera in the world frame when the camera is started",
+                                                        -G_MAXFLOAT, G_MAXFLOAT,
+                                                        DEFAULT_PROP_POS_INIT_Y,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_INIT_Z,
+                                     g_param_spec_float("initial-world-transform-z",
+                                                        "Initial Z coordinate",
+                                                        "Z position of the camera in the world frame when the camera is started",
+                                                        -G_MAXFLOAT, G_MAXFLOAT,
+                                                        DEFAULT_PROP_POS_INIT_Z,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_INIT_ROLL,
+                                     g_param_spec_float("initial-world-transform-roll",
+                                                        "Initial Roll orientation",
+                                                        "Roll orientation of the camera in the world frame when the camera is started",
+                                                        0.0f, 360.0f,
+                                                        DEFAULT_PROP_POS_INIT_ROLL,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_INIT_PITCH,
+                                     g_param_spec_float("initial-world-transform-pitch",
+                                                        "Initial Pitch orientation",
+                                                        "Pitch orientation of the camera in the world frame when the camera is started",
+                                                        0.0f, 360.0f,
+                                                        DEFAULT_PROP_POS_INIT_PITCH,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_INIT_YAW,
+                                     g_param_spec_float("initial-world-transform-yaw",
+                                                        "Initial Yaw orientation",
+                                                        "Yaw orientation of the camera in the world frame when the camera is started",
+                                                        0.0f, 360.0f,
+                                                        DEFAULT_PROP_POS_INIT_YAW,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
 
     g_object_class_install_property( gobject_class, PROP_OD_ENABLE,
                                      g_param_spec_boolean("od-enabled", "Object Detection enable",
@@ -639,7 +884,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           DEFAULT_PROP_OD_TRACKING,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    //Not supported yet
+    //Not yet supported
     /*g_object_class_install_property( gobject_class, PROP_OD_MASK,
                                      g_param_spec_boolean("od-mask", "OD Mask output",
                                                           "Set to TRUE to enable mask output for the detected objects",
@@ -657,6 +902,17 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                      g_param_spec_float("od-confidence", "Minimum Object detection confidence threshold",
                                                         "Minimum Detection Confidence", 0.0f, 100.0f, DEFAULT_PROP_OD_CONFIDENCE,
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_OD_MAX_RANGE,
+                                     g_param_spec_float("od-max-range", "Defines if the body fitting will be applied when using Skeleton Tracking",
+                                                        "Maximum Detection Range", -1.0f, 20000.0f, DEFAULT_PROP_OD_MAX_RANGE,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_OD_BODY_FITTING,
+                                     g_param_spec_boolean("od-body-fitting", "Minimum Object detection confidence threshold",
+                                                          "Set to TRUE to enable body fitting for skeleton tracking",
+                                                          DEFAULT_PROP_OD_BODY_FITTING,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_BRIGHTNESS,
                                      g_param_spec_int("brightness", "Camera control: brightness",
@@ -777,9 +1033,25 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->depth_mode = DEFAULT_PROP_DEPTH_MODE;
     src->camera_disable_self_calib = DEFAULT_PROP_DIS_SELF_CALIB;
     src->depth_stabilization = DEFAULT_PROP_DEPTH_STAB;
+    src->coord_sys = DEFAULT_PROP_COORD_SYS;
+    src->confidence_threshold = DEFAULT_PROP_CONFIDENCE_THRESH;
+    src->texture_confidence_threshold = DEFAULT_PROP_TEXTURE_CONF_THRESH;
+    src->measure3D_reference_frame = DEFAULT_PROP_3D_REF_FRAME;
+    src->sensing_mode = DEFAULT_PROP_SENSING_MODE;
 
     src->pos_tracking = DEFAULT_PROP_POS_TRACKING;
-    src->coord_sys = DEFAULT_PROP_COORD_SYS;
+    src->camera_static = DEFAULT_PROP_CAMERA_STATIC;
+    src->area_file_path = *g_string_new(DEFAULT_PROP_POS_AREA_FILE_PATH);
+    src->enable_area_memory = DEFAULT_PROP_POS_ENABLE_AREA_MEMORY;
+    src->enable_imu_fusion = DEFAULT_PROP_POS_ENABLE_IMU_FUSION;
+    src->enable_pose_smoothing = DEFAULT_PROP_POS_ENABLE_POSE_SMOOTHING;
+    src->set_floor_as_origin = DEFAULT_PROP_POS_SET_FLOOR_AS_ORIGIN;
+    src->init_pose_x = DEFAULT_PROP_POS_INIT_X;
+    src->init_pose_y = DEFAULT_PROP_POS_INIT_Y;
+    src->init_pose_z = DEFAULT_PROP_POS_INIT_Z;
+    src->init_orient_roll = DEFAULT_PROP_POS_INIT_ROLL;
+    src->init_orient_pitch = DEFAULT_PROP_POS_INIT_PITCH;
+    src->init_orient_yaw = DEFAULT_PROP_POS_INIT_YAW;
 
     src->object_detection = DEFAULT_PROP_OD_ENABLE;
     src->od_image_sync = DEFAULT_PROP_OD_SYNC;
@@ -787,6 +1059,8 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->od_enable_mask_output = DEFAULT_PROP_OD_MASK;
     src->od_detection_model = DEFAULT_PROP_OD_MODEL;
     src->od_det_conf = DEFAULT_PROP_OD_CONFIDENCE;
+    src->od_max_range = DEFAULT_PROP_OD_MAX_RANGE;
+    src->od_body_fitting = DEFAULT_PROP_OD_BODY_FITTING;
 
     src->brightness = DEFAULT_PROP_BRIGHTNESS;
     src->contrast = DEFAULT_PROP_CONTRAST;
@@ -869,17 +1143,63 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_DEPTH_STAB:
         src->depth_stabilization = g_value_get_boolean(value);
         break;
+    case PROP_COORD_SYS:
+        src->coord_sys = g_value_get_enum(value);
+        break;
         /*case PROP_RIGHT_DEPTH_ENABLE:
         src->enable_right_side_measure =  g_value_get_boolean(value);
         break;*/
+    case PROP_CONFIDENCE_THRESH:
+        src->confidence_threshold = g_value_get_int(value);
+        break;
+    case PROP_TEXTURE_CONF_THRESH:
+        src->texture_confidence_threshold = g_value_get_int(value);
+        break;
+    case PROP_3D_REF_FRAME:
+        src->measure3D_reference_frame = g_value_get_enum(value);
+        break;
+    case PROP_SENSING_MODE:
+        src->sensing_mode = g_value_get_enum(value);
+        break;
     case PROP_POS_TRACKING:
         src->pos_tracking = g_value_get_boolean(value);
         break;
     case PROP_CAMERA_STATIC:
         src->camera_static = g_value_get_boolean(value);
         break;
-    case PROP_COORD_SYS:
-        src->coord_sys = g_value_get_enum(value);
+    case PROP_POS_AREA_FILE_PATH:
+        str = g_value_get_string(value);
+        src->area_file_path = *g_string_new( str );
+        break;
+    case PROP_POS_ENABLE_AREA_MEMORY:
+        src->enable_area_memory = g_value_get_boolean(value);
+        break;
+    case PROP_POS_ENABLE_IMU_FUSION:
+        src->enable_imu_fusion = g_value_get_boolean(value);
+        break;
+    case PROP_POS_SET_FLOOR_AS_ORIGIN:
+        src->set_floor_as_origin = g_value_get_boolean(value);
+        break;
+    case PROP_POS_ENABLE_POSE_SMOOTHING:
+        src->enable_pose_smoothing = g_value_get_boolean(value);
+        break;
+    case PROP_POS_INIT_X:
+        src->init_pose_x = g_value_get_float(value);
+        break;
+    case PROP_POS_INIT_Y:
+        src->init_pose_y = g_value_get_float(value);
+        break;
+    case PROP_POS_INIT_Z:
+        src->init_pose_z = g_value_get_float(value);
+        break;
+    case PROP_POS_INIT_ROLL:
+        src->init_orient_roll = g_value_get_float(value);
+        break;
+    case PROP_POS_INIT_PITCH:
+        src->init_orient_pitch = g_value_get_float(value);
+        break;
+    case PROP_POS_INIT_YAW:
+        src->init_orient_yaw = g_value_get_float(value);
         break;
     case PROP_OD_ENABLE:
         src->object_detection = g_value_get_boolean(value);
@@ -898,6 +1218,12 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
         break;
     case PROP_OD_CONFIDENCE:
         src->od_det_conf = g_value_get_float(value);
+        break;
+    case PROP_OD_MAX_RANGE:
+        src->od_max_range = g_value_get_float(value);
+        break;
+    case PROP_OD_BODY_FITTING:
+        src->od_body_fitting = g_value_get_boolean(value);
         break;
     case PROP_BRIGHTNESS:
         src->brightness = g_value_get_int(value);
@@ -1005,6 +1331,9 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_DEPTH_MODE:
         g_value_set_enum( value, src->depth_mode );
         break;
+    case PROP_COORD_SYS:
+        g_value_set_enum( value, src->coord_sys );
+        break;
     case PROP_DIS_SELF_CALIB:
         g_value_set_boolean( value, src->camera_disable_self_calib );
         break;
@@ -1014,14 +1343,56 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_DEPTH_STAB:
         g_value_set_boolean( value, src->depth_stabilization );
         break;
+    case PROP_CONFIDENCE_THRESH:
+        g_value_set_int(value, src->confidence_threshold);
+        break;
+    case PROP_TEXTURE_CONF_THRESH:
+        g_value_set_int(value, src->texture_confidence_threshold);
+        break;
+    case PROP_3D_REF_FRAME:
+        g_value_set_enum( value, src->measure3D_reference_frame);
+        break;
+    case PROP_SENSING_MODE:
+        g_value_set_enum( value, src->sensing_mode);
+        break;
     case PROP_POS_TRACKING:
         g_value_set_boolean( value, src->pos_tracking );
         break;
     case PROP_CAMERA_STATIC:
         g_value_set_boolean( value, src->camera_static );
         break;
-    case PROP_COORD_SYS:
-        g_value_set_enum( value, src->coord_sys );
+    case PROP_POS_AREA_FILE_PATH:
+        g_value_set_string( value, src->area_file_path.str );
+        break;
+    case PROP_POS_ENABLE_AREA_MEMORY:
+        g_value_set_boolean( value, src->enable_area_memory );
+        break;
+    case PROP_POS_ENABLE_IMU_FUSION:
+        g_value_set_boolean( value, src->enable_imu_fusion );
+        break;
+    case PROP_POS_SET_FLOOR_AS_ORIGIN:
+        g_value_set_boolean( value, src->set_floor_as_origin );
+        break;
+    case PROP_POS_ENABLE_POSE_SMOOTHING:
+        g_value_set_boolean( value, src->enable_pose_smoothing );
+        break;
+    case PROP_POS_INIT_X:
+        g_value_set_float( value, src->init_pose_x );
+        break;
+    case PROP_POS_INIT_Y:
+        g_value_set_float( value, src->init_pose_y );
+        break;
+    case PROP_POS_INIT_Z:
+        g_value_set_float( value, src->init_pose_z );
+        break;
+    case PROP_POS_INIT_ROLL:
+        g_value_set_float( value, src->init_orient_roll );
+        break;
+    case PROP_POS_INIT_PITCH:
+        g_value_set_float( value, src->init_orient_pitch );
+        break;
+    case PROP_POS_INIT_YAW:
+        g_value_set_float( value, src->init_orient_yaw );
         break;
     case PROP_OD_ENABLE:
         g_value_set_boolean( value, src->object_detection );
@@ -1040,6 +1411,12 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
         break;
     case PROP_OD_CONFIDENCE:
         g_value_set_float( value, src->od_det_conf );
+        break;
+    case PROP_OD_MAX_RANGE:
+        g_value_set_float( value, src->od_max_range );
+        break;
+    case PROP_OD_BODY_FITTING:
+        g_value_set_boolean( value, src->od_body_fitting );
         break;
 
     case PROP_BRIGHTNESS:
@@ -1187,19 +1564,60 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 
     // ----> Set init parameters
     sl::InitParameters init_params;
-    init_params.coordinate_units = sl::UNIT::MILLIMETER; // ready for 16bit depth image
-    init_params.camera_resolution = static_cast<sl::RESOLUTION>(src->camera_resolution);
-    init_params.camera_fps = src->camera_fps;
-    init_params.sdk_verbose = src->sdk_verbose==TRUE;
-    init_params.camera_image_flip = src->camera_image_flip;
 
-    init_params.depth_minimum_distance = src->depth_min_dist;
-    init_params.depth_maximum_distance = src->depth_max_dist;
+    GST_INFO("CAMERA INITIALIZATION PARAMETERS");
+
+    init_params.camera_resolution = static_cast<sl::RESOLUTION>(src->camera_resolution);
+    GST_INFO(" * Camera resolution: %s", sl::toString(init_params.camera_resolution).c_str());
+    init_params.camera_fps = src->camera_fps;
+    GST_INFO(" * Camera FPS: %d", init_params.camera_fps);
+    init_params.sdk_verbose = src->sdk_verbose==TRUE;
+    GST_INFO(" * SDK verbose: %s", (init_params.sdk_verbose?"TRUE":"FALSE"));
+    init_params.camera_image_flip = src->camera_image_flip;
+    GST_INFO(" * Camera flipped: %s", sl::toString(static_cast<sl::FLIP_MODE>(init_params.camera_image_flip)).c_str());
+
     init_params.depth_mode = static_cast<sl::DEPTH_MODE>(src->depth_mode);
+    if(src->object_detection && init_params.depth_mode==sl::DEPTH_MODE::NONE)
+    {
+        init_params.depth_mode=sl::DEPTH_MODE::ULTRA;
+        src->depth_mode = static_cast<gint>(init_params.depth_mode);
+
+        GST_WARNING_OBJECT(src, "Object detection requires DEPTH_MODE!=NONE. Depth mode value forced to ULTRA");
+
+        if(!src->pos_tracking)
+        {
+            src->pos_tracking=TRUE;
+            GST_WARNING_OBJECT(src, "Object detection requires Positional Tracking to be active. Positional Tracking automatically activated");
+        }
+    }
+    if(src->pos_tracking && init_params.depth_mode==sl::DEPTH_MODE::NONE)
+    {
+        init_params.depth_mode=sl::DEPTH_MODE::ULTRA;
+        src->depth_mode = static_cast<gint>(init_params.depth_mode);
+
+        GST_WARNING_OBJECT(src, "Positional tracking requires DEPTH_MODE!=NONE. Depth mode value forced to ULTRA");
+    }
+    if((src->stream_type==GST_ZEDSRC_LEFT_DEPTH || src->stream_type==GST_ZEDSRC_DEPTH_16)
+            && init_params.depth_mode==sl::DEPTH_MODE::NONE)
+    {
+        init_params.depth_mode=sl::DEPTH_MODE::ULTRA;
+        src->depth_mode = static_cast<gint>(init_params.depth_mode);
+        GST_WARNING_OBJECT(src, "'stream-type' setting requires depth calculation. Depth mode value forced to ULTRA");
+    }
+    GST_INFO(" * Depth Mode: %s", sl::toString(init_params.depth_mode).c_str());
+    init_params.coordinate_units = sl::UNIT::MILLIMETER; // ready for 16bit depth image
+    GST_INFO(" * Coordinate units: %s", sl::toString(init_params.coordinate_units).c_str());
+    init_params.coordinate_system = static_cast<sl::COORDINATE_SYSTEM>(src->coord_sys);
+    GST_INFO(" * Coordinate system: %s", sl::toString(init_params.coordinate_system).c_str());
+    init_params.depth_minimum_distance = src->depth_min_dist;
+    GST_INFO(" * MIN depth: %g", init_params.depth_minimum_distance);
+    init_params.depth_maximum_distance = src->depth_max_dist;
+    GST_INFO(" * MAX depth: %g", init_params.depth_maximum_distance);
     init_params.depth_stabilization = src->depth_stabilization;
+    GST_INFO(" * Depth Stabilization: %s", (init_params.depth_stabilization?"TRUE":"FALSE"));
     init_params.enable_right_side_measure = false; //src->enable_right_side_measure==TRUE;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib==TRUE;
-    init_params.coordinate_system = static_cast<sl::COORDINATE_SYSTEM>(src->coord_sys);
+    GST_INFO(" * Disable self calibration: %s", (init_params.camera_disable_self_calib?"TRUE":"FALSE"));
 
     std::cout << "Setting depth_mode to " << init_params.depth_mode << std::endl;
 
@@ -1208,19 +1626,31 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         sl::String svo( static_cast<char*>(src->svo_file.str) );
         init_params.input.setFromSVOFile(svo);
         init_params.svo_real_time_mode = true;
+
+        GST_INFO(" * Input SVO filename: %s", src->svo_file.str);
     }
     else if( src->camera_id != DEFAULT_PROP_CAM_ID )
     {
         init_params.input.setFromCameraID(src->camera_id);
+
+        GST_INFO(" * Input Camera ID: %d", src->camera_id);
     }
     else if( src->camera_sn != DEFAULT_PROP_CAM_SN )
     {
         init_params.input.setFromSerialNumber(src->camera_sn);
+
+        GST_INFO(" * Input Camera SN: %ld", src->camera_sn);
     }
     else if( src->stream_ip.len != 0 )
     {
         sl::String ip( static_cast<char*>(src->stream_ip.str) );
         init_params.input.setFromStream(ip,src->stream_port);
+
+        GST_INFO(" * Input Stream: %s:%d", src->stream_ip.str,src->stream_port );
+    }
+    else
+    {
+        GST_INFO(" * Input from default device");
     }
     // <---- Set init parameters
 
@@ -1235,28 +1665,29 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     // <---- Open camera
 
     // ----> Camera Controls
+    GST_INFO("CAMERA CONTROLS");
     src->zed.setCameraSettings((sl::VIDEO_SETTINGS::BRIGHTNESS), (src->brightness));
-    std::cout << "Brightness: " << src->brightness << std::endl;
+    GST_INFO(" * BRIGHTNESS: %d", src->brightness);
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::CONTRAST, src->contrast );
-    std::cout << "Contrast: " << src->contrast << std::endl;
+    GST_INFO(" * CONTRAST: %d", src->contrast);
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::HUE, src->hue );
-    std::cout << "Hue: " << src->hue << std::endl;
+    GST_INFO(" * HUE: %d", src->hue);
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::SATURATION, src->saturation );
-    std::cout << "Saturation: " << src->saturation << std::endl;
+    GST_INFO(" * SATURATION: %d", src->saturation);
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::SHARPNESS, src->sharpness );
-    std::cout << "Sharpness: " << src->sharpness << std::endl;
+    GST_INFO(" * SHARPNESS: %d", src->sharpness);
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::GAMMA, src->gamma );
-    std::cout << "Gamma: " << src->gamma << std::endl;
+    GST_INFO(" * GAMMA: %d", src->gamma);
     if(src->aec_agc==FALSE) {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc );
-        std::cout << "AEC_AGC: " << src->aec_agc << std::endl;
+        GST_INFO(" * AEC_AGC: %s", (src->aec_agc?"TRUE":"FALSE"));
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE, src->exposure );
-        std::cout << "EXPOSURE: " << src->exposure << std::endl;
+        GST_INFO(" * EXPOSURE: %d", src->exposure);
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::GAIN, src->gain );
-        std::cout << "GAIN: " << src->gain << std::endl;
+        GST_INFO(" * GAIN: %d", src->gain);
     } else {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc );
-        std::cout << "AEC_AGC: " << src->aec_agc << std::endl;
+        GST_INFO(" * AEC_AGC: %s", (src->aec_agc?"TRUE":"FALSE"));
 
         if( src->aec_agc_roi_x!=-1 &&
                 src->aec_agc_roi_y!=-1 &&
@@ -1270,37 +1701,81 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 
             sl::SIDE side =  static_cast<sl::SIDE>(src->aec_agc_roi_side);
 
-            std::cout << "AEC_AGC_ROI: (" << src->aec_agc_roi_x << "," << src->aec_agc_roi_y << ") " <<
-                         src->aec_agc_roi_w << "x" << src->aec_agc_roi_h << " - Side: " << src->aec_agc_roi_side << std::endl;
+            GST_INFO(" * AEC_AGC_ROI: (%d,%d)-%dx%d - Side: %d",
+                     src->aec_agc_roi_x, src->aec_agc_roi_y, src->aec_agc_roi_w, src->aec_agc_roi_h,
+                     src->aec_agc_roi_side);
 
             src->zed.setCameraSettings( sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side );
         }
     }
     if(src->whitebalance_temperature_auto==FALSE) {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->whitebalance_temperature_auto );
-        std::cout << "WHITEBALANCE_AUTO: " << src->whitebalance_temperature_auto << std::endl;
+        GST_INFO(" * WHITEBALANCE_AUTO: %s", (src->whitebalance_temperature_auto?"TRUE":"FALSE"));
         src->whitebalance_temperature /=100;
         src->whitebalance_temperature *=100;
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE, src->whitebalance_temperature );
-        std::cout << "WHITEBALANCE_TEMPERATURE: " << src->whitebalance_temperature << std::endl;
+        GST_INFO(" * WHITEBALANCE_TEMPERATURE: %d", src->whitebalance_temperature);
 
     } else {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->whitebalance_temperature_auto );
-        std::cout << "WHITEBALANCE_AUTO: " << src->whitebalance_temperature_auto << std::endl;
+        GST_INFO(" * WHITEBALANCE_AUTO: %s", (src->whitebalance_temperature_auto?"TRUE":"FALSE"));
     }
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::LED_STATUS, src->led_status );
-    std::cout << "LED_STATUS: " << src->led_status << std::endl;
-
-
+    GST_INFO(" * LED_STATUS: %s", (src->led_status?"ON":"OFF"));
     // <---- Camera Controls
 
+    // ----> Set runtime parameters
+    GST_INFO("CAMERA RUNTIME PARAMETERS");
+    if( src->depth_mode==static_cast<gint>(sl::DEPTH_MODE::NONE)
+            && !src->pos_tracking)
+    {
+        src->zedRtParams.enable_depth = false;
+    }
+    else
+    {
+        src->zedRtParams.enable_depth = true;
+    }
+    GST_INFO(" * Depth calculation: %s", (src->zedRtParams.enable_depth?"ON":"OFF"));
+    src->zedRtParams.confidence_threshold = src->confidence_threshold;
+    GST_INFO(" * Depth Confidence threshold: %d", src->zedRtParams.confidence_threshold);
+    src->zedRtParams.texture_confidence_threshold = src->texture_confidence_threshold;
+    GST_INFO(" * Depth Texture Confidence threshold: %d", src->zedRtParams.texture_confidence_threshold );
+    src->zedRtParams.measure3D_reference_frame = static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
+    GST_INFO(" * 3D Reference Frame: %s",  sl::toString(src->zedRtParams.measure3D_reference_frame).c_str());
+    src->zedRtParams.sensing_mode = static_cast<sl::SENSING_MODE>(src->sensing_mode);
+    GST_INFO(" * Sensing Mode: %s",  sl::toString(src->zedRtParams.sensing_mode).c_str());
+    // <---- Set runtime parameters
+
     // ----> Positional tracking
+    GST_INFO("POSITIONAL TRACKING PARAMETERS");
+    GST_INFO(" * Positional tracking status: %s", (src->pos_tracking?"ON":"OFF"));
     if( src->pos_tracking )
     {
         sl::PositionalTrackingParameters pos_trk_params;
         pos_trk_params.set_as_static = (src->camera_static==TRUE);
-        // TODO add other parameters
-        ret = src->zed.enablePositionalTracking( pos_trk_params);
+        GST_INFO(" * Camera static: %s", (pos_trk_params.set_as_static?"TRUE":"FALSE"));
+        sl::String area_file_path( static_cast<char*>(src->area_file_path.str) );
+        pos_trk_params.area_file_path = area_file_path;
+        GST_INFO(" * Area file path: %s", pos_trk_params.area_file_path.c_str());
+        pos_trk_params.enable_area_memory = (src->enable_area_memory==TRUE);
+        GST_INFO(" * Area memory: %s", (pos_trk_params.enable_area_memory?"TRUE":"FALSE"));
+        pos_trk_params.enable_imu_fusion = (src->enable_imu_fusion==TRUE);
+        GST_INFO(" * IMU fusion: %s", (pos_trk_params.enable_imu_fusion?"TRUE":"FALSE"));
+        pos_trk_params.enable_pose_smoothing = (src->enable_pose_smoothing==TRUE);
+        GST_INFO(" * Pose smoothing: %s", (pos_trk_params.enable_pose_smoothing?"TRUE":"FALSE"));
+        pos_trk_params.set_floor_as_origin = (src->set_floor_as_origin==TRUE);
+        GST_INFO(" * Floor as origin: %s", (pos_trk_params.set_floor_as_origin?"TRUE":"FALSE"));
+
+        sl::Translation init_pos(src->init_pose_x,src->init_pose_y, src->init_pose_z);
+        sl::Rotation init_or;
+        init_or.setEulerAngles( sl::float3(src->init_orient_roll,src->init_orient_pitch,src->init_orient_yaw), false);
+        pos_trk_params.initial_world_transform = sl::Transform(init_or,init_pos);
+        GST_INFO(" * Initial world transform: T(%g,%g,%g) OR(%g,%g,%g)",
+                 src->init_pose_x,src->init_pose_y, src->init_pose_z,
+                 src->init_orient_roll,src->init_orient_pitch,src->init_orient_yaw);
+
+
+        ret = src->zed.enablePositionalTracking(pos_trk_params);
         if (ret!=sl::ERROR_CODE::SUCCESS) {
             GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
                                ("Failed to start positional tracking, '%s'", sl::toString(ret).c_str() ), (NULL));
@@ -1310,13 +1785,23 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     // <---- Positional tracking
 
     // ----> Object Detection
+    GST_INFO("OBJECT DETECTION PARAMETERS");
+    GST_INFO(" * Object Detection status: %s", (src->object_detection?"ON":"OFF"));
     if( src->object_detection )
     {
         sl::ObjectDetectionParameters od_params;
         od_params.image_sync = (src->od_image_sync==TRUE);
+        GST_INFO(" * Image sync: %s", (od_params.image_sync?"TRUE":"FALSE"));
         od_params.enable_tracking = (src->od_enable_tracking==TRUE);
+        GST_INFO(" * Object tracking: %s", (od_params.enable_tracking?"TRUE":"FALSE"));
         od_params.enable_mask_output = (src->od_enable_mask_output==TRUE);
+        GST_INFO(" * Mask output: %s", (od_params.enable_mask_output?"TRUE":"FALSE"));
         od_params.detection_model = static_cast<sl::DETECTION_MODEL>(src->od_detection_model);
+        GST_INFO(" * Detection model: %s", sl::toString(od_params.detection_model).c_str());
+        od_params.max_range = src->od_max_range;
+        GST_INFO(" * Max range: %g", od_params.max_range);
+        od_params.enable_body_fitting = src->od_body_fitting;
+        GST_INFO(" * Body fitting: %s", (od_params.enable_body_fitting?"TRUE":"FALSE"));
 
         ret = src->zed.enableObjectDetection( od_params );
         if (ret!=sl::ERROR_CODE::SUCCESS) {
@@ -1339,8 +1824,6 @@ static gboolean gst_zedsrc_stop (GstBaseSrc * bsrc)
     GstZedSrc *src = GST_ZED_SRC (bsrc);
 
     GST_DEBUG_OBJECT (src, "stop");
-
-    // TODO stop any started modules
 
     gst_zedsrc_reset( src );
 
@@ -1434,7 +1917,6 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     GST_LOG_OBJECT (src, "fill");
 
     if (!src->is_started) {
-        /* TODO: check timestamps on buffers vs start time */
         src->acq_start_time =
                 gst_clock_get_time(gst_element_get_clock (GST_ELEMENT (src)));
 
@@ -1442,7 +1924,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     }
 
     // ----> ZED grab
-    ret = src->zed.grab(); // TODO set runtime parameters
+    ret = src->zed.grab(src->zedRtParams);
 
     if( ret!=sl::ERROR_CODE::SUCCESS )
     {

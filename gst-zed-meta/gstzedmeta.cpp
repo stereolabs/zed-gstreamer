@@ -134,8 +134,6 @@ static void gst_zed_src_meta_free(GstMeta * meta, GstBuffer * buffer)
     GST_TRACE( "gst_zed_src_meta_free" );
 
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
-
-    // TODO eventually free dynamic data
 }
 
 const GstMetaInfo* gst_zed_src_meta_get_info (void)

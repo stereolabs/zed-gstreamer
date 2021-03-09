@@ -1,5 +1,32 @@
 LATEST CHANGES
 ==============
+Improved Depth Handling and new `zedsrc` parameters(2021-01-29)
+---------------------------------------------------------------
+- Depth mode has now a default value of NONE.
+  To disable the depth elaboration it is also necessary to disable the positional tracking and the object detection, 
+  so the values of the relative activation options have been set to false as default.
+  The zedsrc element now starts without performing any depth elaboration with the default settings. 
+- New Positional Tracking parameters
+  * area-file-path
+  * enable-area-memory
+  * enable-imu-fusion
+  * enable-pos
+  * set-floor-as-origine-smoothing
+  * initial-world-transform-x
+  * initial-world-transform-y
+  * initial-world-transform-z
+  * initial-world-transform-roll
+  * initial-world-transform-pitch
+  * initial-world-transform-yaw
+- New Runtime parameters
+  * confidence-threshold
+  * sensing-mode
+  * texture-confidence-threshold
+  * measure3D-reference-frame  
+- New Object Detection parameters
+  * od-max-range
+  * od-body-fitting
+
 Name fixes (2021-01-18)
 -----------------------
 - Change parameters names in `zedsrc` to match the names in the ZED SDK:
