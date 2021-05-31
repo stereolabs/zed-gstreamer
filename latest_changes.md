@@ -42,7 +42,6 @@ ZED SDK v3.5
   * object-detection-tracking -> od-enable-tracking
   * object-detection-confidence -> od-confidence
 
-
 ZED SDK v3.4
 -------------
 - Add compatibility fix for ZED SDK v3.4
