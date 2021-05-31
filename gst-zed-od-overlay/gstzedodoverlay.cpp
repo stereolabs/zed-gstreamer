@@ -374,7 +374,7 @@ static void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs,
         cv::Rect roi_render(0, 0, image.size().width, image.size().height);
 
         GST_TRACE( "Object: %d", i );
-        GST_TRACE( " * Id: %d", (int)objs[i].label );
+        GST_TRACE( " * Id: %d [%d]", (int)objs[i].label, (int)objs[i].sublabel );
         GST_TRACE( " * Pos: %g,%g,%g", objs[i].position[0],objs[i].position[1],objs[i].position[2] );
 
         if(objs[i].skeletons_avail==FALSE)
@@ -424,6 +424,81 @@ static void draw_objects( cv::Mat& image, guint8 obj_count, ZedObjectData* objs,
             default:
                 txt_info << "UNDEFINED";
                 break;
+            }
+
+            if(!objs[i].skeletons_avail)
+            {
+                switch (objs[i].sublabel) {
+                case OBJECT_SUBCLASS::PERSON:
+                    //txt_info << " [Person]";
+                    break;
+                case OBJECT_SUBCLASS::BICYCLE:
+                    txt_info << " [Bicycle]";
+                    break;
+                case OBJECT_SUBCLASS::CAR:
+                    txt_info << " [Car]";
+                    break;
+                case OBJECT_SUBCLASS::MOTORBIKE:
+                    txt_info << " [Motorbike]";
+                    break;
+                case OBJECT_SUBCLASS::BUS:
+                    txt_info << " [Bus]";
+                    break;
+                case OBJECT_SUBCLASS::TRUCK:
+                    txt_info << " [Truck]";
+                    break;
+                case OBJECT_SUBCLASS::BOAT:
+                    txt_info << " [Boat]";
+                    break;
+                case OBJECT_SUBCLASS::BACKPACK:
+                    txt_info << " [Backpack]";
+                    break;
+                case OBJECT_SUBCLASS::HANDBAG:
+                    txt_info << " [Handbag]";
+                    break;
+                case OBJECT_SUBCLASS::SUITCASE:
+                    txt_info << " [Suitcase]";
+                    break;
+                case OBJECT_SUBCLASS::BIRD:
+                    txt_info << " [Bird]";
+                    break;
+                case OBJECT_SUBCLASS::CAT:
+                    txt_info << " [Cat]";
+                    break;
+                case OBJECT_SUBCLASS::DOG:
+                    txt_info << " [Dog]";
+                    break;
+                case OBJECT_SUBCLASS::HORSE:
+                    txt_info << " [Horse]";
+                    break;
+                case OBJECT_SUBCLASS::SHEEP:
+                    txt_info << " [Sheep]";
+                    break;
+                case OBJECT_SUBCLASS::COW:
+                    txt_info << " [Cow]";
+                    break;
+                case OBJECT_SUBCLASS::CELLPHONE:
+                    txt_info << " [CellPhone]";
+                    break;
+                case OBJECT_SUBCLASS::LAPTOP:
+                    txt_info << " [Laptop]";
+                    break;
+                case OBJECT_SUBCLASS::BANANA:
+                    txt_info << " [Banana]";
+                    break;
+                case OBJECT_SUBCLASS::APPLE:
+                    txt_info << " [Apple]";
+                    break;
+                case OBJECT_SUBCLASS::ORANGE:
+                    txt_info << " [Orange]";
+                    break;
+                case OBJECT_SUBCLASS::CARROT:
+                    txt_info << " [Carrot]";
+                    break;
+                default:
+                    txt_info << " [-]";
+                    break;
+                }
             }
 
             cv::Size txt_size = cv::getTextSize( txt_info.str(), font_face, font_scale, 1, &baseline );

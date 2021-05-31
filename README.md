@@ -32,13 +32,13 @@ GStreamer plugin package for ZED Cameras. The package is composed of several plu
 
 ### Prerequisites
 
- * Stereo camera: [ZED 2](https://www.stereolabs.com/zed-2/), [ZED](https://www.stereolabs.com/zed/), [ZED Mini](https://www.stereolabs.com/zed-mini/)
- * CMake (v3.1+)
+ * Stereo camera: [ZED 2i](https://www.stereolabs.com/zed-2i/),[ZED 2](https://www.stereolabs.com/zed-2/), [ZED](https://www.stereolabs.com/zed/), [ZED Mini](https://www.stereolabs.com/zed-mini/)
+ * CMake (v3.6+)
  * GStreamer 1.0
 
 ### Windows installation
 
- * Install the latest ZED SDK v3.4.x from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` plugin to acquire data from a ZED camera device]
+ * Install the latest ZED SDK v3.5.x from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` plugin to acquire data from a ZED camera device]
  * Install [Git](https://git-scm.com/) or download a ZIP archive
  * Install [CMake](https://cmake.org/)
  * Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
@@ -157,7 +157,7 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `od-enabled`: Enable Object Detection - {TRUE, FALSE}
  * `od-image-sync`: Set to TRUE to enable Object Detection frame synchronization - {TRUE, FALSE}
  * `od-enable-tracking`: Set to TRUE to enable tracking for the detected objects - {TRUE, FALSE}
- * `od-detection-model`: Object Detection Model - {Multi class (0), Human Body Tracking FAST (1), Human Body Tracking ACCURATE (2)}
+ * `od-detection-model`: Object Detection Model - {(0): Object Detection Multi class, (1): Object Detection Multi class ACCURATE, (2): Skeleton tracking FAST, (3): Skeleton tracking ACCURATE, (4): Object Detection Multi class MEDIUM, (5): Skeleton tracking MEDIUM}
  * `od-confidence`: Minimum Detection Confidence - {0,100}
  * `od-max-range`: Maximum Detection Range - [-1,20000]
  * `od-body-fitting`: Set to TRUE to enable body fitting for skeleton tracking - {TRUE, FALSE}

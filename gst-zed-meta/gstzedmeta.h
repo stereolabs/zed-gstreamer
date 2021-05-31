@@ -93,6 +93,32 @@ enum class OBJECT_CLASS {
     LAST
 };
 
+enum class OBJECT_SUBCLASS {
+    PERSON = 0, /**< PERSON */
+    BICYCLE = 1, /**< VEHICLE */
+    CAR = 2, /**< VEHICLE */
+    MOTORBIKE = 3, /**< VEHICLE */
+    BUS = 4, /**< VEHICLE */
+    TRUCK = 5, /**< VEHICLE */
+    BOAT = 6, /**< VEHICLE */
+    BACKPACK = 7, /**< BAG */
+    HANDBAG = 8, /**< BAG */
+    SUITCASE = 9, /**< BAG */
+    BIRD = 10, /**< ANIMAL */
+    CAT = 11, /**< ANIMAL */
+    DOG = 12, /**< ANIMAL */
+    HORSE = 13, /**< ANIMAL */
+    SHEEP = 14, /**< ANIMAL */
+    COW = 15, /**< ANIMAL */
+    CELLPHONE = 16, /**< ELECTRONIC */
+    LAPTOP = 17, /**< ELECTRONIC */
+    BANANA = 18, /**< FRUIT/VEGETABLE */
+    APPLE = 19, /**< FRUIT/VEGETABLE */
+    ORANGE = 20, /**< FRUIT/VEGETABLE */
+    CARROT = 21, /**< FRUIT/VEGETABLE */
+    LAST = 22
+};
+
 enum class OBJECT_TRACKING_STATE {
     OFF, /**< The tracking is not yet initialized, the object ID is not usable */
     OK, /**< The object is tracked */
@@ -111,6 +137,7 @@ struct _ZedObjectData {
     gint id;
 
     OBJECT_CLASS label;
+    OBJECT_SUBCLASS sublabel;
     OBJECT_TRACKING_STATE tracking_state;
     OBJECT_ACTION_STATE action_state;
 
