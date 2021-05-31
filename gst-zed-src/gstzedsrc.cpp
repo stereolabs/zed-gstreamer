@@ -145,7 +145,9 @@ typedef enum {
     GST_ZEDSRC_OD_MULTI_CLASS_BOX = 0,
     GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE = 1,
     GST_ZEDSRC_OD_HUMAN_BODY_FAST = 2,
-    GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE  = 3
+    GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE  = 3,
+    GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM = 4,
+    GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM  = 5
 } GstZedSrcOdModel;
 
 typedef enum {
@@ -324,7 +326,7 @@ static GType gst_zedsrc_flip_get_type (void)
               "Force flip",
               "Flip" },
             { GST_ZEDSRC_AUTO,
-              "Auto mode (ZED2/ZED-M only)",
+              "Auto mode (ZED2/ZED2i/ZED-M only)",
               "Auto" },
             { 0, NULL, NULL },
         };
@@ -422,6 +424,12 @@ static GType gst_zedsrc_od_model_get_type (void)
             { GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE,
               "Keypoints based, specific to human skeleton, state of the art accuracy, requires powerful GPU",
               "Skeleton tracking ACCURATE"  },
+            { GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM,
+              "Any objects, bounding box based, compromise between accuracy and speed",
+              "Object Detection Multi class MEDIUM" },
+            { GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM,
+              "Keypoints based, specific to human skeleton, compromise between accuracy and speed",
+              "Skeleton tracking MEDIUM"  },
             { 0, NULL, NULL },
         };
 
@@ -1552,9 +1560,9 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc* src)
 
 static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 {   
-#if ZED_SDK_MAJOR_VERSION!=3 && ZED_SDK_MINOR_VERSION!=3
+#if(ZED_SDK_MAJOR_VERSION==3 && ZED_SDK_MINOR_VERSION<5)
     GST_ELEMENT_ERROR (src, LIBRARY, FAILED,
-                       ("Wrong ZED SDK version. SDK v3.3.x required "), (NULL));
+                       ("Wrong ZED SDK version. SDK v3.5.x required "), (NULL));
 #endif
 
     GstZedSrc *src = GST_ZED_SRC (bsrc);
@@ -2168,6 +2176,9 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
                     obj_data[idx].label = static_cast<OBJECT_CLASS>(obj.label);
                     GST_TRACE_OBJECT( src, " * [%d] Label: %s", idx, sl::toString(obj.label).c_str() );
 
+                    obj_data[idx].sublabel = static_cast<OBJECT_SUBCLASS>(obj.sublabel);
+                    GST_TRACE_OBJECT( src, " * [%d] Sublabel: %s", idx, sl::toString(obj.sublabel).c_str() );
+
                     obj_data[idx].tracking_state = static_cast<OBJECT_TRACKING_STATE>(obj.tracking_state);
                     GST_TRACE_OBJECT( src, " * [%d] Tracking state: %s", idx, sl::toString(obj.tracking_state).c_str() );
 
@@ -2214,6 +2225,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
                     GST_TRACE_OBJECT( src, " * [%d] Copied dimensions", idx );
 
                     if( src->od_detection_model==GST_ZEDSRC_OD_HUMAN_BODY_FAST ||
+                            src->od_detection_model==GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM ||
                             src->od_detection_model==GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE )
                     {
                         obj_data[idx].skeletons_avail = TRUE;

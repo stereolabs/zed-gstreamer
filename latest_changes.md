@@ -1,11 +1,19 @@
 LATEST CHANGES
 ==============
-Improved Depth Handling and new `zedsrc` parameters(2021-01-29)
----------------------------------------------------------------
+
+ZED SDK v3.5
+-------------
+- Add compatibility fix for ZED SDK v3.5
+- Add support for new camera model "ZED 2i"
+- Improve Depth Handling and new `zedsrc` parameters
 - Depth mode has now a default value of NONE.
   To disable the depth elaboration it is also necessary to disable the positional tracking and the object detection, 
   so the values of the relative activation options have been set to false as default.
   The zedsrc element now starts without performing any depth elaboration with the default settings. 
+- Add new object detection models:
+  * GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM
+  * GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM
+- Add support for object subclasses
 - New Positional Tracking parameters
   * area-file-path
   * enable-area-memory
@@ -26,9 +34,6 @@ Improved Depth Handling and new `zedsrc` parameters(2021-01-29)
 - New Object Detection parameters
   * od-max-range
   * od-body-fitting
-
-Name fixes (2021-01-18)
------------------------
 - Change parameters names in `zedsrc` to match the names in the ZED SDK:
   * resolution -> camera-resolution
   * framerate -> camera-fps
@@ -36,6 +41,7 @@ Name fixes (2021-01-18)
   * object-detection-image-sync -> od-image-sync
   * object-detection-tracking -> od-enable-tracking
   * object-detection-confidence -> od-confidence
+
 
 ZED SDK v3.4
 -------------

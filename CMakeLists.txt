@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION "3.6")
 
-set(proj_name gst-plugins-zed)
-project(${proj_name})
+project(gst-plugins-zed)
 
 set(CMAKE_SHARED_MODULE_PREFIX "lib")
 set(CMAKE_SHARED_LIBRARY_PREFIX "lib")
@@ -46,7 +45,7 @@ include_directories(
     )
 
 # values used when registering plugins
-add_definitions(-DGST_PACKAGE_VERSION="0.1")
+add_definitions(-DGST_PACKAGE_VERSION="3.5")
 add_definitions(-DGST_PACKAGE_LICENSE="LGPL")
 add_definitions(-DGST_PACKAGE_ORIGIN="https://github.com/stereolabs/zed-gstreamer")
 add_definitions(-DGST_PACKAGE_NAME="${CMAKE_PROJECT_NAME}")
