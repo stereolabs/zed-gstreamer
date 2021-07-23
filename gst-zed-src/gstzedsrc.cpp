@@ -1733,6 +1733,13 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     // <---- Camera Controls
 
     // ----> Set runtime parameters
+    /*
+    src->zedRtParams members are all '0' now.
+    textureness_confidence_threshold is still active, even if designated as 'deprecated'.
+    construct a new one with default values before setting it below.
+    */
+    sl::RuntimeParameters runtime_parameters;
+    src->zedRtParams = runtime_parameters;
     GST_INFO("CAMERA RUNTIME PARAMETERS");
     if( src->depth_mode==static_cast<gint>(sl::DEPTH_MODE::NONE)
             && !src->pos_tracking)
@@ -1747,7 +1754,9 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     src->zedRtParams.confidence_threshold = src->confidence_threshold;
     GST_INFO(" * Depth Confidence threshold: %d", src->zedRtParams.confidence_threshold);
     src->zedRtParams.texture_confidence_threshold = src->texture_confidence_threshold;
+    src->zedRtParams.textureness_confidence_threshold = src->texture_confidence_threshold;
     GST_INFO(" * Depth Texture Confidence threshold: %d", src->zedRtParams.texture_confidence_threshold );
+    GST_INFO(" * Depth Textureness Confidence threshold: %d", src->zedRtParams.textureness_confidence_threshold );
     src->zedRtParams.measure3D_reference_frame = static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
     GST_INFO(" * 3D Reference Frame: %s",  sl::toString(src->zedRtParams.measure3D_reference_frame).c_str());
     src->zedRtParams.sensing_mode = static_cast<sl::SENSING_MODE>(src->sensing_mode);
