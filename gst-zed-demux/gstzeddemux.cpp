@@ -27,6 +27,8 @@
 #include "gstzeddemux.h"
 #include "gst-zed-meta/gstzedmeta.h"
 
+#include <stdio.h>
+
 GST_DEBUG_CATEGORY_STATIC (gst_zeddemux_debug);
 #define GST_CAT_DEFAULT gst_zeddemux_debug
 
@@ -633,7 +635,10 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
 
                 for (unsigned long i = 0; i < map_out_aux.size/(sizeof(guint16)); i++)
                 {
-                    *(gst_out_data++) = static_cast<guint16>(*(gst_in_data++));
+                    float depth = static_cast<float>(*(gst_in_data++));
+                    *(gst_out_data++) = static_cast<guint16>(depth);
+
+                    //printf( "#%lu: %g / %u %u \n", i, depth, *(gst_out_data-1), *(gst_in_data-1));
                 }
             }
 

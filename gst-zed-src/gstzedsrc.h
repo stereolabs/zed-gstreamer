@@ -43,7 +43,7 @@ struct _GstZedSrc
 
     // ZED camera object
     sl::Camera zed;
-    sl::RuntimeParameters zedRtParams; // runtime parameters
+
 
     gboolean is_started; // grab started flag
 
@@ -111,8 +111,6 @@ struct _GstZedSrc
     gint whitebalance_temperature;
     gboolean whitebalance_temperature_auto;
     gboolean led_status;
-
-
     // <---- Properties
 
     GstClockTime acq_start_time;
