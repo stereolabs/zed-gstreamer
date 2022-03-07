@@ -59,7 +59,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of several plu
 
 #### Install prerequisites
 
-* Install the latest ZED SDK v3.4.x from the [official download page](https://www.stereolabs.com/developers/release/)
+* Install the latest ZED SDK v3.5.x from the [official download page](https://www.stereolabs.com/developers/release/)
 
 * Update list of `apt` available packages
 
