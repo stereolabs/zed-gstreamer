@@ -178,7 +178,7 @@ typedef enum {
 //#define DEFAULT_PROP_RIGHT_DEPTH              FALSE
 
 // RUNTIME
-#define DEFAULT_PROP_CONFIDENCE_THRESH          80
+#define DEFAULT_PROP_CONFIDENCE_THRESH          50
 #define DEFAULT_PROP_TEXTURE_CONF_THRESH        100
 #define DEFAULT_PROP_3D_REF_FRAME               static_cast<gint>(sl::REFERENCE_FRAME::WORLD)
 #define DEFAULT_PROP_SENSING_MODE               static_cast<gint>(sl::SENSING_MODE::STANDARD)
@@ -447,6 +447,9 @@ static GType gst_zedsrc_depth_mode_get_type (void)
 
     if (!zedsrc_depth_mode_type) {
         static GEnumValue pattern_types[] = {
+            { static_cast<gint>(sl::DEPTH_MODE::NEURAL),
+              "End to End Neural disparity estimation, requires AI module",
+              "NEURAL" },
             { static_cast<gint>(sl::DEPTH_MODE::ULTRA),
               "Computation mode favorising edges and sharpness. Requires more GPU memory and computation power.",
               "ULTRA" },
@@ -1732,27 +1735,23 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     GST_INFO(" * LED_STATUS: %s", (src->led_status?"ON":"OFF"));
     // <---- Camera Controls
 
-    // ----> Set runtime parameters
+    // ----> Runtime parameters
     GST_INFO("CAMERA RUNTIME PARAMETERS");
     if( src->depth_mode==static_cast<gint>(sl::DEPTH_MODE::NONE)
             && !src->pos_tracking)
     {
-        src->zedRtParams.enable_depth = false;
+        GST_INFO(" * Depth calculation: ON" );
     }
     else
     {
-        src->zedRtParams.enable_depth = true;
+        GST_INFO(" * Depth calculation: OFF" );
     }
-    GST_INFO(" * Depth calculation: %s", (src->zedRtParams.enable_depth?"ON":"OFF"));
-    src->zedRtParams.confidence_threshold = src->confidence_threshold;
-    GST_INFO(" * Depth Confidence threshold: %d", src->zedRtParams.confidence_threshold);
-    src->zedRtParams.texture_confidence_threshold = src->texture_confidence_threshold;
-    GST_INFO(" * Depth Texture Confidence threshold: %d", src->zedRtParams.texture_confidence_threshold );
-    src->zedRtParams.measure3D_reference_frame = static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
-    GST_INFO(" * 3D Reference Frame: %s",  sl::toString(src->zedRtParams.measure3D_reference_frame).c_str());
-    src->zedRtParams.sensing_mode = static_cast<sl::SENSING_MODE>(src->sensing_mode);
-    GST_INFO(" * Sensing Mode: %s",  sl::toString(src->zedRtParams.sensing_mode).c_str());
-    // <---- Set runtime parameters
+
+    GST_INFO(" * Depth Confidence threshold: %d", src->confidence_threshold);
+    GST_INFO(" * Depth Texture Confidence threshold: %d", src->texture_confidence_threshold );
+    GST_INFO(" * 3D Reference Frame: %s",  sl::toString((sl::COORDINATE_SYSTEM)src->measure3D_reference_frame).c_str());
+    GST_INFO(" * Sensing Mode: %s",  sl::toString((sl::SENSING_MODE)src->sensing_mode).c_str());
+    // <---- Runtime parameters
 
     // ----> Positional tracking
     GST_INFO("POSITIONAL TRACKING PARAMETERS");
@@ -1931,8 +1930,27 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         src->is_started = TRUE;
     }
 
+    // ----> Set runtime parameters
+    sl::RuntimeParameters zedRtParams; // runtime parameters
+
+    GST_INFO("CAMERA RUNTIME PARAMETERS");
+    if( src->depth_mode==static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking)
+    {
+        zedRtParams.enable_depth = false;
+    }
+    else
+    {
+        zedRtParams.enable_depth = true;
+    }
+    zedRtParams.confidence_threshold = src->confidence_threshold;
+    zedRtParams.texture_confidence_threshold = src->texture_confidence_threshold;
+    zedRtParams.measure3D_reference_frame = static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
+    zedRtParams.sensing_mode = static_cast<sl::SENSING_MODE>(src->sensing_mode);
+    zedRtParams.remove_saturated_areas = true;
+    // <---- Set runtime parameters
+
     // ----> ZED grab
-    ret = src->zed.grab(src->zedRtParams);
+    ret = src->zed.grab(zedRtParams);
 
     if( ret!=sl::ERROR_CODE::SUCCESS )
     {
@@ -1981,12 +1999,14 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU );
 #else
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU );
+        //depth_data.write( "test_depth_16.png" );
 #endif
     }
     else if(src->stream_type== GST_ZEDSRC_LEFT_DEPTH)
     {
         ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU );
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU );
+        //depth_data.write( "test_depth_32.png" );
     }
 
     if( ret!=sl::ERROR_CODE::SUCCESS )
@@ -2034,6 +2054,8 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
 
         for (unsigned long i = 0; i < minfo.size/8; i++) {
             *(gst_data++) = static_cast<uint32_t>(*(depthDataPtr++));
+
+            //printf( "#%lu: %u / %g %u \n", i, *(gst_data-1), *(depthDataPtr-1), static_cast<uint32_t>(*(depthDataPtr-1)));
         }
     }
     else
