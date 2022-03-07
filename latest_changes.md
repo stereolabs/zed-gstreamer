@@ -1,6 +1,11 @@
 LATEST CHANGES
 ==============
 
+ZED SDK v3.7
+-------------
+- Fix issue with texture confidence threshold invalidating th edepth map
+- Add support for NEURAL depth mode
+
 ZED SDK v3.5
 -------------
 - Add compatibility fix for ZED SDK v3.5
