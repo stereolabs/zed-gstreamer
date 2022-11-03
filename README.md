@@ -135,7 +135,11 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `depth-maximum-distance`: Maximum depth value
  * `depth-mode`: Depth Mode - {NONE (0), PERFORMANCE (1), QUALITY (2), ULTRA (3)}
  * `coordinate-system`: 3D Coordinate System - {Image (0) - Left handed, Y up (1) - Right handed, Y up (2) - Right handed, Z up (3) - Left handed, Z up (4) - Right handed, Z up, X fwd (5)}
- * `camera-disable-self-calib`: Disable the self calibration processing when the camera is opened - {TRUE, FALSE}
+ * `roi`: Enable region of interest for SDK to focus on - {TRUE, FALSE}
+ * `roi-x`: Region of interest focus left 'X' coordinate (-1 to not set ROI) - {-1,2208}
+ * `roi-y`: Region of interest focus left 'Y' coordinate (-1 to not set ROI) - {-1,1242}
+ * `roi-w`: Region of interest focus height (-1 to not set ROI) - {-1,2208}
+ * `roi-h`: Region of interest focus height (-1 to not set ROI) - {-1,1242}
  * `depth-stabilization`: Enable depth stabilization - {TRUE, FALSE}
  * `confidence-threshold`: Specify the Depth Confidence Threshold - [0,100]
  * `texture-confidence-threshold`: Specify the Texture Confidence Threshold - [0,100]
@@ -148,6 +152,8 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `enable-imu-fusion`: This setting allows you to enable or disable IMU fusion. When set to false, only the optical odometry will be used - {TRUE, FALSE}
  * `enable-pose-smoothing`: This mode enables smooth pose correction for small drift correction - {TRUE, FALSE}
  * `set-floor-as-origin`: This mode initializes the tracking to be aligned with the floor plane to better position the camera in space.
+ * `set-gravity-as-origin`: This mode initializes the tracking to override 2 of the 3 rotations from initial-world-transform using IMU gravity default: true - {TRUE, FALSE}
+ * `pos-depth-min-range`: Sets the minimum depth used by the SDK for positional tracking (-1 for no minimum depth) - {-1, 65535} 
  * `initial-world-transform-x`: X position of the camera in the world frame when the camera is started.
  * `initial-world-transform-y`: Y position of the camera in the world frame when the camera is started.
  * `initial-world-transform-z`: Z position of the camera in the world frame when the camera is started.
@@ -161,6 +167,8 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `od-confidence`: Minimum Detection Confidence - {0,100}
  * `od-max-range`: Maximum Detection Range - [-1,20000]
  * `od-body-fitting`: Set to TRUE to enable body fitting for skeleton tracking - {TRUE, FALSE}
+ * `od-prediction-timeout-s`: Timeout when an object is not detected anymore for the SDK to predict its position for a short period before its state switched to SEARCHING (sec)
+ * `od-allow-reduced-precision-inference`: Runs inference at a lower precision to improve runtime and memory usage - {TRUE, FALSE} 
  * `brightness`: Image brightness - {0,8}
  * `contrast`: Image contrast - {0,8}
  * `hue`: Image hue - {0,11}
