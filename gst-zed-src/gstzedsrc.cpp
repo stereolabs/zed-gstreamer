@@ -2313,14 +2313,15 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     }
     // <---- Object detection metadata
 
-    gst_buffer_add_zed_src_meta( buf, info, pose, sens, src->object_detection, obj_count, obj_data);
-
     // ----> Timestamp meta-data
     GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF (gst_element_get_base_time (GST_ELEMENT (src)),
                                                 clock_time);
     GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
     // <---- Timestamp meta-data
+
+    guint64 offset = GST_BUFFER_OFFSET(buf);
+    GstZedSrcMeta* meta = gst_buffer_add_zed_src_meta( buf, info, pose, sens, src->object_detection, obj_count, obj_data, offset);
 
     // Buffer release
     gst_buffer_unmap( buf, &minfo );

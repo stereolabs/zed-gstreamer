@@ -123,7 +123,8 @@ static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
                                  emeta->sens,
                                  emeta->od_enabled,
                                  emeta->obj_count,
-                                 emeta->objects );
+                                 emeta->objects, 
+                                 emeta->frame_id);
 
 
     return TRUE;
@@ -162,7 +163,8 @@ GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
                                             ZedSensors& sens,
                                             gboolean od_enabled,
                                             guint8 obj_count,
-                                            ZedObjectData* objects)
+                                            ZedObjectData* objects,
+                                            guint64 frame_id)
 {
     GST_TRACE( "gst_buffer_add_zed_src_meta" );
 
@@ -182,6 +184,8 @@ GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
     meta->obj_count = obj_count;
 
     memcpy( &meta->objects, objects, obj_count*sizeof(ZedObjectData));
+
+    meta->frame_id = frame_id;
 
     return meta;
 }
