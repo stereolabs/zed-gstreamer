@@ -1894,16 +1894,19 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 		src->roi_w != -1 && 
 		src->roi_h != -1) {	    
 	    int roi_x_end = src->roi_x + src->roi_w;
-	    int roi_y_end = src->roi_y + src->roi_y;
+	    int roi_y_end = src->roi_y + src->roi_h;
 	    sl::Resolution resolution = sl::getResolution(init_params.camera_resolution);
 	    if (src->roi_x < 0 || src->roi_x >= resolution.width ||
 		    src->roi_y < 0 || src->roi_y >= resolution.height ||
 		    roi_x_end >= resolution.width || roi_y_end >= resolution.height) {
-		sl::Mat roi_mask(resolution, sl::MAT_TYPE::U8_C1);
-		roi_mask.setTo(0.f);
-		for (int i = src->roi_x; i < roi_x_end; i++) 
-		    for (int j = src->roi_y; j < roi_y_end; j++)
-			roi_mask.setValue(i, j, 1.f);
+
+		sl::uchar1 uint0 = 0;
+		sl::uchar1 uint1 = 1;
+		sl::Mat roi_mask(resolution, sl::MAT_TYPE::U8_C1, sl::MEM::CPU);
+		roi_mask.setTo(uint0);
+		for (int row = src->roi_y; row < roi_y_end; row++)
+		    for (int col = src->roi_y; col < roi_x_end; col++)
+		        roi_mask.setValue(col, row, uint1);
 		
 		GST_INFO(" * ROI mask: (%d,%d)-%dx%d",
 			src->roi_x, src->roi_y, src->roi_w, src->roi_h);
@@ -1945,12 +1948,25 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 
         sl::Translation init_pos(src->init_pose_x,src->init_pose_y, src->init_pose_z);
         sl::Rotation init_or;
-        init_or.setEulerAngles( sl::float3(src->init_orient_roll,src->init_orient_pitch,src->init_orient_yaw), false);
-        pos_trk_params.initial_world_transform = sl::Transform(init_or,init_pos);
+	switch (init_params.coordinate_system) {
+	    case sl::COORDINATE_SYSTEM::IMAGE:
+	    case sl::COORDINATE_SYSTEM::LEFT_HANDED_Y_UP:
+	    case sl::COORDINATE_SYSTEM::RIGHT_HANDED_Y_UP:
+                init_or.setEulerAngles( sl::float3(src->init_orient_pitch,src->init_orient_yaw,src->init_orient_roll), false);
+		break;
+	    case sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP:
+		init_or.setEulerAngles( sl::float3(src->init_orient_pitch,src->init_orient_roll,src->init_orient_yaw), false);
+		break;
+	    case sl::COORDINATE_SYSTEM::LEFT_HANDED_Z_UP:
+	    case sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD:
+		init_or.setEulerAngles( sl::float3(src->init_orient_roll,src->init_orient_pitch,src->init_orient_yaw), false);
+		break;
+	}
+
+	pos_trk_params.initial_world_transform = sl::Transform(init_or,init_pos);
         GST_INFO(" * Initial world transform: T(%g,%g,%g) OR(%g,%g,%g)",
                  src->init_pose_x,src->init_pose_y, src->init_pose_z,
                  src->init_orient_roll,src->init_orient_pitch,src->init_orient_yaw);
-
 
         ret = src->zed.enablePositionalTracking(pos_trk_params);
         if (ret!=sl::ERROR_CODE::SUCCESS) {
