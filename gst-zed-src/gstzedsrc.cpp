@@ -156,7 +156,9 @@ typedef enum {
     GST_ZEDSRC_OD_HUMAN_BODY_FAST = 2,
     GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE  = 3,
     GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM = 4,
-    GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM  = 5
+    GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM  = 5,
+    GST_ZEDSRC_OD_PERSON_HEAD_BOX = 6,
+    GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE = 7,
 } GstZedSrcOdModel;
 
 typedef enum {
@@ -448,6 +450,12 @@ static GType gst_zedsrc_od_model_get_type (void)
             { GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM,
               "Keypoints based, specific to human skeleton, compromise between accuracy and speed",
               "Skeleton tracking MEDIUM"  },
+            { GST_ZEDSRC_OD_PERSON_HEAD_BOX ,
+              "Bounding Box detector specialized in person heads, particulary well suited for crowded environments, the person localization is also improved",
+              "Person Head"  },
+            { GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE ,
+              "Bounding Box detector specialized in person heads, particulary well suited for crowded environments, the person localization is also improved, more accurate but slower than the base model",
+              "Person Head ACCURATE"  },
             { 0, NULL, NULL },
         };
 

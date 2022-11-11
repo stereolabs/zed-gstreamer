@@ -13,6 +13,7 @@ ZED SDK v3.8
 - Add `od-prediction-timeout-s` parameter [Thx @ryanppeters]
 - Add `od-allow-reduced-precision-inference` parameter [Thx @ryanppeters]
 - Add new field `frame_id` to `GstZedSrcMeta`  in order to track the meta/buffer throughout the GStreamer pipeline (when working with source code) [Thx @ryanppeters]
+- Add support for new Object Detection models in `od-detection-model` (Person Head and Person Head ACCURATE)
 
 ZED SDK v3.7
 -------------
