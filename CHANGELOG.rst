@@ -1,9 +1,22 @@
 LATEST CHANGES
 ==============
 
+ZED SDK v3.8
+-------------
+- Add support for Region of Interest [Thx @ryanppeters]
+  * Add `roi` parameter
+  * Add `roi-x` parameter
+  * Add `roi-y` parameter
+  * Add `roi-w` parameter
+  * Add `roi-h` parameter
+- Add `set-gravity-as-origin` parameter [Thx @ryanppeters] 
+- Add `od-prediction-timeout-s` parameter [Thx @ryanppeters]
+- Add `od-allow-reduced-precision-inference` parameter [Thx @ryanppeters]
+- Add new field `frame_id` to `GstZedSrcMeta`  in order to track the meta/buffer throughout the GStreamer pipeline (when working with source code) [Thx @ryanppeters]
+
 ZED SDK v3.7
 -------------
-- Fix issue with texture confidence threshold invalidating th edepth map
+- Fix issue with texture confidence threshold invalidating the depth map
 - Add support for NEURAL depth mode
 
 ZED SDK v3.5

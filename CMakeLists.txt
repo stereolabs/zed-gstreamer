@@ -135,7 +135,7 @@ endif()
 
 ####################################################################
 # USEFUL FILES
-FILE(GLOB_RECURSE doc_files ${CMAKE_SOURCE_DIR}/*.md)
+FILE(GLOB_RECURSE doc_files ${CMAKE_SOURCE_DIR}/*.md ${CMAKE_SOURCE_DIR}/*.rst)
 add_custom_target("DOCS" SOURCES ${doc_files})
 FILE(GLOB_RECURSE script_files ${CMAKE_SOURCE_DIR}/scripts/*)
 add_custom_target("SCRIPTS" SOURCES ${script_files})
