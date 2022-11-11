@@ -560,7 +560,8 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                                              meta->sens,
                                              meta->od_enabled,
                                              meta->obj_count,
-                                             meta->objects );
+                                             meta->objects,
+                                             meta->frame_id );
             }
 
             GST_TRACE ("Left buffer set timestamp" );
@@ -651,7 +652,8 @@ static GstFlowReturn gst_zeddemux_chain(GstPad* pad, GstObject * parent, GstBuff
                                              meta->sens,
                                              meta->od_enabled,
                                              meta->obj_count,
-                                             meta->objects );
+                                             meta->objects,
+                                             meta->frame_id );
             }
 
             GST_TRACE ("Aux buffer set timestamp" );

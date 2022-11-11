@@ -63,6 +63,11 @@ enum
     PROP_DEPTH_MAX,
     PROP_DEPTH_MODE,
     PROP_DIS_SELF_CALIB,
+    PROP_ROI,
+    PROP_ROI_X,
+    PROP_ROI_Y,
+    PROP_ROI_W,
+    PROP_ROI_H,
     //PROP_RIGHT_DEPTH_ENABLE,
     PROP_DEPTH_STAB,
     PROP_CONFIDENCE_THRESH,
@@ -76,6 +81,8 @@ enum
     PROP_POS_ENABLE_IMU_FUSION,
     PROP_POS_ENABLE_POSE_SMOOTHING,
     PROP_POS_SET_FLOOR_AS_ORIGIN,
+    PROP_POS_SET_GRAVITY_AS_ORIGIN,
+    PROP_POS_DEPTH_MIN_RANGE,
     PROP_POS_INIT_X,
     PROP_POS_INIT_Y,
     PROP_POS_INIT_Z,
@@ -91,6 +98,8 @@ enum
     PROP_OD_CONFIDENCE,
     PROP_OD_MAX_RANGE,
     PROP_OD_BODY_FITTING,
+    PROP_OD_PREDICTION_TIMEOUT_S,
+    PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE,
     PROP_BRIGHTNESS,
     PROP_CONTRAST,
     PROP_HUE,
@@ -147,7 +156,9 @@ typedef enum {
     GST_ZEDSRC_OD_HUMAN_BODY_FAST = 2,
     GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE  = 3,
     GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM = 4,
-    GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM  = 5
+    GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM  = 5,
+    GST_ZEDSRC_OD_PERSON_HEAD_BOX = 6,
+    GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE = 7,
 } GstZedSrcOdModel;
 
 typedef enum {
@@ -176,6 +187,11 @@ typedef enum {
 #define DEFAULT_PROP_DIS_SELF_CALIB             FALSE
 #define DEFAULT_PROP_DEPTH_STAB                 TRUE
 //#define DEFAULT_PROP_RIGHT_DEPTH              FALSE
+#define DEFAULT_PROP_ROI			FALSE
+#define DEFAULT_PROP_ROI_X			-1
+#define DEFAULT_PROP_ROI_Y			-1
+#define DEFAULT_PROP_ROI_W			-1
+#define DEFAULT_PROP_ROI_H			-1
 
 // RUNTIME
 #define DEFAULT_PROP_CONFIDENCE_THRESH          50
@@ -191,6 +207,8 @@ typedef enum {
 #define DEFAULT_PROP_POS_ENABLE_IMU_FUSION      TRUE
 #define DEFAULT_PROP_POS_ENABLE_POSE_SMOOTHING  TRUE
 #define DEFAULT_PROP_POS_SET_FLOOR_AS_ORIGIN    FALSE
+#define DEFAULT_PROP_POS_SET_GRAVITY_AS_ORIGIN	TRUE
+#define DEFAULT_PROP_POS_DEPTH_MIN_RANGE	-1.0
 #define DEFAULT_PROP_POS_INIT_X                 0.0
 #define DEFAULT_PROP_POS_INIT_Y                 0.0
 #define DEFAULT_PROP_POS_INIT_Z                 0.0
@@ -207,6 +225,8 @@ typedef enum {
 #define DEFAULT_PROP_OD_CONFIDENCE              50.0
 #define DEFAULT_PROP_OD_MAX_RANGE               DEFAULT_PROP_DEPTH_MAX
 #define DEFAULT_PROP_OD_BODY_FITTING            TRUE
+#define DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S	0.2
+#define DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE	FALSE
 
 // CAMERA CONTROLS
 #define DEFAULT_PROP_BRIGHTNESS                 4
@@ -430,6 +450,12 @@ static GType gst_zedsrc_od_model_get_type (void)
             { GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM,
               "Keypoints based, specific to human skeleton, compromise between accuracy and speed",
               "Skeleton tracking MEDIUM"  },
+            { GST_ZEDSRC_OD_PERSON_HEAD_BOX ,
+              "Bounding Box detector specialized in person heads, particulary well suited for crowded environments, the person localization is also improved",
+              "Person Head"  },
+            { GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE ,
+              "Bounding Box detector specialized in person heads, particulary well suited for crowded environments, the person localization is also improved, more accurate but slower than the base model",
+              "Person Head ACCURATE"  },
             { 0, NULL, NULL },
         };
 
@@ -750,8 +776,35 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                        "3D Coordinate System", GST_TYPE_ZED_COORD_SYS,
                                                        DEFAULT_PROP_COORD_SYS,
                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    
+    g_object_class_install_property( gobject_class, PROP_ROI,
+                                     g_param_spec_boolean("roi", "Region of interest",
+                                                          "Enable region of interest filtering", DEFAULT_PROP_ROI,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property( gobject_class, PROP_ROI_X,
+                                     g_param_spec_int("roi-x", "Region of interest top left 'X' coordinate",
+                                                      "Region of interest top left 'X' coordinate (-1 to not set ROI)",
+                                                      -1, 2208, DEFAULT_PROP_ROI_X,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property( gobject_class, PROP_ROI_Y,
+                                     g_param_spec_int("roi-y", "Region of interest top left 'Y' coordinate",
+                                                      "Region of interest top left 'Y' coordinate (-1 to not set ROI)",
+                                                      -1, 1242, DEFAULT_PROP_ROI_Y,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_ROI_W,
+                                     g_param_spec_int("roi-w", "Region of interest width",
+                                                      "Region of intererst width (-1 to not set ROI)",
+                                                      -1, 2208, DEFAULT_PROP_ROI_W,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_ROI_H,
+                                     g_param_spec_int("roi-h", "Region of interest height",
+                                                      "Region of interest height (-1 to not set ROI)",
+                                                      -1, 1242, DEFAULT_PROP_ROI_H,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property( gobject_class, PROP_CONFIDENCE_THRESH,
                                      g_param_spec_int("confidence-threshold", "Depth Confidence Threshold",
@@ -828,6 +881,20 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           DEFAULT_PROP_POS_SET_FLOOR_AS_ORIGIN,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property( gobject_class, PROP_POS_SET_GRAVITY_AS_ORIGIN,
+                                     g_param_spec_boolean("set-gravity-as-origin", "Set gravity as pose origin",
+                                                          "This setting allows you to override of 2 of the 3 rotations from"
+                                                          "initial-world-transform using the IMU gravity default: true",
+                                                          DEFAULT_PROP_POS_SET_GRAVITY_AS_ORIGIN,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_POS_DEPTH_MIN_RANGE,
+                                     g_param_spec_float("pos-depth-min-range", "Set depth minimum range",
+                                                          "This setting allows you to change the minmum depth used by the"
+                                                          "SDK for Positional Tracking.",
+                                                          -1, 65535, DEFAULT_PROP_POS_DEPTH_MIN_RANGE,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property( gobject_class, PROP_POS_INIT_X,
                                      g_param_spec_float("initial-world-transform-x",
                                                         "Initial X coordinate",
@@ -877,6 +944,7 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
 
+
     g_object_class_install_property( gobject_class, PROP_OD_ENABLE,
                                      g_param_spec_boolean("od-enabled", "Object Detection enable",
                                                           "Set to TRUE to enable Object Detection",
@@ -924,6 +992,18 @@ static void gst_zedsrc_class_init (GstZedSrcClass * klass)
                                                           "Set to TRUE to enable body fitting for skeleton tracking",
                                                           DEFAULT_PROP_OD_BODY_FITTING,
                                                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    
+    g_object_class_install_property( gobject_class, PROP_OD_PREDICTION_TIMEOUT_S,
+                                     g_param_spec_float("od-prediction-timeout-s", "Object detection prediction timeout (sec)",
+                                                        "Object prediction timeout (sec)", 0.0f, 1.0f, DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S,
+                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property( gobject_class, PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE,
+                                     g_param_spec_boolean("od-allow-reduced-precision-inference", "Allow inference at reduced precision",
+                                                          "Set to TRUE to allow inference to run at a lower precision to improve runtime",
+                                                          DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE,
+                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
 
     g_object_class_install_property( gobject_class, PROP_BRIGHTNESS,
                                      g_param_spec_int("brightness", "Camera control: brightness",
@@ -1049,6 +1129,11 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->texture_confidence_threshold = DEFAULT_PROP_TEXTURE_CONF_THRESH;
     src->measure3D_reference_frame = DEFAULT_PROP_3D_REF_FRAME;
     src->sensing_mode = DEFAULT_PROP_SENSING_MODE;
+    src->roi = DEFAULT_PROP_ROI;
+    src->roi_x = DEFAULT_PROP_ROI_X;
+    src->roi_y = DEFAULT_PROP_ROI_Y;
+    src->roi_w = DEFAULT_PROP_ROI_W;
+    src->roi_h = DEFAULT_PROP_ROI_H;
 
     src->pos_tracking = DEFAULT_PROP_POS_TRACKING;
     src->camera_static = DEFAULT_PROP_CAMERA_STATIC;
@@ -1057,6 +1142,8 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->enable_imu_fusion = DEFAULT_PROP_POS_ENABLE_IMU_FUSION;
     src->enable_pose_smoothing = DEFAULT_PROP_POS_ENABLE_POSE_SMOOTHING;
     src->set_floor_as_origin = DEFAULT_PROP_POS_SET_FLOOR_AS_ORIGIN;
+    src->set_gravity_as_origin = DEFAULT_PROP_POS_SET_GRAVITY_AS_ORIGIN;
+    src->depth_min_range = DEFAULT_PROP_POS_DEPTH_MIN_RANGE;
     src->init_pose_x = DEFAULT_PROP_POS_INIT_X;
     src->init_pose_y = DEFAULT_PROP_POS_INIT_Y;
     src->init_pose_z = DEFAULT_PROP_POS_INIT_Z;
@@ -1072,6 +1159,8 @@ static void gst_zedsrc_init (GstZedSrc * src)
     src->od_det_conf = DEFAULT_PROP_OD_CONFIDENCE;
     src->od_max_range = DEFAULT_PROP_OD_MAX_RANGE;
     src->od_body_fitting = DEFAULT_PROP_OD_BODY_FITTING;
+    src->od_prediction_timeout_s = DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S;
+    src->od_allow_reduced_precision_inference = DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE;
 
     src->brightness = DEFAULT_PROP_BRIGHTNESS;
     src->contrast = DEFAULT_PROP_CONTRAST;
@@ -1172,6 +1261,21 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
     case PROP_SENSING_MODE:
         src->sensing_mode = g_value_get_enum(value);
         break;
+    case PROP_ROI:
+        src->roi = g_value_get_boolean(value);
+        break;
+    case PROP_ROI_X:
+        src->roi_x = g_value_get_int(value);
+        break;
+    case PROP_ROI_Y:
+        src->roi_y = g_value_get_int(value);
+        break;
+    case PROP_ROI_W:
+        src->roi_w = g_value_get_int(value);
+        break;
+    case PROP_ROI_H:
+        src->roi_h = g_value_get_int(value);
+        break;
     case PROP_POS_TRACKING:
         src->pos_tracking = g_value_get_boolean(value);
         break;
@@ -1193,6 +1297,12 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
         break;
     case PROP_POS_ENABLE_POSE_SMOOTHING:
         src->enable_pose_smoothing = g_value_get_boolean(value);
+        break;
+    case PROP_POS_SET_GRAVITY_AS_ORIGIN:
+        src->set_gravity_as_origin = g_value_get_boolean(value);
+        break;
+    case PROP_POS_DEPTH_MIN_RANGE:
+        src->depth_min_range = g_value_get_float(value);
         break;
     case PROP_POS_INIT_X:
         src->init_pose_x = g_value_get_float(value);
@@ -1235,6 +1345,12 @@ void gst_zedsrc_set_property (GObject * object, guint property_id,
         break;
     case PROP_OD_BODY_FITTING:
         src->od_body_fitting = g_value_get_boolean(value);
+        break;
+    case PROP_OD_PREDICTION_TIMEOUT_S:
+        src->od_prediction_timeout_s = g_value_get_float(value);
+        break;
+    case PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE:
+        src->od_allow_reduced_precision_inference = g_value_get_boolean(value);
         break;
     case PROP_BRIGHTNESS:
         src->brightness = g_value_get_int(value);
@@ -1366,6 +1482,21 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
     case PROP_SENSING_MODE:
         g_value_set_enum( value, src->sensing_mode);
         break;
+    case PROP_ROI:
+        g_value_set_boolean( value, src->roi);
+        break;
+    case PROP_ROI_X:
+        g_value_set_int( value, src->roi_x);
+        break;
+    case PROP_ROI_Y:
+        g_value_set_int( value, src->roi_y);
+        break;
+    case PROP_ROI_W:
+        g_value_set_int( value, src->roi_w);
+        break;
+    case PROP_ROI_H:
+        g_value_set_int( value, src->roi_h);
+        break;
     case PROP_POS_TRACKING:
         g_value_set_boolean( value, src->pos_tracking );
         break;
@@ -1386,6 +1517,12 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
         break;
     case PROP_POS_ENABLE_POSE_SMOOTHING:
         g_value_set_boolean( value, src->enable_pose_smoothing );
+        break;
+    case PROP_POS_SET_GRAVITY_AS_ORIGIN:
+        g_value_set_boolean( value, src->set_gravity_as_origin);
+        break;
+    case PROP_POS_DEPTH_MIN_RANGE:
+        g_value_set_float( value, src->depth_min_range);
         break;
     case PROP_POS_INIT_X:
         g_value_set_float( value, src->init_pose_x );
@@ -1428,6 +1565,12 @@ gst_zedsrc_get_property (GObject * object, guint property_id,
         break;
     case PROP_OD_BODY_FITTING:
         g_value_set_boolean( value, src->od_body_fitting );
+        break;
+    case PROP_OD_PREDICTION_TIMEOUT_S:
+        g_value_set_float( value, src->od_prediction_timeout_s);
+        break;
+    case PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE:
+        g_value_set_boolean( value, src->od_allow_reduced_precision_inference);
         break;
 
     case PROP_BRIGHTNESS:
@@ -1751,6 +1894,40 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     GST_INFO(" * Depth Texture Confidence threshold: %d", src->texture_confidence_threshold );
     GST_INFO(" * 3D Reference Frame: %s",  sl::toString((sl::COORDINATE_SYSTEM)src->measure3D_reference_frame).c_str());
     GST_INFO(" * Sensing Mode: %s",  sl::toString((sl::SENSING_MODE)src->sensing_mode).c_str());
+
+
+    if (src->roi) {
+	if (src->roi_x != -1 && 
+		src->roi_y != -1 && 
+		src->roi_w != -1 && 
+		src->roi_h != -1) {	    
+	    int roi_x_end = src->roi_x + src->roi_w;
+	    int roi_y_end = src->roi_y + src->roi_h;
+	    sl::Resolution resolution = sl::getResolution(init_params.camera_resolution);
+	    if (src->roi_x < 0 || src->roi_x >= resolution.width ||
+		    src->roi_y < 0 || src->roi_y >= resolution.height ||
+		    roi_x_end >= resolution.width || roi_y_end >= resolution.height) {
+
+		sl::uchar1 uint0 = 0;
+		sl::uchar1 uint1 = 1;
+		sl::Mat roi_mask(resolution, sl::MAT_TYPE::U8_C1, sl::MEM::CPU);
+		roi_mask.setTo(uint0);
+		for (int row = src->roi_y; row < roi_y_end; row++)
+		    for (int col = src->roi_y; col < roi_x_end; col++)
+		        roi_mask.setValue(col, row, uint1);
+		
+		GST_INFO(" * ROI mask: (%d,%d)-%dx%d",
+			src->roi_x, src->roi_y, src->roi_w, src->roi_h);
+
+		ret = src->zed.setRegionOfInterest(roi_mask);
+		if (ret!=sl::ERROR_CODE::SUCCESS) {
+		    GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
+				    ("Failed to set region of interest, '%s'", sl::toString(ret).c_str() ), (NULL));
+		    return FALSE;
+		} 
+	    }
+	}
+    }
     // <---- Runtime parameters
 
     // ----> Positional tracking
@@ -1772,15 +1949,32 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         GST_INFO(" * Pose smoothing: %s", (pos_trk_params.enable_pose_smoothing?"TRUE":"FALSE"));
         pos_trk_params.set_floor_as_origin = (src->set_floor_as_origin==TRUE);
         GST_INFO(" * Floor as origin: %s", (pos_trk_params.set_floor_as_origin?"TRUE":"FALSE"));
+        pos_trk_params.set_gravity_as_origin = (src->set_gravity_as_origin==TRUE);
+        GST_INFO(" * Gravity as origin: %s", (pos_trk_params.set_gravity_as_origin?"TRUE":"FALSE"));
+        pos_trk_params.depth_min_range = src->depth_min_range;
+        GST_INFO(" * Depth min range: %f", (pos_trk_params.depth_min_range));
 
         sl::Translation init_pos(src->init_pose_x,src->init_pose_y, src->init_pose_z);
         sl::Rotation init_or;
-        init_or.setEulerAngles( sl::float3(src->init_orient_roll,src->init_orient_pitch,src->init_orient_yaw), false);
-        pos_trk_params.initial_world_transform = sl::Transform(init_or,init_pos);
+	switch (init_params.coordinate_system) {
+	    case sl::COORDINATE_SYSTEM::IMAGE:
+	    case sl::COORDINATE_SYSTEM::LEFT_HANDED_Y_UP:
+	    case sl::COORDINATE_SYSTEM::RIGHT_HANDED_Y_UP:
+                init_or.setEulerAngles( sl::float3(src->init_orient_pitch,src->init_orient_yaw,src->init_orient_roll), false);
+		break;
+	    case sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP:
+		init_or.setEulerAngles( sl::float3(src->init_orient_pitch,src->init_orient_roll,src->init_orient_yaw), false);
+		break;
+	    case sl::COORDINATE_SYSTEM::LEFT_HANDED_Z_UP:
+	    case sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD:
+		init_or.setEulerAngles( sl::float3(src->init_orient_roll,src->init_orient_pitch,src->init_orient_yaw), false);
+		break;
+	}
+
+	pos_trk_params.initial_world_transform = sl::Transform(init_or,init_pos);
         GST_INFO(" * Initial world transform: T(%g,%g,%g) OR(%g,%g,%g)",
                  src->init_pose_x,src->init_pose_y, src->init_pose_z,
                  src->init_orient_roll,src->init_orient_pitch,src->init_orient_yaw);
-
 
         ret = src->zed.enablePositionalTracking(pos_trk_params);
         if (ret!=sl::ERROR_CODE::SUCCESS) {
@@ -1809,6 +2003,10 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         GST_INFO(" * Max range: %g", od_params.max_range);
         od_params.enable_body_fitting = src->od_body_fitting;
         GST_INFO(" * Body fitting: %s", (od_params.enable_body_fitting?"TRUE":"FALSE"));
+        od_params.prediction_timeout_s = src->od_prediction_timeout_s;
+        GST_INFO(" * Prediction timeout (sec): %f", (od_params.prediction_timeout_s));
+	od_params.allow_reduced_precision_inference = src->od_allow_reduced_precision_inference;
+	GST_INFO(" * Allow reduced precision inference: %s", (od_params.allow_reduced_precision_inference?"TRUE":"FALSE"));
 
         ret = src->zed.enableObjectDetection( od_params );
         if (ret!=sl::ERROR_CODE::SUCCESS) {
@@ -2313,14 +2511,15 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     }
     // <---- Object detection metadata
 
-    gst_buffer_add_zed_src_meta( buf, info, pose, sens, src->object_detection, obj_count, obj_data);
-
     // ----> Timestamp meta-data
     GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF (gst_element_get_base_time (GST_ELEMENT (src)),
                                                 clock_time);
     GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
     // <---- Timestamp meta-data
+
+    guint64 offset = GST_BUFFER_OFFSET(buf);
+    GstZedSrcMeta* meta = gst_buffer_add_zed_src_meta( buf, info, pose, sens, src->object_detection, obj_count, obj_data, offset);
 
     // Buffer release
     gst_buffer_unmap( buf, &minfo );

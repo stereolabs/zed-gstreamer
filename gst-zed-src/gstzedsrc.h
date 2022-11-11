@@ -64,6 +64,11 @@ struct _GstZedSrc
     gboolean camera_disable_self_calib;
     gboolean depth_stabilization;
     gint coord_sys;
+    gboolean roi;
+    gint roi_x;
+    gint roi_y;
+    gint roi_w;
+    gint roi_h;
     //gboolean enable_right_side_measure;
 
     gint confidence_threshold;
@@ -78,6 +83,8 @@ struct _GstZedSrc
     gboolean enable_imu_fusion;
     gboolean enable_pose_smoothing;
     gboolean set_floor_as_origin;
+    gboolean set_gravity_as_origin;
+    gfloat depth_min_range;
     gfloat init_pose_x;
     gfloat init_pose_y;
     gfloat init_pose_z;
@@ -93,6 +100,8 @@ struct _GstZedSrc
     gfloat od_det_conf;
     gfloat od_max_range;
     gboolean od_body_fitting;
+    gfloat od_prediction_timeout_s;
+    gboolean od_allow_reduced_precision_inference;
 
     gint brightness;
     gint contrast;
