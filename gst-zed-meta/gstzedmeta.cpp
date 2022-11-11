@@ -50,7 +50,7 @@ GType gst_zed_src_meta_api_get_type()
 {
     GST_TRACE( "gst_zed_src_meta_api_get_type");
 
-    static volatile GType type;
+    static GType type;
 
     static const gchar *tags[] =
     { /*GST_META_TAG_VIDEO_STR, GST_META_TAG_VIDEO_SIZE_STR,
