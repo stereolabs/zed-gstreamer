@@ -1904,9 +1904,9 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
 	    int roi_x_end = src->roi_x + src->roi_w;
 	    int roi_y_end = src->roi_y + src->roi_h;
 	    sl::Resolution resolution = sl::getResolution(init_params.camera_resolution);
-	    if (src->roi_x < 0 || src->roi_x >= resolution.width ||
-		    src->roi_y < 0 || src->roi_y >= resolution.height ||
-		    roi_x_end >= resolution.width || roi_y_end >= resolution.height) {
+	    if (src->roi_x >= 0 && src->roi_x < resolution.width &&
+		    src->roi_y >= 0 && src->roi_y < resolution.height &&
+		    roi_x_end <= resolution.width && roi_y_end <= resolution.height) {
 
 		sl::uchar1 uint0 = 0;
 		sl::uchar1 uint1 = 1;
