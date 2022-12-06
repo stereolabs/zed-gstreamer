@@ -2318,35 +2318,36 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Fill Mode: %s", (src->fill_mode ? "TRUE" : "FALSE"));
 
     if (src->roi) {
-        if (src->roi_x != -1 && src->roi_y != -1 && src->roi_w != -1 && src->roi_h != -1) {
-            int roi_x_end = src->roi_x + src->roi_w;
-            int roi_y_end = src->roi_y + src->roi_h;
-            sl::Resolution resolution = sl::getResolution(init_params.camera_resolution);
-            if (src->roi_x < 0 || src->roi_x >= resolution.width || src->roi_y < 0 ||
-                src->roi_y >= resolution.height || roi_x_end >= resolution.width ||
-                roi_y_end >= resolution.height) {
+	if (src->roi_x != -1 && 
+		src->roi_y != -1 && 
+		src->roi_w != -1 && 
+		src->roi_h != -1) {	    
+	    int roi_x_end = src->roi_x + src->roi_w;
+	    int roi_y_end = src->roi_y + src->roi_h;
+	    sl::Resolution resolution = sl::getResolution(init_params.camera_resolution);
+	    if (src->roi_x >= 0 && src->roi_x < resolution.width &&
+		    src->roi_y >= 0 && src->roi_y < resolution.height &&
+		    roi_x_end <= resolution.width && roi_y_end <= resolution.height) {
 
-                sl::uchar1 uint0 = 0;
-                sl::uchar1 uint1 = 1;
-                sl::Mat roi_mask(resolution, sl::MAT_TYPE::U8_C1, sl::MEM::CPU);
-                roi_mask.setTo(uint0);
-                for (int row = src->roi_y; row < roi_y_end; row++)
-                    for (int col = src->roi_y; col < roi_x_end; col++)
-                        roi_mask.setValue(col, row, uint1);
+		sl::uchar1 uint0 = 0;
+		sl::uchar1 uint1 = 1;
+		sl::Mat roi_mask(resolution, sl::MAT_TYPE::U8_C1, sl::MEM::CPU);
+		roi_mask.setTo(uint0);
+		for (int row = src->roi_y; row < roi_y_end; row++)
+		    for (int col = src->roi_y; col < roi_x_end; col++)
+		        roi_mask.setValue(col, row, uint1);
+		
+		GST_INFO(" * ROI mask: (%d,%d)-%dx%d",
+			src->roi_x, src->roi_y, src->roi_w, src->roi_h);
 
-                GST_INFO(" * ROI mask: (%d,%d)-%dx%d", src->roi_x, src->roi_y, src->roi_w,
-                         src->roi_h);
-
-                ret = src->zed.setRegionOfInterest(roi_mask);
-                if (ret != sl::ERROR_CODE::SUCCESS) {
-                    GST_ELEMENT_ERROR(
-                        src, RESOURCE, NOT_FOUND,
-                        ("Failed to set region of interest, '%s'", sl::toString(ret).c_str()),
-                        (NULL));
-                    return FALSE;
-                }
-            }
-        }
+		ret = src->zed.setRegionOfInterest(roi_mask);
+		if (ret!=sl::ERROR_CODE::SUCCESS) {
+		    GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
+				    ("Failed to set region of interest, '%s'", sl::toString(ret).c_str() ), (NULL));
+		    return FALSE;
+		} 
+	    }
+	}
     }
     // <---- Runtime parameters
 
