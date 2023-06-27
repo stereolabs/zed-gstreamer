@@ -32,13 +32,13 @@ GStreamer plugin package for ZED Cameras. The package is composed of several plu
 
 ### Prerequisites
 
- * Stereo camera: [ZED 2i](https://www.stereolabs.com/zed-2i/),[ZED 2](https://www.stereolabs.com/zed-2/), [ZED](https://www.stereolabs.com/zed/), [ZED Mini](https://www.stereolabs.com/zed-mini/)
+ * ZED SDK v4.0.x
  * CMake (v3.6+)
  * GStreamer 1.0
 
 ### Windows installation
 
- * Install the latest ZED SDK v3.8.x from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` plugin to acquire data from a ZED camera device]
+ * Install the latest ZED SDK v4 from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` plugin to acquire data from a ZED camera device]
  * Install [Git](https://git-scm.com/) or download a ZIP archive
  * Install [CMake](https://cmake.org/)
  * Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
@@ -59,7 +59,7 @@ GStreamer plugin package for ZED Cameras. The package is composed of several plu
 
 #### Install prerequisites
 
-* Install the latest ZED SDK v3.8.x from the [official download page](https://www.stereolabs.com/developers/release/)
+* Install the latest ZED SDK v4 from the [official download page](https://www.stereolabs.com/developers/release/)
 
 * Update list of `apt` available packages
 
@@ -389,7 +389,6 @@ Ready to use scripts are available in the scripts/ folder for windows and linux.
 ## Related
 
 - [Stereolabs](https://www.stereolabs.com)
-- [ZED 2 multi-sensor camera](https://www.stereolabs.com/zed-2/)
 - [ZED SDK](https://www.stereolabs.com/developers/)
 
 ## License
