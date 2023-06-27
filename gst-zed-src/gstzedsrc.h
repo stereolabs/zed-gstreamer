@@ -28,28 +28,26 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_ZED_SRC   (gst_zedsrc_get_type())
-#define GST_ZED_SRC(obj)   (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ZED_SRC,GstZedSrc))
-#define GST_ZED_SRC_CLASS(klass)   (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_ZED_SRC,GstZedSrcClass))
-#define GST_IS_ZED_SRC(obj)   (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_ZED_SRC))
-#define GST_IS_ZED_SRC_CLASS(obj)   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_ZED_SRC))
+#define GST_TYPE_ZED_SRC          (gst_zedsrc_get_type())
+#define GST_ZED_SRC(obj)          (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_ZED_SRC, GstZedSrc))
+#define GST_ZED_SRC_CLASS(klass)  (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_ZED_SRC, GstZedSrcClass))
+#define GST_IS_ZED_SRC(obj)       (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_ZED_SRC))
+#define GST_IS_ZED_SRC_CLASS(obj) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_ZED_SRC))
 
 typedef struct _GstZedSrc GstZedSrc;
 typedef struct _GstZedSrcClass GstZedSrcClass;
 
-struct _GstZedSrc
-{
-    GstPushSrc base_zedsrc;    
+struct _GstZedSrc {
+    GstPushSrc base_zedsrc;
 
     // ZED camera object
     sl::Camera zed;
 
-
-    gboolean is_started; // grab started flag
+    gboolean is_started;   // grab started flag
 
     // ----> Properties
-    gint camera_resolution;     // Camera resolution [enum]
-    gint camera_fps;            // Camera FPS
+    gint camera_resolution;   // Camera resolution [enum]
+    gint camera_fps;          // Camera FPS
     gboolean sdk_verbose;
     gint camera_image_flip;
     gint camera_id;
@@ -57,10 +55,10 @@ struct _GstZedSrc
     GString svo_file;
     GString stream_ip;
     gint stream_port;
-    gint stream_type;    
+    gint stream_type;
     gfloat depth_min_dist;
     gfloat depth_max_dist;
-    gint depth_mode;            // Depth mode [enum]
+    gint depth_mode;   // Depth mode [enum]
     gboolean camera_disable_self_calib;
     gboolean depth_stabilization;
     gint coord_sys;
@@ -69,12 +67,12 @@ struct _GstZedSrc
     gint roi_y;
     gint roi_w;
     gint roi_h;
-    //gboolean enable_right_side_measure;
+    // gboolean enable_right_side_measure;
 
     gint confidence_threshold;
     gint texture_confidence_threshold;
     gint measure3D_reference_frame;
-    gint sensing_mode;
+    gboolean fill_mode;
 
     gboolean pos_tracking;
     gboolean camera_static;
@@ -95,7 +93,7 @@ struct _GstZedSrc
     gboolean object_detection;
     gboolean od_image_sync;
     gboolean od_enable_tracking;
-    gboolean od_enable_mask_output;
+    gboolean od_enable_segm_output;
     gint od_detection_model;
     gfloat od_det_conf;
     gfloat od_max_range;
@@ -132,12 +130,11 @@ struct _GstZedSrc
     gboolean stop_requested;
 };
 
-struct _GstZedSrcClass
-{
+struct _GstZedSrcClass {
     GstPushSrcClass base_zedsrc_class;
 };
 
-G_GNUC_INTERNAL GType gst_zedsrc_get_type (void);
+G_GNUC_INTERNAL GType gst_zedsrc_get_type(void);
 
 G_END_DECLS
 

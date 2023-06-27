@@ -1,6 +1,10 @@
 LATEST CHANGES
 ==============
 
+2023-06-27
+----------
+* changed `sensing-mode` to `fill-mode`
+
 ZED SDK v3.8
 -------------
 - Add support for Region of Interest [Thx @ryanppeters]

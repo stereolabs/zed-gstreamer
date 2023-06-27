@@ -144,7 +144,7 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `confidence-threshold`: Specify the Depth Confidence Threshold - [0,100]
  * `texture-confidence-threshold`: Specify the Texture Confidence Threshold - [0,100]
  * `measure3D-reference-frame` : Specify the 3D Reference Frame - {WORLD (0), CAMERA (1)}
- * `sensing-mode`: Specify the Depth Sensing Mode - {STANDARD (0), FILL (1)}
+ * `fill-mode`: Specify the Depth Fill Mode - {TRUE, FALSE}
  * `enable-positional-tracking`: Enable positional tracking - {TRUE, FALSE}
  * `set-as-static`: Set to TRUE if the camera is static - {TRUE, FALSE}
  * `area-file-path`: Area localization file that describes the surroundings, saved from a previous tracking session
