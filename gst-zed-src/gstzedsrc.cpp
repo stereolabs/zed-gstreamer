@@ -1029,7 +1029,6 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->od_detection_model = DEFAULT_PROP_OD_MODEL;
     src->od_det_conf = DEFAULT_PROP_OD_CONFIDENCE;
     src->od_max_range = DEFAULT_PROP_OD_MAX_RANGE;
-    src->od_body_fitting = DEFAULT_PROP_OD_BODY_FITTING;
     src->od_prediction_timeout_s = DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S;
     src->od_allow_reduced_precision_inference = DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE;
 
@@ -1211,9 +1210,6 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_OD_MAX_RANGE:
         src->od_max_range = g_value_get_float(value);
-        break;
-    case PROP_OD_BODY_FITTING:
-        src->od_body_fitting = g_value_get_boolean(value);
         break;
     case PROP_OD_PREDICTION_TIMEOUT_S:
         src->od_prediction_timeout_s = g_value_get_float(value);
@@ -1428,9 +1424,6 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         break;
     case PROP_OD_MAX_RANGE:
         g_value_set_float(value, src->od_max_range);
-        break;
-    case PROP_OD_BODY_FITTING:
-        g_value_set_boolean(value, src->od_body_fitting);
         break;
     case PROP_OD_PREDICTION_TIMEOUT_S:
         g_value_set_float(value, src->od_prediction_timeout_s);

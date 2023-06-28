@@ -95,7 +95,7 @@ static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
     GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
 
     // ----> Scale transformation
-    // TODO understand how `videoscale` filter hands this part because there is something weird with
+    // TODO understand how `videoscale` filter handleds this part because there is something weird with
     //      metadata tags handling
     //    if( GST_VIDEO_META_TRANSFORM_IS_SCALE(type) )
     //    {

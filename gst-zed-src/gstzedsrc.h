@@ -91,30 +91,44 @@ struct _GstZedSrc {
     gfloat init_orient_yaw;
 
     gboolean object_detection;
-    gboolean od_image_sync;
-    gboolean od_enable_tracking;
-    gboolean od_enable_segm_output;
-    gint od_detection_model;
-    gfloat od_det_conf;
-    gfloat od_max_range;
-    gboolean od_body_fitting;
-    gfloat od_prediction_timeout_s;
-    gboolean od_allow_reduced_precision_inference;
+    gboolean od_image_sync;                          // bool image_sync
+    gboolean od_enable_tracking;                     // bool enable_tracking
+    gboolean od_enable_segm_output;                  // bool enable_segmentation TODO
+    gint od_detection_model;                         // sl::OBJECT_DETECTION_MODEL detection_model
+    gfloat od_max_range;                             // float max_range
+    gint od_filter_mode;                             // TODO(Walter) sl::OBJECT_FILTERING_MODE filtering_mode 
+    gfloat od_prediction_timeout_s;                  // float prediction_timeout_s
+    gboolean od_allow_reduced_precision_inference;   // bool allow_reduced_precision_inference
+    gfloat od_det_conf;                              // TODO(Walter) [runtime] float detection_confidence_threshold
+    gboolean od_person;                              // TODO(Walter) [runtime] std::vector< OBJECT_CLASS > object_class_filter 
+    gboolean od_vehicle;                             // TODO(Walter) [runtime] std::vector< OBJECT_CLASS > object_class_filter 
+    gboolean od_bag;                                 // TODO(Walter) [runtime] std::vector< OBJECT_CLASS > object_class_filter 
+    gboolean od_animal;                              // TODO(Walter) [runtime] std::vector< OBJECT_CLASS > object_class_filter 
+    gboolean od_electronics;                         // TODO(Walter) [runtime] std::vector< OBJECT_CLASS > object_class_filter 
+    gboolean od_fruit_vegetable;                     // TODO(Walter) [runtime] std::vector< OBJECT_CLASS > object_class_filter 
+    gboolean od_sport;                               // TODO(Walter) [runtime] std::vector< OBJECT_CLASS > object_class_filter 
+    gboolean od_person_conf;                         // TODO(Walter) [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold 
+    gboolean od_vehicle_conf;                        // TODO(Walter) [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold 
+    gboolean od_bag_conf;                            // TODO(Walter) [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold 
+    gboolean od_animal_conf;                         // TODO(Walter) [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold 
+    gboolean od_electronics_conf;                    // TODO(Walter) [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold 
+    gboolean od_fruit_vegetable_conf;                // TODO(Walter) [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold 
+    gboolean od_sport_conf;                          // TODO(Walter) [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold 
 
-    gboolean body_tracking;
-    gboolean od_enable_segm_output;   // bool enable_segmentation
-    gboolean bt_image_sync;           // bool image_sync
-    gint bt_model;                    // sl::BODY_TRACKING_MODEL detection_model
-    gint bt_format;                   // sl::BODY_FORMAT body_format
-    gboolean bt_reduce_precision;     // bool allow_reduced_precision_inference
-    gfloat bt_max_range;              // float max_range
-    gint bt_kp_sel;                   // sl::BODY_KEYPOINTS_SELECTION body_selection
-    gboolean bt_fitting;              // bool enable_body_fitting
-    gboolean bt_enable_trk;           // bool enable_tracking
-    gfloat bt_pred_timeout;           // float prediction_timeout_s
-    gfloat bt_rt_det_conf;            // [runtime] float detection_confidence_threshold
-    gint bt_rt_min_kp_thresh;         // [runtime] int 	minimum_keypoints_threshold
-    gfloat bt_rt_skel_smoothing;      // [runtime] float 	skeleton_smoothing
+    gboolean body_tracking; // TODO(Walter) 
+    gboolean bt_enable_segm_output;   // TODO(Walter) bool enable_segmentation
+    gboolean bt_image_sync;           // TODO(Walter) bool image_sync
+    gint bt_model;                    // TODO(Walter) sl::BODY_TRACKING_MODEL detection_model
+    gint bt_format;                   // TODO(Walter) sl::BODY_FORMAT body_format
+    gboolean bt_reduce_precision;     // TODO(Walter) bool allow_reduced_precision_inference
+    gfloat bt_max_range;              // TODO(Walter) float max_range
+    gint bt_kp_sel;                   // TODO(Walter) sl::BODY_KEYPOINTS_SELECTION body_selection
+    gboolean bt_fitting;              // TODO(Walter) bool enable_body_fitting
+    gboolean bt_enable_trk;           // TODO(Walter) bool enable_tracking
+    gfloat bt_pred_timeout;           // TODO(Walter) float prediction_timeout_s
+    gfloat bt_rt_det_conf;            // TODO(Walter) [runtime] float detection_confidence_threshold
+    gint bt_rt_min_kp_thresh;         // TODO(Walter) [runtime] int minimum_keypoints_threshold
+    gfloat bt_rt_skel_smoothing;      // TODO(Walter) [runtime] float skeleton_smoothing
 
     gint brightness;
     gint contrast;
