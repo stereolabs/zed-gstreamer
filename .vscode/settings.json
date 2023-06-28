@@ -4,8 +4,7 @@
   "editor.formatOnPaste": false,
   "cmake.debugConfig": {
     "stopAtEntry": false,
-    "args": [      
-    ],
+    "args": [],
     "MIMode": "gdb",
     "externalConsole": false,
   },
@@ -86,7 +85,12 @@
     "valarray": "cpp",
     "variant": "cpp",
     "__nullptr": "cpp",
-    "core": "cpp"
+    "core": "cpp",
+    "__hash_table": "cpp",
+    "__split_buffer": "cpp",
+    "__tree": "cpp",
+    "queue": "cpp",
+    "stack": "cpp"
   },
   "C_Cpp.errorSquiggles": "disabled"
 }

@@ -29,6 +29,10 @@
 GST_DEBUG_CATEGORY_STATIC(gst_zedsrc_debug);
 #define GST_CAT_DEFAULT gst_zedsrc_debug
 
+// AI Module
+#define OD_INSTANCE_MODULE_ID 0
+#define BT_INSTANCE_MODULE_ID 1
+
 /* prototypes */
 static void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec);
 static void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec);
@@ -1712,6 +1716,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Object Detection status: %s", (src->object_detection ? "ON" : "OFF"));
     if (src->object_detection) {
         sl::ObjectDetectionParameters od_params;
+        od_params.instance_module_id = OD_INSTANCE_MODULE_ID;
         od_params.image_sync = (src->od_image_sync == TRUE);
         GST_INFO(" * Image sync: %s", (od_params.image_sync ? "TRUE" : "FALSE"));
         od_params.enable_tracking = (src->od_enable_tracking == TRUE);
@@ -1720,14 +1725,16 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Segmentation Mask output: %s", (od_params.enable_segmentation ? "TRUE" : "FALSE"));
         od_params.detection_model = static_cast<sl::OBJECT_DETECTION_MODEL>(src->od_detection_model);
         GST_INFO(" * Detection model: %s", sl::toString(od_params.detection_model).c_str());
+        od_params.od_filter_mode = static_cast<sl::OBJECT_FILTERING_MODE>(src->od_filter_mode);
+        GST_INFO(" * Filtering mode: %s", sl::toString(od_params.od_filter_mode).c_str());
         od_params.max_range = src->od_max_range;
         GST_INFO(" * Max range: %g", od_params.max_range);
-        // od_params.enable_body_fitting = src->od_body_fitting;
-        // GST_INFO(" * Body fitting: %s", (od_params.enable_body_fitting ? "TRUE" : "FALSE"));
         od_params.prediction_timeout_s = src->od_prediction_timeout_s;
         GST_INFO(" * Prediction timeout (sec): %f", (od_params.prediction_timeout_s));
         od_params.allow_reduced_precision_inference = src->od_allow_reduced_precision_inference;
         GST_INFO(" * Allow reduced precision inference: %s", (od_params.allow_reduced_precision_inference ? "TRUE" : "FALSE"));
+
+        // TODO(Walter) Handle classes and single class confidences
 
         ret = src->zed.enableObjectDetection(od_params);
         if (ret != sl::ERROR_CODE::SUCCESS) {
@@ -1736,6 +1743,23 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         }
     }
     // <---- Object Detection
+
+    // ----> Body Tracking
+    GST_INFO("BODY TRACKING PARAMETERS");
+    GST_INFO(" * Object Detection status: %s", (src->body_tracking ? "ON" : "OFF"));
+    if (src->body_tracking) {
+        sl::BodyTrackingParameters bt_params;
+        od_params.instance_module_id = BT_INSTANCE_MODULE_ID;
+        
+        // TODO(Walter) Handle all the Body Tracking parameters
+
+        ret = src->zed.enableBodyTracking(bt_params);
+        if (ret != sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to start Body Tracking, '%s'", sl::toString(ret).c_str()), (NULL));
+            return FALSE;
+        }
+    }
+    // <---- Body Tracking
 
     if (!gst_zedsrc_calculate_caps(src)) {
         return FALSE;
@@ -2018,9 +2042,10 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
     // <---- Sensors metadata metadata
 
-    // ----> Object detection metadata
-    ZedObjectData obj_data[256];
+    ZedObjectData obj_data[256]; // Common Array for Detected Object and Tracked Skeletons metadata
     guint8 obj_count = 0;
+
+    // ----> Object detection metadata    
     if (src->object_detection) {
         GST_TRACE_OBJECT(src, "Object Detection enabled");
 
@@ -2144,6 +2169,35 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         }
     }
     // <---- Object detection metadata
+
+    // ----> Body Tracking metadata
+    guint8 obj_count = 0;
+    if (src->object_detection) {
+        GST_TRACE_OBJECT(src, "Object Detection enabled");
+
+        sl::BodyTrackingRuntimeParameters rt_params;
+        rt_params.detection_confidence_threshold = src->bt_rt_det_conf;
+        rt_params.minimum_keypoints_threshold = src->bt_rt_min_kp_thresh;
+
+        // TODO(Walter) Skeleton smoothing???
+
+        sl::Bodies bodies;
+        sl::ERROR_CODE ret = src->zed.retrieveBodies(bodies, rt_params);
+
+        if (ret == sl::ERROR_CODE::SUCCESS) {
+            if (bodies.is_new) {
+                GST_TRACE_OBJECT(src, "OD new data");
+
+                int bodies_count = det_objs.object_list.size();
+
+                GST_TRACE_OBJECT(src, "Number of detected bodies: %d", bodies_count);
+
+                
+            } 
+        } else {
+            GST_DEBUG_OBJECT(src, "Body Tracking problem: %s", sl::toString(ret).c_str());
+        } 
+    // <---- Body Tracking metadata
 
     // ----> Timestamp meta-data
     GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
