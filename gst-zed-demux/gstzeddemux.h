@@ -26,37 +26,35 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_ZEDDEMUX (gst_zeddemux_get_type())
-#define GST_ZEDDEMUX(obj)   (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ZEDDEMUX,GstZedDemux))
-#define GST_ZEDDEMUX_CLASS(klass)   (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_ZEDDEMUX,GstZedDemuxClass))
-#define GST_IS_ZEDDEMUX(obj)   (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_ZEDDEMUX))
-#define GST_IS_ZEDDEMUX_CLASS(obj)   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_ZEDDEMUX))
+#define GST_TYPE_ZEDDEMUX          (gst_zeddemux_get_type())
+#define GST_ZEDDEMUX(obj)          (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_ZEDDEMUX, GstZedDemux))
+#define GST_ZEDDEMUX_CLASS(klass)  (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_ZEDDEMUX, GstZedDemuxClass))
+#define GST_IS_ZEDDEMUX(obj)       (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_ZEDDEMUX))
+#define GST_IS_ZEDDEMUX_CLASS(obj) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_ZEDDEMUX))
 
 typedef struct _GstZedDemux GstZedDemux;
 typedef struct _GstZedDemuxClass GstZedDemuxClass;
 
-struct _GstZedDemux
-{
-  GstElement element;
+struct _GstZedDemux {
+    GstElement element;
 
-  GstPad* sinkpad;
-  GstPad* srcpad_left;
-  GstPad* srcpad_aux;
-  GstPad* srcpad_data;
+    GstPad *sinkpad;
+    GstPad *srcpad_left;
+    GstPad *srcpad_aux;
+    GstPad *srcpad_data;
 
-  GstCaps* caps_left;
-  GstCaps* caps_aux;
+    GstCaps *caps_left;
+    GstCaps *caps_aux;
 
-  gboolean is_depth;
-  gboolean stream_data;
+    gboolean is_depth;
+    gboolean stream_data;
 };
 
-struct _GstZedDemuxClass
-{
+struct _GstZedDemuxClass {
     GstElementClass base_zeddemux_class;
 };
 
-GType gst_zeddemux_get_type (void);
+GType gst_zeddemux_get_type(void);
 
 G_END_DECLS
 
