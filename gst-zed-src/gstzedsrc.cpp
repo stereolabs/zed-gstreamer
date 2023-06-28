@@ -1564,8 +1564,8 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
 }
 
 static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
-#if (ZED_SDK_MAJOR_VERSION == 3 && ZED_SDK_MINOR_VERSION < 5)
-    GST_ELEMENT_ERROR(src, LIBRARY, FAILED, ("Wrong ZED SDK version. SDK v3.5.x required "), (NULL));
+#if (ZED_SDK_MAJOR_VERSION < 4)
+    GST_ELEMENT_ERROR(src, LIBRARY, FAILED, ("Wrong ZED SDK version. SDK v4.0.x required "), (NULL));
 #endif
 
     GstZedSrc *src = GST_ZED_SRC(bsrc);
@@ -1999,16 +1999,10 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
         ret = src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU);
     } else if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
-#if (ZED_SDK_MAJOR_VERSION == 3 && ZED_SDK_MINOR_VERSION < 4)
-        ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU);
-#else
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU);
-        // depth_data.write( "test_depth_16.png" );
-#endif
     } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU);
-        // depth_data.write( "test_depth_32.png" );
     }
 
     if (ret != sl::ERROR_CODE::SUCCESS) {
@@ -2020,19 +2014,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // ----> Memory copy
     if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
-#if (ZED_SDK_MAJOR_VERSION == 3 && ZED_SDK_MINOR_VERSION < 4)
-        uint16_t *gst_data = (uint16_t *) (&minfo.data[0]);
-        unsigned long dataSize = minfo.size;
-
-        sl::float1 *depthDataPtr = depth_data.getPtr<sl::float1>();
-
-        for (unsigned long i = 0; i < dataSize / 2; i++) {
-            *(gst_data++) = static_cast<uint16_t>(*(depthDataPtr++));
-        }
-#else
         memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
-#endif
-
     } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
         // Left RGB data on half top
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
