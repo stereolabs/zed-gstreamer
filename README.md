@@ -121,8 +121,8 @@ GStreamer plugin package for ZED Cameras. The package is composed of several plu
 ### `ZED Video Source Plugin` parameters
 Most of the parameters follow the same name as the C++ API. Except that `_` is replaced by `-` to follow gstreamer common formatting.
 
- * `camera-resolution`: stream resolution - {VGA (3), HD270 (2), HD1080 (1), HD2K (0)}
- * `camera-fps`: stream framerate - {15, 30, 60, 100}
+ * `camera-resolution`: stream resolution - {AUTO (6), VGA (5), SVGA (4), HD270 (3), HD1200(2), HD1080 (1), HD2K (0)}
+ * `camera-fps`: stream framerate - {15, 30, 60, 100, 120}
  * `stream-type`: type of video stream - {Left image (0), Right image (1), Stereo couple (2), 16 bit depth (3), Left+Depth (4)}
  * `sdk-verbose`: SDK verbose mode - {TRUE, FALSE}
  * `camera-image-flip`: Use the camera in forced flip/no flip or automatic mode - {No Flip (0), Flip (1), Auto (2)}

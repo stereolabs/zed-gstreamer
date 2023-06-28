@@ -608,7 +608,7 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                     // <---- Joints
                     break;
                 default:
-                    GST_ELEMENT_ERROR(filter, RESOURCE, FAILED, ("No ZED metadata [GstZedSrcMeta] found in the stream'"), (NULL));
+                    GST_ELEMENT_ERROR(filter, RESOURCE, FAILED, ("Wrong skeleton model format"), (NULL));
                 }
             }
             // <---- Skeletons

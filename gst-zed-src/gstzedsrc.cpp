@@ -117,7 +117,7 @@ enum {
     N_PROPERTIES
 };
 
-typedef enum { GST_ZEDSRC_100FPS = 100, GST_ZEDSRC_60FPS = 60, GST_ZEDSRC_30FPS = 30, GST_ZEDSRC_15FPS = 15 } GstZedSrcFPS;
+typedef enum { GST_ZEDSRC_120FPS = 120, GST_ZEDSRC_100FPS = 100, GST_ZEDSRC_60FPS = 60, GST_ZEDSRC_30FPS = 30, GST_ZEDSRC_15FPS = 15 } GstZedSrcFPS;
 
 typedef enum {
     GST_ZEDSRC_NO_FLIP = 0,
@@ -158,7 +158,7 @@ typedef enum { GST_ZEDSRC_SIDE_LEFT = 0, GST_ZEDSRC_SIDE_RIGHT = 1, GST_ZEDSRC_S
 //////////////// DEFAULT PARAMETERS //////////////////////////////////////////////////////////////////////////
 
 // INITIALIZATION
-#define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::HD1080)
+#define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::AUTO)
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_30FPS
 #define DEFAULT_PROP_SDK_VERBOSE    FALSE
 #define DEFAULT_PROP_CAM_FLIP       2
@@ -260,10 +260,13 @@ static GType gst_zedsrc_resol_get_type(void) {
 
     if (!zedsrc_resol_type) {
         static GEnumValue pattern_types[] = {
-            {static_cast<gint>(sl::RESOLUTION::VGA), "672x376", "VGA"},
-            {static_cast<gint>(sl::RESOLUTION::HD720), "1280x720", "HD720"},
-            {static_cast<gint>(sl::RESOLUTION::HD1080), "1920x1080", "HD1080"},
-            {static_cast<gint>(sl::RESOLUTION::HD2K), "2208x1242", "HD2K"},
+            {static_cast<gint>(sl::RESOLUTION::HD2K), "2208x1242", "HD2K (USB3)"},
+            {static_cast<gint>(sl::RESOLUTION::HD1200), "1920x1200", "HD1200 (GMSL2)"},
+            {static_cast<gint>(sl::RESOLUTION::HD1080), "1920x1080", "HD1080 (USB3/GMSL2)"},
+            {static_cast<gint>(sl::RESOLUTION::HD720), "1280x720", "HD720 (USB3)"},
+            {static_cast<gint>(sl::RESOLUTION::SVGA), "960x600", "SVGA (GMSL2)"},
+            {static_cast<gint>(sl::RESOLUTION::VGA), "672x376", "VGA (USB3)"},
+            {static_cast<gint>(sl::RESOLUTION::AUTO), "Automatic", "Default value for the camera model"},
             {0, NULL, NULL},
         };
 
@@ -279,10 +282,11 @@ static GType gst_zedsrc_fps_get_type(void) {
 
     if (!zedsrc_fps_type) {
         static GEnumValue pattern_types[] = {
-            {GST_ZEDSRC_100FPS, "only VGA resolution", "100 FPS"},
-            {GST_ZEDSRC_60FPS, "only VGA and HD720 resolutions", "60  FPS"},
-            {GST_ZEDSRC_30FPS, "only VGA, HD720 and HD1080 resolutions", "30  FPS"},
-            {GST_ZEDSRC_15FPS, "all resolutions", "15  FPS"},
+            {GST_ZEDSRC_120FPS, "only SVGA (GMSL2) resolution", "120 FPS"},
+            {GST_ZEDSRC_100FPS, "only VGA (USB3) resolution", "100 FPS"},
+            {GST_ZEDSRC_60FPS, "VGA (USB3), HD720, HD1080 (GMSL2), and HD1200 (GMSL2) resolutions", "60  FPS"},
+            {GST_ZEDSRC_30FPS, "VGA (USB3), HD720 (USB3) and HD1080 (USB3/GMSL2) resolutions", "30  FPS"},
+            {GST_ZEDSRC_15FPS, "all resolutions (NO GMSL2)", "15  FPS"},
             {0, NULL, NULL},
         };
 
@@ -2037,6 +2041,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                 uint8_t idx = 0;
                 for (auto i = det_objs.object_list.begin(); i != det_objs.object_list.end(); ++i) {
                     sl::ObjectData obj = *i;
+
+                    obj_data[idx].skeletons_avail = FALSE; // No Skeleton info for Object Detection
 
                     obj_data[idx].id = obj.id;
                     GST_TRACE_OBJECT(src, " * [%d] Object id: %d", idx, obj.id);
