@@ -96,6 +96,7 @@ enum {
     PROP_OD_TRACKING,
     PROP_OD_SEGM,
     PROP_OD_DET_MODEL,
+    PROP_OD_FILTER_MODE,
     PROP_OD_CONFIDENCE,
     PROP_OD_MAX_RANGE,
     PROP_OD_BODY_FITTING,
@@ -157,6 +158,8 @@ typedef enum {
     GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE = 7,
 } GstZedSrcOdModel;
 
+typedef enum { GST_ZEDSRC_OD_FILTER_MODE_NONE, GST_ZEDSRC_OD_FILTER_MODE_NMS3D, GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS } GstZedSrcOdFilterMode;
+
 typedef enum { GST_ZEDSRC_SIDE_LEFT = 0, GST_ZEDSRC_SIDE_RIGHT = 1, GST_ZEDSRC_SIDE_BOTH = 2 } GstZedSrcSide;
 
 //////////////// DEFAULT PARAMETERS //////////////////////////////////////////////////////////////////////////
@@ -214,6 +217,7 @@ typedef enum { GST_ZEDSRC_SIDE_LEFT = 0, GST_ZEDSRC_SIDE_RIGHT = 1, GST_ZEDSRC_S
 #define DEFAULT_PROP_OD_TRACKING                          TRUE
 #define DEFAULT_PROP_OD_SEGM                              FALSE   // NOTE for the future
 #define DEFAULT_PROP_OD_MODEL                             GST_ZEDSRC_OD_MULTI_CLASS_BOX
+#define DEFAULT_PROP_OD_FILTER_MODE                       GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS
 #define DEFAULT_PROP_OD_CONFIDENCE                        50.0
 #define DEFAULT_PROP_OD_MAX_RANGE                         DEFAULT_PROP_DEPTH_MAX
 #define DEFAULT_PROP_OD_BODY_FITTING                      TRUE
@@ -390,6 +394,26 @@ static GType gst_zedsrc_od_model_get_type(void) {
     }
 
     return zedsrc_od_model_type;
+}
+
+#define GST_TYPE_ZED_OD_FILTER_MODE_TYPE (gst_zedsrc_od_filter_mode_get_type())
+static GType gst_zedsrc_od_filter_mode_get_type(void) {
+    static GType zedsrc_od_filter_mode_type = 0;
+
+    if (!zedsrc_od_filter_mode_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDSRC_OD_FILTER_MODE_NMS3D, "SDK will not apply any preprocessing to the detected objects"},
+            {GST_ZEDSRC_OD_FILTER_MODE_NMS3D,
+             "SDK will remove objects that are in the same 3D position as an already tracked object (independant of class ID)"},
+            {GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS,
+             "SDK will remove objects that are in the same 3D position as an already tracked object of the same class ID."},
+            {0, NULL, NULL},
+        };
+
+        zedsrc_od_filter_mode_type = g_enum_register_static("GstZedSrcOdFilterMode", pattern_types);
+    }
+
+    return zedsrc_od_filter_mode_type;
 }
 
 #define GST_TYPE_ZED_DEPTH_MODE (gst_zedsrc_depth_mode_get_type())
@@ -778,6 +802,11 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                                     g_param_spec_enum("od-detection-model", "Object detection model", "Object Detection Model", GST_TYPE_ZED_OD_MODEL_TYPE,
                                                       DEFAULT_PROP_OD_MODEL, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property(gobject_class, PROP_OD_FILTER_MODE,
+                                    g_param_spec_enum("od-detection-filter-mode", "Object detection filter mode", "Object Detection Filter Mode",
+                                                      GST_TYPE_ZED_OD_FILTER_MODE_TYPE, DEFAULT_PROP_OD_FILTER_MODE,
+                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property(gobject_class, PROP_OD_CONFIDENCE,
                                     g_param_spec_float("od-confidence", "Minimum Object detection confidence threshold", "Minimum Detection Confidence", 0.0f,
                                                        100.0f, DEFAULT_PROP_OD_CONFIDENCE, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
@@ -935,6 +964,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->od_enable_tracking = DEFAULT_PROP_OD_TRACKING;
     src->od_enable_segm_output = DEFAULT_PROP_OD_SEGM;
     src->od_detection_model = DEFAULT_PROP_OD_MODEL;
+    src->od_filter_mode = DEFAULT_PROP_OD_FILTER_MODE;
     src->od_det_conf = DEFAULT_PROP_OD_CONFIDENCE;
     src->od_max_range = DEFAULT_PROP_OD_MAX_RANGE;
     src->od_prediction_timeout_s = DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S;
@@ -1112,6 +1142,9 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;*/
     case PROP_OD_DET_MODEL:
         src->od_detection_model = g_value_get_enum(value);
+        break;
+    case PROP_OD_FILTER_MODE:
+        src->od_filter_mode = g_value_get_enum(value);
         break;
     case PROP_OD_CONFIDENCE:
         src->od_det_conf = g_value_get_float(value);
@@ -1326,6 +1359,9 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         break;*/
     case PROP_OD_DET_MODEL:
         g_value_set_enum(value, src->od_detection_model);
+        break;
+    case PROP_OD_FILTER_MODE:
+        g_value_set_enum(value, src->od_filter_mode);
         break;
     case PROP_OD_CONFIDENCE:
         g_value_set_float(value, src->od_det_conf);
@@ -1725,8 +1761,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Segmentation Mask output: %s", (od_params.enable_segmentation ? "TRUE" : "FALSE"));
         od_params.detection_model = static_cast<sl::OBJECT_DETECTION_MODEL>(src->od_detection_model);
         GST_INFO(" * Detection model: %s", sl::toString(od_params.detection_model).c_str());
-        od_params.od_filter_mode = static_cast<sl::OBJECT_FILTERING_MODE>(src->od_filter_mode);
-        GST_INFO(" * Filtering mode: %s", sl::toString(od_params.od_filter_mode).c_str());
+        od_params.filtering_mode = static_cast<sl::OBJECT_FILTERING_MODE>(src->od_filter_mode);
+        GST_INFO(" * Filter mode: %s", sl::toString(od_params.filtering_mode).c_str());
         od_params.max_range = src->od_max_range;
         GST_INFO(" * Max range: %g", od_params.max_range);
         od_params.prediction_timeout_s = src->od_prediction_timeout_s;
@@ -1744,13 +1780,15 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     }
     // <---- Object Detection
 
+    src->body_tracking = true;
+
     // ----> Body Tracking
     GST_INFO("BODY TRACKING PARAMETERS");
     GST_INFO(" * Object Detection status: %s", (src->body_tracking ? "ON" : "OFF"));
     if (src->body_tracking) {
         sl::BodyTrackingParameters bt_params;
-        od_params.instance_module_id = BT_INSTANCE_MODULE_ID;
-        
+        bt_params.instance_module_id = BT_INSTANCE_MODULE_ID;
+
         // TODO(Walter) Handle all the Body Tracking parameters
 
         ret = src->zed.enableBodyTracking(bt_params);
@@ -2042,10 +2080,10 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
     // <---- Sensors metadata metadata
 
-    ZedObjectData obj_data[256]; // Common Array for Detected Object and Tracked Skeletons metadata
+    ZedObjectData obj_data[256];   // Common Array for Detected Object and Tracked Skeletons metadata
     guint8 obj_count = 0;
 
-    // ----> Object detection metadata    
+    // ----> Object detection metadata
     if (src->object_detection) {
         GST_TRACE_OBJECT(src, "Object Detection enabled");
 
@@ -2067,7 +2105,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                 for (auto i = det_objs.object_list.begin(); i != det_objs.object_list.end(); ++i) {
                     sl::ObjectData obj = *i;
 
-                    obj_data[idx].skeletons_avail = FALSE; // No Skeleton info for Object Detection
+                    obj_data[idx].skeletons_avail = FALSE;   // No Skeleton info for Object Detection
 
                     obj_data[idx].id = obj.id;
                     GST_TRACE_OBJECT(src, " * [%d] Object id: %d", idx, obj.id);
@@ -2171,7 +2209,6 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Object detection metadata
 
     // ----> Body Tracking metadata
-    guint8 obj_count = 0;
     if (src->object_detection) {
         GST_TRACE_OBJECT(src, "Object Detection enabled");
 
@@ -2188,15 +2225,15 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             if (bodies.is_new) {
                 GST_TRACE_OBJECT(src, "OD new data");
 
-                int bodies_count = det_objs.object_list.size();
+                int bodies_count = bodies.body_list.size();
 
                 GST_TRACE_OBJECT(src, "Number of detected bodies: %d", bodies_count);
-
-                
-            } 
+                obj_count += bodies_count;
+            }
         } else {
             GST_DEBUG_OBJECT(src, "Body Tracking problem: %s", sl::toString(ret).c_str());
-        } 
+        }
+    }
     // <---- Body Tracking metadata
 
     // ----> Timestamp meta-data

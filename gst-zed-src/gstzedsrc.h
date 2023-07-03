@@ -96,7 +96,7 @@ struct _GstZedSrc {
     gboolean od_enable_segm_output;                  // bool enable_segmentation TODO
     gint od_detection_model;                         // sl::OBJECT_DETECTION_MODEL detection_model
     gfloat od_max_range;                             // float max_range
-    gint od_filter_mode;                             // TODO(Walter) sl::OBJECT_FILTERING_MODE filtering_mode
+    gint od_filter_mode;                             // sl::OBJECT_FILTERING_MODE filtering_mode
     gfloat od_prediction_timeout_s;                  // float prediction_timeout_s
     gboolean od_allow_reduced_precision_inference;   // bool allow_reduced_precision_inference
     gfloat od_det_conf;                              // TODO(Walter) [runtime] float detection_confidence_threshold
