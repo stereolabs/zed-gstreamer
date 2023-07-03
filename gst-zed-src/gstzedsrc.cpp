@@ -102,6 +102,13 @@ enum {
     PROP_OD_BODY_FITTING,
     PROP_OD_PREDICTION_TIMEOUT_S,
     PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE,
+    PROP_OD_PERSON_CONF,
+    PROP_OD_VEHICLE_CONF,
+    PROP_OD_BAG_CONF,
+    PROP_OD_ANIMAL_CONF,
+    PROP_OD_ELECTRONICS_CONF,
+    PROP_OD_FRUIT_VEGETABLES_CONF,
+    PROP_OD_SPORT_CONF,
     PROP_BRIGHTNESS,
     PROP_CONTRAST,
     PROP_HUE,
@@ -223,6 +230,13 @@ typedef enum { GST_ZEDSRC_SIDE_LEFT = 0, GST_ZEDSRC_SIDE_RIGHT = 1, GST_ZEDSRC_S
 #define DEFAULT_PROP_OD_BODY_FITTING                      TRUE
 #define DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S              0.2
 #define DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE FALSE
+#define DEFAULT_PROP_OD_PEOPLE_CONF                       35.0
+#define DEFAULT_PROP_OD_VEHICLE_CONF                      35.0
+#define DEFAULT_PROP_OD_BAG_CONF                          35.0
+#define DEFAULT_PROP_OD_ANIMAL_CONF                       35.0
+#define DEFAULT_PROP_OD_ELECTRONICS_CONF                  35.0
+#define DEFAULT_PROP_OD_FRUIT_VEGETABLES_CONF             35.0
+#define DEFAULT_PROP_OD_SPORT_CONF                        35.0
 
 // CAMERA CONTROLS
 #define DEFAULT_PROP_BRIGHTNESS        4
@@ -832,6 +846,49 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                                                          DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE,
                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property(gobject_class, PROP_OD_PERSON_CONF,
+                                    g_param_spec_float("od-people-conf",
+                                                       "Defines the detection confidence threashold for the PEOPLE class (-1.0 to disable the detection)",
+                                                       "People Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_PEOPLE_CONF,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(gobject_class, PROP_OD_VEHICLE_CONF,
+                                    g_param_spec_float("od-vehicle-conf",
+                                                       "Defines the detection confidence threashold for the VEHICLE class (-1.0 to disable the detection)",
+                                                       "Vehicle Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_VEHICLE_CONF,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(gobject_class, PROP_OD_BAG_CONF,
+                                    g_param_spec_float("od-bag-conf",
+                                                       "Defines the detection confidence threashold for the BAG class (-1.0 to disable the detection)",
+                                                       "Bag Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_BAG_CONF,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(gobject_class, PROP_OD_ANIMAL_CONF,
+                                    g_param_spec_float("od-animal-conf",
+                                                       "Defines the detection confidence threashold for the ANIMAL class (-1.0 to disable the detection)",
+                                                       "Animal Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_ANIMAL_CONF,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(gobject_class, PROP_OD_ELECTRONICS_CONF,
+                                    g_param_spec_float("od-electronics-conf",
+                                                       "Defines the detection confidence threashold for the ELECTRONICS class (-1.0 to disable the detection)",
+                                                       "Electronics Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_ELECTRONICS_CONF,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_FRUIT_VEGETABLES_CONF,
+        g_param_spec_float("od-fruit-vegetables-conf",
+                           "Defines the detection confidence threashold for the FRUIT_VEGETABLES class (-1.0 to disable the detection)",
+                           "Fruit/Vegetables Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_FRUIT_VEGETABLES_CONF,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(gobject_class, PROP_OD_SPORT_CONF,
+                                    g_param_spec_float("od-sport-conf",
+                                                       "Defines the detection confidence threashold for the SPORT class (-1.0 to disable the detection)",
+                                                       "Sport Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_SPORT_CONF,
+                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property(gobject_class, PROP_BRIGHTNESS,
                                     g_param_spec_int("brightness", "Camera control: brightness", "Image brightness", 0, 8, DEFAULT_PROP_BRIGHTNESS,
                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
@@ -969,6 +1026,13 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->od_max_range = DEFAULT_PROP_OD_MAX_RANGE;
     src->od_prediction_timeout_s = DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S;
     src->od_allow_reduced_precision_inference = DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE;
+    src->od_person_conf = DEFAULT_PROP_OD_PEOPLE_CONF;
+    src->od_vehicle_conf = DEFAULT_PROP_OD_VEHICLE_CONF;
+    src->od_animal_conf = DEFAULT_PROP_OD_ANIMAL_CONF;
+    src->od_bag_conf = DEFAULT_PROP_OD_BAG_CONF;
+    src->od_electronics_conf = DEFAULT_PROP_OD_ELECTRONICS_CONF;
+    src->od_fruit_vegetable_conf = DEFAULT_PROP_OD_FRUIT_VEGETABLES_CONF;
+    src->od_sport_conf = DEFAULT_PROP_OD_SPORT_CONF;
 
     src->brightness = DEFAULT_PROP_BRIGHTNESS;
     src->contrast = DEFAULT_PROP_CONTRAST;
@@ -1157,6 +1221,27 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE:
         src->od_allow_reduced_precision_inference = g_value_get_boolean(value);
+        break;
+    case PROP_OD_PERSON_CONF:
+        src->od_person_conf = g_value_get_float(value);
+        break;
+    case PROP_OD_VEHICLE_CONF:
+        src->od_vehicle_conf = g_value_get_float(value);
+        break;
+    case PROP_OD_ANIMAL_CONF:
+        src->od_animal_conf = g_value_get_float(value);
+        break;
+    case PROP_OD_BAG_CONF:
+        src->od_bag_conf = g_value_get_float(value);
+        break;
+    case PROP_OD_ELECTRONICS_CONF:
+        src->od_electronics_conf = g_value_get_float(value);
+        break;
+    case PROP_OD_FRUIT_VEGETABLES_CONF:
+        src->od_fruit_vegetable_conf = g_value_get_float(value);
+        break;
+    case PROP_OD_SPORT_CONF:
+        src->od_sport_conf = g_value_get_float(value);
         break;
     case PROP_BRIGHTNESS:
         src->brightness = g_value_get_int(value);
@@ -1375,7 +1460,27 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     case PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE:
         g_value_set_boolean(value, src->od_allow_reduced_precision_inference);
         break;
-
+    case PROP_OD_PERSON_CONF:
+        g_value_set_float(value, src->od_person_conf);
+        break;
+    case PROP_OD_VEHICLE_CONF:
+        g_value_set_float(value, src->od_vehicle_conf);
+        break;
+    case PROP_OD_ANIMAL_CONF:
+        g_value_set_float(value, src->od_animal_conf);
+        break;
+    case PROP_OD_BAG_CONF:
+        g_value_set_float(value, src->od_bag_conf);
+        break;
+    case PROP_OD_ELECTRONICS_CONF:
+        g_value_set_float(value, src->od_electronics_conf);
+        break;
+    case PROP_OD_FRUIT_VEGETABLES_CONF:
+        g_value_set_float(value, src->od_fruit_vegetable_conf);
+        break;
+    case PROP_OD_SPORT_CONF:
+        g_value_set_float(value, src->od_sport_conf);
+        break;
     case PROP_BRIGHTNESS:
         g_value_set_int(value, src->brightness);
         break;
@@ -1770,6 +1875,16 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         od_params.allow_reduced_precision_inference = src->od_allow_reduced_precision_inference;
         GST_INFO(" * Allow reduced precision inference: %s", (od_params.allow_reduced_precision_inference ? "TRUE" : "FALSE"));
 
+        GST_INFO(" * Confidence thresh.: %g", src->od_det_conf);
+
+        GST_INFO(" * Person conf: %g", src->od_person_conf);
+        GST_INFO(" * Vehicle conf: %g", src->od_vehicle_conf);
+        GST_INFO(" * Animal conf: %g", src->od_animal_conf);
+        GST_INFO(" * Bag conf: %g", src->od_bag_conf);
+        GST_INFO(" * Electronics conf: %g", src->od_electronics_conf);
+        GST_INFO(" * Fruit/Vegetables conf: %g", src->od_fruit_vegetable_conf);
+        GST_INFO(" * Sport conf: %g", src->od_sport_conf);
+
         // TODO(Walter) Handle classes and single class confidences
 
         ret = src->zed.enableObjectDetection(od_params);
@@ -2090,7 +2205,35 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         sl::ObjectDetectionRuntimeParameters rt_params;
         rt_params.detection_confidence_threshold = src->od_det_conf;
 
-        sl::Objects det_objs;
+        std::vector<sl::OBJECT_CLASS> class_filter;
+        if (src->od_person_conf > 0.0f)
+            class_filter.push_back(sl::OBJECT_CLASS::PERSON);
+        if (src->od_vehicle_conf > 0.0f)
+            class_filter.push_back(sl::OBJECT_CLASS::VEHICLE);
+        if (src->od_animal_conf > 0.0f)
+            class_filter.push_back(sl::OBJECT_CLASS::ANIMAL);
+        if (src->od_bag_conf > 0.0f)
+            class_filter.push_back(sl::OBJECT_CLASS::BAG);
+        if (src->od_electronics_conf > 0.0f)
+            class_filter.push_back(sl::OBJECT_CLASS::ELECTRONICS);
+        if (src->od_fruit_vegetable_conf > 0.0f)
+            class_filter.push_back(sl::OBJECT_CLASS::FRUIT_VEGETABLE);
+        if (src->od_sport_conf > 0.0f)
+            class_filter.push_back(sl::OBJECT_CLASS::SPORT);
+        rt_params.object_class_filter = class_filter;
+
+        std::map<sl::OBJECT_CLASS, float> class_det_conf;
+        class_det_conf[sl::OBJECT_CLASS::PERSON] = src->od_person_conf;
+        class_det_conf[sl::OBJECT_CLASS::VEHICLE] = src->od_vehicle_conf;
+        class_det_conf[sl::OBJECT_CLASS::ANIMAL] = src->od_animal_conf;
+        class_det_conf[sl::OBJECT_CLASS::ELECTRONICS] = src->od_electronics_conf;
+        class_det_conf[sl::OBJECT_CLASS::BAG] = src->od_bag_conf;
+        class_det_conf[sl::OBJECT_CLASS::FRUIT_VEGETABLE] = src->od_fruit_vegetable_conf;
+        class_det_conf[sl::OBJECT_CLASS::SPORT] = src->od_sport_conf;
+
+        rt_params.object_class_detection_confidence_threshold = class_det_conf;
+
+            sl::Objects det_objs;
         sl::ERROR_CODE ret = src->zed.retrieveObjects(det_objs, rt_params);
 
         if (ret == sl::ERROR_CODE::SUCCESS) {

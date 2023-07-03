@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION "3.6")
 
 project(gst-plugins-zed)
 
+## Generate symbols for IDE indexer
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_SHARED_MODULE_PREFIX "lib")
 set(CMAKE_SHARED_LIBRARY_PREFIX "lib")
 

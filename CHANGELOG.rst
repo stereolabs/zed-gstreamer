@@ -1,12 +1,27 @@
 LATEST CHANGES
 ==============
 
+2023-07-03
+----------
+
+* Add new parameter `od-detection-filter-mode`
+* Add new parameter `od-person-conf`
+* Add new parameter `od-vehicle-conf`
+* Add new parameter `od-bag-conf`
+* Add new parameter `od-animal-conf`
+* Add new parameter `od-electronics-conf`
+* Add new parameter `od-fruit-vegetables-conf`
+* Add new parameter `od-electronics-conf`
+* Add new parameter `od-sport-conf`
+
 2023-06-27
 ----------
-* changed `sensing-mode` to `fill-mode`
+
+* Change `sensing-mode` to `fill-mode`
 
 ZED SDK v3.8
 -------------
+
 - Add support for Region of Interest [Thx @ryanppeters]
   * Add `roi` parameter
   * Add `roi-x` parameter
@@ -21,11 +36,13 @@ ZED SDK v3.8
 
 ZED SDK v3.7
 -------------
+
 - Fix issue with texture confidence threshold invalidating the depth map
 - Add support for NEURAL depth mode
 
 ZED SDK v3.5
 -------------
+
 - Add compatibility fix for ZED SDK v3.5
 - Add support for new camera model "ZED 2i"
 - Improve Depth Handling and new `zedsrc` parameters
@@ -67,17 +84,20 @@ ZED SDK v3.5
 
 ZED SDK v3.4
 -------------
+
 - Add compatibility fix for ZED SDK v3.4
 - Add support for UINT16 Depth map
 
 ZED SDK v3.3 (2020-11-27)
 --------------------------
+
 - Add compatibility fix for ZED SDK v3.3
 - Add support for multiple OD class
 - Add support for MULTICLASS ACCURATE
 
 Release v0.1 (2020-08-24)
 --------------------------
+
 - ZED GStreamer package for Linux and Windows
 - zedsrc: acquires camera color image and depth map and pushes them in a GStreamer pipeline.
 - zedmeta: GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data).
