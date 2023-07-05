@@ -2626,6 +2626,23 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
     zedRtParams.enable_fill_mode = src->fill_mode;
     zedRtParams.remove_saturated_areas = true;
+
+    if( src->aec_agc==TRUE ) {
+    	if ( src->aec_agc_roi_x!=-1 &&
+		src->aec_agc_roi_y!=-1 &&
+		src->aec_agc_roi_w!=-1 &&
+		src->aec_agc_roi_h!=-1) {
+		sl::Rect roi;
+		roi.x=src->aec_agc_roi_x;
+		roi.y=src->aec_agc_roi_y;
+		roi.width=src->aec_agc_roi_w;
+		roi.height=src->aec_agc_roi_h;
+		sl::SIDE side = static_cast<sl::SIDE>(src->aec_agc_roi_side);
+		GST_INFO(" Runtime AEC_AGC_ROI: (%d,%d)-%dx%d - Side: %d",
+			roi.x, roi.y, roi.width, roi.height, side);
+		src->zed.setCameraSettings( sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side );
+	}
+    }
     // <---- Set runtime parameters
 
     // ----> ZED grab
