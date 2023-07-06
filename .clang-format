@@ -17,6 +17,6 @@ SpacesBeforeTrailingComments: 3
 AlwaysBreakAfterReturnType: None
 #  #define SHORT_NAME       42
 #  #define LONGER_NAME      0x007f   # does nice spacing for macros
-AlignConsecutiveMacros: Consecutive
+AlignConsecutiveMacros: Enabled
 # use \n instead of \r\n
 UseCRLF: false

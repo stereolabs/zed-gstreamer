@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Example pipeline to acquire a stream at default resolution and frame rate
 # with RGB and Object Detection information and displaying the results 

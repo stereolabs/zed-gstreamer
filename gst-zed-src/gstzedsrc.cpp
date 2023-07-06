@@ -170,7 +170,7 @@ typedef enum { GST_ZEDSRC_SIDE_LEFT = 0, GST_ZEDSRC_SIDE_RIGHT = 1, GST_ZEDSRC_S
 
 // INITIALIZATION
 #define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::AUTO)
-#define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_30FPS
+#define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_15FPS
 #define DEFAULT_PROP_SDK_VERBOSE    FALSE
 #define DEFAULT_PROP_CAM_FLIP       2
 #define DEFAULT_PROP_CAM_ID         0
@@ -184,7 +184,7 @@ typedef enum { GST_ZEDSRC_SIDE_LEFT = 0, GST_ZEDSRC_SIDE_RIGHT = 1, GST_ZEDSRC_S
 #define DEFAULT_PROP_DEPTH_MODE     static_cast<gint>(sl::DEPTH_MODE::NONE)
 #define DEFAULT_PROP_COORD_SYS      static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
-#define DEFAULT_PROP_DEPTH_STAB     TRUE
+#define DEFAULT_PROP_DEPTH_STAB     1
 //#define DEFAULT_PROP_RIGHT_DEPTH              FALSE
 #define DEFAULT_PROP_ROI   FALSE
 #define DEFAULT_PROP_ROI_X -1
@@ -663,7 +663,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
        (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));*/
 
     g_object_class_install_property(gobject_class, PROP_DEPTH_STAB,
-                                    g_param_spec_boolean("depth-stabilization", "Depth stabilization", "Enable depth stabilization", DEFAULT_PROP_DEPTH_STAB,
+                                    g_param_spec_int("depth-stabilization", "Depth stabilization", "Enable depth stabilization", 0,100,DEFAULT_PROP_DEPTH_STAB,
                                                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(gobject_class, PROP_COORD_SYS,
@@ -1113,7 +1113,7 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         src->camera_disable_self_calib = g_value_get_boolean(value);
         break;
     case PROP_DEPTH_STAB:
-        src->depth_stabilization = g_value_get_boolean(value);
+        src->depth_stabilization = g_value_get_int(value);
         break;
     case PROP_COORD_SYS:
         src->coord_sys = g_value_get_enum(value);
@@ -1358,7 +1358,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_boolean( value, src->enable_right_side_measure);
         break;*/
     case PROP_DEPTH_STAB:
-        g_value_set_boolean(value, src->depth_stabilization);
+        g_value_set_int(value, src->depth_stabilization);
         break;
     case PROP_CONFIDENCE_THRESH:
         g_value_set_int(value, src->confidence_threshold);
@@ -1665,7 +1665,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     init_params.depth_maximum_distance = src->depth_max_dist;
     GST_INFO(" * MAX depth: %g", init_params.depth_maximum_distance);
     init_params.depth_stabilization = src->depth_stabilization;
-    GST_INFO(" * Depth Stabilization: %s", (init_params.depth_stabilization ? "TRUE" : "FALSE"));
+    GST_INFO(" * Depth Stabilization: %d", init_params.depth_stabilization );
     init_params.enable_right_side_measure = false;   // src->enable_right_side_measure==TRUE;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib == TRUE;
     GST_INFO(" * Disable self calibration: %s", (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
@@ -1762,7 +1762,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     // <---- Camera Controls
 
     // ----> Runtime parameters
-    GST_INFO("CAMERA RUNTIME PARAMETERS");
+    GST_DEBUG("CAMERA RUNTIME PARAMETERS");
     if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
         GST_INFO(" * Depth calculation: ON");
     } else {
@@ -2013,7 +2013,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // ----> Set runtime parameters
     sl::RuntimeParameters zedRtParams;   // runtime parameters
 
-    GST_INFO("CAMERA RUNTIME PARAMETERS");
+    GST_DEBUG("CAMERA RUNTIME PARAMETERS");
     if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
         zedRtParams.enable_depth = false;
     } else {

@@ -136,11 +136,11 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `depth-mode`: Depth Mode - {NONE (0), PERFORMANCE (1), QUALITY (2), ULTRA (3)}
  * `coordinate-system`: 3D Coordinate System - {Image (0) - Left handed, Y up (1) - Right handed, Y up (2) - Right handed, Z up (3) - Left handed, Z up (4) - Right handed, Z up, X fwd (5)}
  * `roi`: Enable region of interest for SDK to focus on - {TRUE, FALSE}
- * `roi-x`: Region of interest focus left 'X' coordinate (-1 to not set ROI) - {-1,2208}
- * `roi-y`: Region of interest focus left 'Y' coordinate (-1 to not set ROI) - {-1,1242}
- * `roi-w`: Region of interest focus height (-1 to not set ROI) - {-1,2208}
- * `roi-h`: Region of interest focus height (-1 to not set ROI) - {-1,1242}
- * `depth-stabilization`: Enable depth stabilization - {TRUE, FALSE}
+ * `roi-x`: Region of interest focus left 'X' coordinate (-1 to not set ROI) - [-1,2208]
+ * `roi-y`: Region of interest focus left 'Y' coordinate (-1 to not set ROI) - [-1,1242]
+ * `roi-w`: Region of interest focus height (-1 to not set ROI) - [-1,2208]
+ * `roi-h`: Region of interest focus height (-1 to not set ROI) - [-1,1242]
+ * `depth-stabilization`: Set depth stabilization - [0,100]
  * `confidence-threshold`: Specify the Depth Confidence Threshold - [0,100]
  * `texture-confidence-threshold`: Specify the Texture Confidence Threshold - [0,100]
  * `measure3D-reference-frame` : Specify the 3D Reference Frame - {WORLD (0), CAMERA (1)}

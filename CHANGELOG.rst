@@ -1,6 +1,11 @@
 LATEST CHANGES
 ==============
 
+2023-07-06
+----------
+* Add new `jetson` script folder
+* `depth-stabilization` is now an integer [0,100] parameter
+
 2023-07-03
 ----------
 
