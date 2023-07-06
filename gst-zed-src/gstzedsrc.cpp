@@ -155,14 +155,11 @@ typedef enum {
 } GstZedSrcCoordSys;
 
 typedef enum {
-    GST_ZEDSRC_OD_MULTI_CLASS_BOX = 0,
-    GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE = 1,
-    GST_ZEDSRC_OD_HUMAN_BODY_FAST = 2,
-    GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE = 3,
-    GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM = 4,
-    GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM = 5,
-    GST_ZEDSRC_OD_PERSON_HEAD_BOX = 6,
-    GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE = 7,
+    GST_ZEDSRC_OD_MULTI_CLASS_BOX_FAST = 0,
+    GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM = 1,
+    GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE = 2,
+    GST_ZEDSRC_OD_PERSON_HEAD_BOX_FAST = 3,
+    GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE = 4
 } GstZedSrcOdModel;
 
 typedef enum { GST_ZEDSRC_OD_FILTER_MODE_NONE, GST_ZEDSRC_OD_FILTER_MODE_NMS3D, GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS } GstZedSrcOdFilterMode;
@@ -223,7 +220,7 @@ typedef enum { GST_ZEDSRC_SIDE_LEFT = 0, GST_ZEDSRC_SIDE_RIGHT = 1, GST_ZEDSRC_S
 #define DEFAULT_PROP_OD_SYNC                              TRUE
 #define DEFAULT_PROP_OD_TRACKING                          TRUE
 #define DEFAULT_PROP_OD_SEGM                              FALSE   // NOTE for the future
-#define DEFAULT_PROP_OD_MODEL                             GST_ZEDSRC_OD_MULTI_CLASS_BOX
+#define DEFAULT_PROP_OD_MODEL                             GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM
 #define DEFAULT_PROP_OD_FILTER_MODE                       GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS
 #define DEFAULT_PROP_OD_CONFIDENCE                        50.0
 #define DEFAULT_PROP_OD_MAX_RANGE                         DEFAULT_PROP_DEPTH_MAX
@@ -383,23 +380,16 @@ static GType gst_zedsrc_od_model_get_type(void) {
 
     if (!zedsrc_od_model_type) {
         static GEnumValue pattern_types[] = {
-            {GST_ZEDSRC_OD_MULTI_CLASS_BOX, "Any objects, bounding box based", "Object Detection Multi class"},
-            {GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE, "Any objects, bounding box based, state of the art accuracy, requires powerful GPU",
-             "Object Detection Multi class ACCURATE"},
-            {GST_ZEDSRC_OD_HUMAN_BODY_FAST, "Keypoints based, specific to human skeleton, real time performance even on Jetson or low end GPU cards",
-             "Skeleton tracking FAST"},
-            {GST_ZEDSRC_OD_HUMAN_BODY_ACCURATE, "Keypoints based, specific to human skeleton, state of the art accuracy, requires powerful GPU",
-             "Skeleton tracking ACCURATE"},
+            {GST_ZEDSRC_OD_MULTI_CLASS_BOX_FAST, "Any objects, bounding box based", "Object Detection Multi class FAST"},
             {GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM, "Any objects, bounding box based, compromise between accuracy and speed",
              "Object Detection Multi class MEDIUM"},
-            {GST_ZEDSRC_OD_HUMAN_BODY_MEDIUM, "Keypoints based, specific to human skeleton, compromise between accuracy and speed", "Skeleton tracking MEDIUM"},
-            {GST_ZEDSRC_OD_PERSON_HEAD_BOX,
-             "Bounding Box detector specialized in person heads, particulary well suited for crowded environments, the "
-             "person localization is also improved",
-             "Person Head"},
+            {GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE, "Any objects, bounding box based, more accurate but slower than the base model",
+             "Object Detection Multi class ACCURATE"},
+            {GST_ZEDSRC_OD_PERSON_HEAD_BOX_FAST,
+             "Bounding Box detector specialized in person heads, particularly well suited for crowded environments, the person localization is also improved",
+             "Person Head FAST"},
             {GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE,
-             "Bounding Box detector specialized in person heads, particulary well suited for crowded environments, the "
-             "person localization is also improved, more accurate but slower than the base model",
+             "Bounding Box detector specialized in person heads, particularly well suited for crowded environments, the person localization is also improved, more accurate but slower than the base model",
              "Person Head ACCURATE"},
             {0, NULL, NULL},
         };
