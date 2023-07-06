@@ -3,7 +3,7 @@
 BasedOnStyle: LLVM
 IndentWidth: 4
 # Must be 80 characters or less!
-ColumnLimit: 160
+ColumnLimit: 100
 # does (int) x instead of (int)x
 SpaceAfterCStyleCast: true
 # spaces, not tabs!
@@ -17,6 +17,6 @@ SpacesBeforeTrailingComments: 3
 AlwaysBreakAfterReturnType: None
 #  #define SHORT_NAME       42
 #  #define LONGER_NAME      0x007f   # does nice spacing for macros
-AlignConsecutiveMacros: Enabled
+AlignConsecutiveMacros: Consecutive
 # use \n instead of \r\n
 UseCRLF: false

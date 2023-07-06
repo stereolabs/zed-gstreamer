@@ -34,8 +34,10 @@ GST_DEBUG_CATEGORY_STATIC(gst_zedsrc_debug);
 #define BT_INSTANCE_MODULE_ID 1
 
 /* prototypes */
-static void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec);
-static void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec);
+static void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value,
+                                    GParamSpec *pspec);
+static void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value,
+                                    GParamSpec *pspec);
 static void gst_zedsrc_dispose(GObject *object);
 static void gst_zedsrc_finalize(GObject *object);
 
@@ -129,7 +131,13 @@ enum {
     N_PROPERTIES
 };
 
-typedef enum { GST_ZEDSRC_120FPS = 120, GST_ZEDSRC_100FPS = 100, GST_ZEDSRC_60FPS = 60, GST_ZEDSRC_30FPS = 30, GST_ZEDSRC_15FPS = 15 } GstZedSrcFPS;
+typedef enum {
+    GST_ZEDSRC_120FPS = 120,
+    GST_ZEDSRC_100FPS = 100,
+    GST_ZEDSRC_60FPS = 60,
+    GST_ZEDSRC_30FPS = 30,
+    GST_ZEDSRC_15FPS = 15
+} GstZedSrcFPS;
 
 typedef enum {
     GST_ZEDSRC_NO_FLIP = 0,
@@ -162,11 +170,20 @@ typedef enum {
     GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE = 4
 } GstZedSrcOdModel;
 
-typedef enum { GST_ZEDSRC_OD_FILTER_MODE_NONE, GST_ZEDSRC_OD_FILTER_MODE_NMS3D, GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS } GstZedSrcOdFilterMode;
+typedef enum {
+    GST_ZEDSRC_OD_FILTER_MODE_NONE,
+    GST_ZEDSRC_OD_FILTER_MODE_NMS3D,
+    GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS
+} GstZedSrcOdFilterMode;
 
-typedef enum { GST_ZEDSRC_SIDE_LEFT = 0, GST_ZEDSRC_SIDE_RIGHT = 1, GST_ZEDSRC_SIDE_BOTH = 2 } GstZedSrcSide;
+typedef enum {
+    GST_ZEDSRC_SIDE_LEFT = 0,
+    GST_ZEDSRC_SIDE_RIGHT = 1,
+    GST_ZEDSRC_SIDE_BOTH = 2
+} GstZedSrcSide;
 
-//////////////// DEFAULT PARAMETERS //////////////////////////////////////////////////////////////////////////
+//////////////// DEFAULT PARAMETERS
+/////////////////////////////////////////////////////////////////////////////
 
 // INITIALIZATION
 #define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::AUTO)
@@ -219,12 +236,11 @@ typedef enum { GST_ZEDSRC_SIDE_LEFT = 0, GST_ZEDSRC_SIDE_RIGHT = 1, GST_ZEDSRC_S
 #define DEFAULT_PROP_OD_ENABLE                            FALSE
 #define DEFAULT_PROP_OD_SYNC                              TRUE
 #define DEFAULT_PROP_OD_TRACKING                          TRUE
-#define DEFAULT_PROP_OD_SEGM                              FALSE   // NOTE for the future
+#define DEFAULT_PROP_OD_SEGM                              FALSE   // NOTE(Walter) for the future
 #define DEFAULT_PROP_OD_MODEL                             GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM
 #define DEFAULT_PROP_OD_FILTER_MODE                       GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS
 #define DEFAULT_PROP_OD_CONFIDENCE                        50.0
 #define DEFAULT_PROP_OD_MAX_RANGE                         DEFAULT_PROP_DEPTH_MAX
-#define DEFAULT_PROP_OD_BODY_FITTING                      TRUE
 #define DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S              0.2
 #define DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE FALSE
 #define DEFAULT_PROP_OD_PEOPLE_CONF                       35.0
@@ -234,6 +250,22 @@ typedef enum { GST_ZEDSRC_SIDE_LEFT = 0, GST_ZEDSRC_SIDE_RIGHT = 1, GST_ZEDSRC_S
 #define DEFAULT_PROP_OD_ELECTRONICS_CONF                  35.0
 #define DEFAULT_PROP_OD_FRUIT_VEGETABLES_CONF             35.0
 #define DEFAULT_PROP_OD_SPORT_CONF                        35.0
+
+// BODY TRACKING
+#define DEFAULT_PROP_BT_ENABLE                            FALSE
+#define DEFAULT_PROP_BT_SEGM                              FALSE   // NOTE(Walter) for the future
+#define DEFAULT_PROP_BT_SYNC                              TRUE
+#define DEFAULT_PROP_BT_MODEL                             0
+#define DEFAULT_PROP_BT_FORMAT                            0
+#define DEFAULT_PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE FALSE
+#define DEFAULT_PROP_BT_MAX_RANGE                         15.0
+#define DEFAULT_PROP_BT_KP_SELECT                         0
+#define DEFAULT_PROP_BT_BODY_FITTING                      TRUE
+#define DEFAULT_PROP_BT_TRACKING                          TRUE
+#define DEFAULT_PROP_BT_PREDICTION_TIMEOUT_S              0.2
+#define DEFAULT_PROP_BT_CONFIDENCE                        50.0
+#define DEFAULT_PROP_BT_MIN_KP_THRESH                     10
+#define DEFAULT_PROP_BT_SMOOTHING                         0.0
 
 // CAMERA CONTROLS
 #define DEFAULT_PROP_BRIGHTNESS        4
@@ -285,7 +317,8 @@ static GType gst_zedsrc_resol_get_type(void) {
             {static_cast<gint>(sl::RESOLUTION::HD720), "1280x720", "HD720 (USB3)"},
             {static_cast<gint>(sl::RESOLUTION::SVGA), "960x600", "SVGA (GMSL2)"},
             {static_cast<gint>(sl::RESOLUTION::VGA), "672x376", "VGA (USB3)"},
-            {static_cast<gint>(sl::RESOLUTION::AUTO), "Automatic", "Default value for the camera model"},
+            {static_cast<gint>(sl::RESOLUTION::AUTO), "Automatic",
+             "Default value for the camera model"},
             {0, NULL, NULL},
         };
 
@@ -303,8 +336,10 @@ static GType gst_zedsrc_fps_get_type(void) {
         static GEnumValue pattern_types[] = {
             {GST_ZEDSRC_120FPS, "only SVGA (GMSL2) resolution", "120 FPS"},
             {GST_ZEDSRC_100FPS, "only VGA (USB3) resolution", "100 FPS"},
-            {GST_ZEDSRC_60FPS, "VGA (USB3), HD720, HD1080 (GMSL2), and HD1200 (GMSL2) resolutions", "60  FPS"},
-            {GST_ZEDSRC_30FPS, "VGA (USB3), HD720 (USB3) and HD1080 (USB3/GMSL2) resolutions", "30  FPS"},
+            {GST_ZEDSRC_60FPS, "VGA (USB3), HD720, HD1080 (GMSL2), and HD1200 (GMSL2) resolutions",
+             "60  FPS"},
+            {GST_ZEDSRC_30FPS, "VGA (USB3), HD720 (USB3) and HD1080 (USB3/GMSL2) resolutions",
+             "30  FPS"},
             {GST_ZEDSRC_15FPS, "all resolutions (NO GMSL2)", "15  FPS"},
             {0, NULL, NULL},
         };
@@ -341,9 +376,11 @@ static GType gst_zedsrc_stream_type_get_type(void) {
         static GEnumValue pattern_types[] = {
             {GST_ZEDSRC_ONLY_LEFT, "8 bits- 4 channels Left image", "Left image [BGRA]"},
             {GST_ZEDSRC_ONLY_RIGHT, "8 bits- 4 channels Right image", "Right image [BGRA]"},
-            {GST_ZEDSRC_LEFT_RIGHT, "8 bits- 4 channels bit Left and Right", "Stereo couple up/down [BGRA]"},
+            {GST_ZEDSRC_LEFT_RIGHT, "8 bits- 4 channels bit Left and Right",
+             "Stereo couple up/down [BGRA]"},
             {GST_ZEDSRC_DEPTH_16, "16 bits depth", "Depth image [GRAY16_LE]"},
-            {GST_ZEDSRC_LEFT_DEPTH, "8 bits- 4 channels Left and Depth(image)", "Left and Depth up/down [BGRA]"},
+            {GST_ZEDSRC_LEFT_DEPTH, "8 bits- 4 channels Left and Depth(image)",
+             "Left and Depth up/down [BGRA]"},
             {0, NULL, NULL},
         };
 
@@ -359,12 +396,23 @@ static GType gst_zedsrc_coord_sys_get_type(void) {
 
     if (!zedsrc_coord_sys_type) {
         static GEnumValue pattern_types[] = {
-            {GST_ZEDSRC_COORD_IMAGE, "Standard coordinates system in computer vision. Used in OpenCV.", "Image"},
-            {GST_ZEDSRC_COORD_LEFT_HANDED_Y_UP, "Left-Handed with Y up and Z forward. Used in Unity with DirectX.", "Left handed, Y up"},
-            {GST_ZEDSRC_COORD_RIGHT_HANDED_Y_UP, "Right-Handed with Y pointing up and Z backward. Used in OpenGL.", "Right handed, Y up"},
-            {GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP, "Right-Handed with Z pointing up and Y forward. Used in 3DSMax.", "Right handed, Z up"},
-            {GST_ZEDSRC_COORD_LEFT_HANDED_Z_UP, "Left-Handed with Z axis pointing up and X forward. Used in Unreal Engine.", "Left handed, Z up"},
-            {GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP_X_FWD, "Right-Handed with Z pointing up and X forward. Used in ROS (REP 103).", "Right handed, Z up, X fwd"},
+            {GST_ZEDSRC_COORD_IMAGE,
+             "Standard coordinates system in computer vision. Used in OpenCV.", "Image"},
+            {GST_ZEDSRC_COORD_LEFT_HANDED_Y_UP,
+             "Left-Handed with Y up and Z forward. Used in Unity with DirectX.",
+             "Left handed, Y up"},
+            {GST_ZEDSRC_COORD_RIGHT_HANDED_Y_UP,
+             "Right-Handed with Y pointing up and Z backward. Used in OpenGL.",
+             "Right handed, Y up"},
+            {GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP,
+             "Right-Handed with Z pointing up and Y forward. Used in 3DSMax.",
+             "Right handed, Z up"},
+            {GST_ZEDSRC_COORD_LEFT_HANDED_Z_UP,
+             "Left-Handed with Z axis pointing up and X forward. Used in Unreal Engine.",
+             "Left handed, Z up"},
+            {GST_ZEDSRC_COORD_RIGHT_HANDED_Z_UP_X_FWD,
+             "Right-Handed with Z pointing up and X forward. Used in ROS (REP 103).",
+             "Right handed, Z up, X fwd"},
             {0, NULL, NULL},
         };
 
@@ -380,16 +428,22 @@ static GType gst_zedsrc_od_model_get_type(void) {
 
     if (!zedsrc_od_model_type) {
         static GEnumValue pattern_types[] = {
-            {GST_ZEDSRC_OD_MULTI_CLASS_BOX_FAST, "Any objects, bounding box based", "Object Detection Multi class FAST"},
-            {GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM, "Any objects, bounding box based, compromise between accuracy and speed",
+            {GST_ZEDSRC_OD_MULTI_CLASS_BOX_FAST, "Any objects, bounding box based",
+             "Object Detection Multi class FAST"},
+            {GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM,
+             "Any objects, bounding box based, compromise between accuracy and speed",
              "Object Detection Multi class MEDIUM"},
-            {GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE, "Any objects, bounding box based, more accurate but slower than the base model",
+            {GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE,
+             "Any objects, bounding box based, more accurate but slower than the base model",
              "Object Detection Multi class ACCURATE"},
             {GST_ZEDSRC_OD_PERSON_HEAD_BOX_FAST,
-             "Bounding Box detector specialized in person heads, particularly well suited for crowded environments, the person localization is also improved",
+             "Bounding Box detector specialized in person heads, particularly well suited for "
+             "crowded environments, the person localization is also improved",
              "Person Head FAST"},
             {GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE,
-             "Bounding Box detector specialized in person heads, particularly well suited for crowded environments, the person localization is also improved, more accurate but slower than the base model",
+             "Bounding Box detector specialized in person heads, particularly well suited for "
+             "crowded environments, the person localization is also improved, "
+             "more accurate but slower than the base model",
              "Person Head ACCURATE"},
             {0, NULL, NULL},
         };
@@ -406,11 +460,14 @@ static GType gst_zedsrc_od_filter_mode_get_type(void) {
 
     if (!zedsrc_od_filter_mode_type) {
         static GEnumValue pattern_types[] = {
-            {GST_ZEDSRC_OD_FILTER_MODE_NMS3D, "SDK will not apply any preprocessing to the detected objects"},
             {GST_ZEDSRC_OD_FILTER_MODE_NMS3D,
-             "SDK will remove objects that are in the same 3D position as an already tracked object (independant of class ID)"},
+             "SDK will not apply any preprocessing to the detected objects"},
+            {GST_ZEDSRC_OD_FILTER_MODE_NMS3D,
+             "SDK will remove objects that are in the same 3D position as an already tracked "
+             "object (independant of class ID)"},
             {GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS,
-             "SDK will remove objects that are in the same 3D position as an already tracked object of the same class ID."},
+             "SDK will remove objects that are in the same 3D position as an already tracked "
+             "object of the same class ID."},
             {0, NULL, NULL},
         };
 
@@ -420,18 +477,69 @@ static GType gst_zedsrc_od_filter_mode_get_type(void) {
     return zedsrc_od_filter_mode_type;
 }
 
+#define GST_TYPE_ZED_BT_MODEL_TYPE (gst_zedsrc_bt_model_get_type())
+static GType gst_zedsrc_bt_model_get_type(void) {
+    static GType zedsrc_bt_model_type = 0;
+
+    if (!zedsrc_bt_model_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDSRC_BT_HUMAN_BODY_FAST , "Keypoints based, specific to human skeleton, real time performance even on Jetson or low end GPU cards",
+             "Body Tracking FAST"},
+             {GST_ZEDSRC_BT_HUMAN_BODY_MEDIUM, "Keypoints based, specific to human skeleton, compromise between accuracy and speed",
+             "Body Tracking MEDIUM"},
+             {GST_ZEDSRC_BT_HUMAN_BODY_ACCURATE , "Keypoints based, specific to human skeleton, state of the art accuracy, requires powerful GPU",
+             "Body Tracking ACCURATE"},
+            {0, NULL, NULL},
+        };
+
+        zedsrc_bt_model_type = g_enum_register_static("GstZedSrcBtModel", pattern_types);
+    }
+
+    return zedsrc_bt_model_type;
+}
+
+#define GST_TYPE_ZED_BT_FORMAT_TYPE (gst_zedsrc_bt_format_get_type())
+static GType gst_zedsrc_bt_format_get_type(void) {
+    static GType zedsrc_bt_format_type = 0;
+
+    if (!zedsrc_bt_format_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDSRC_BT_BODY_18 , "18 keypoints format. Basic Body format",
+             "Body 18 Key Points"},
+             {GST_ZEDSRC_BT_BODY_34, "34 keypoints format. Body format, requires body fitting enabled",
+             "Body 34 Key Points"},
+             {GST_ZEDSRC_BT_BODY_38 , "38 keypoints format. Body format, including feet simplified face and hands",
+             "Body 38 Key Points"},
+            {0, NULL, NULL},
+        };
+
+        zedsrc_bt_format_type = g_enum_register_static("GstZedSrcBtFormat", pattern_types);
+    }
+
+    return zedsrc_bt_format_type;
+}
+
 #define GST_TYPE_ZED_DEPTH_MODE (gst_zedsrc_depth_mode_get_type())
 static GType gst_zedsrc_depth_mode_get_type(void) {
     static GType zedsrc_depth_mode_type = 0;
 
     if (!zedsrc_depth_mode_type) {
         static GEnumValue pattern_types[] = {
-            {static_cast<gint>(sl::DEPTH_MODE::NEURAL), "End to End Neural disparity estimation, requires AI module", "NEURAL"},
-            {static_cast<gint>(sl::DEPTH_MODE::ULTRA), "Computation mode favorising edges and sharpness. Requires more GPU memory and computation power.",
+            {static_cast<gint>(sl::DEPTH_MODE::NEURAL),
+             "End to End Neural disparity estimation, requires AI module", "NEURAL"},
+            {static_cast<gint>(sl::DEPTH_MODE::ULTRA),
+             "Computation mode favorising edges and sharpness. Requires more GPU memory and "
+             "computation power.",
              "ULTRA"},
-            {static_cast<gint>(sl::DEPTH_MODE::QUALITY), "Computation mode designed for challenging areas with untextured surfaces.", "QUALITY"},
-            {static_cast<gint>(sl::DEPTH_MODE::PERFORMANCE), "Computation mode optimized for speed.", "PERFORMANCE"},
-            {static_cast<gint>(sl::DEPTH_MODE::NONE), "This mode does not compute any depth map. Only rectified stereo images will be available.", "NONE"},
+            {static_cast<gint>(sl::DEPTH_MODE::QUALITY),
+             "Computation mode designed for challenging areas with untextured surfaces.",
+             "QUALITY"},
+            {static_cast<gint>(sl::DEPTH_MODE::PERFORMANCE),
+             "Computation mode optimized for speed.", "PERFORMANCE"},
+            {static_cast<gint>(sl::DEPTH_MODE::NONE),
+             "This mode does not compute any depth map. Only rectified stereo images will be "
+             "available.",
+             "NONE"},
             {0, NULL, NULL},
         };
 
@@ -448,127 +556,133 @@ static GType gst_zedsrc_3d_meas_ref_frame_get_type(void) {
     if (!zedsrc_3d_meas_ref_frame_type) {
         static GEnumValue pattern_types[] = {
             {static_cast<gint>(sl::REFERENCE_FRAME::WORLD),
-             "The positional tracking pose transform will contains the motion with reference to the world frame.", "WORLD"},
-            {static_cast<gint>(sl::REFERENCE_FRAME::CAMERA), "The  pose transform will contains the motion with reference to the previous camera frame.",
+             "The positional tracking pose transform will contains the motion with reference to "
+             "the world frame.",
+             "WORLD"},
+            {static_cast<gint>(sl::REFERENCE_FRAME::CAMERA),
+             "The  pose transform will contains the motion with reference to the previous camera "
+             "frame.",
              "CAMERA"},
             {0, NULL, NULL},
         };
 
-        zedsrc_3d_meas_ref_frame_type = g_enum_register_static("GstZedsrc3dMeasRefFrame", pattern_types);
+        zedsrc_3d_meas_ref_frame_type =
+            g_enum_register_static("GstZedsrc3dMeasRefFrame", pattern_types);
     }
 
     return zedsrc_3d_meas_ref_frame_type;
 }
 
 /* pad templates */
-static GstStaticPadTemplate gst_zedsrc_src_template = GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
-                                                                              GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)672, "
-                                                                                               "height = (int)752 , "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 100 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Double stream HD720
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1280, "
-                                                                                               "height = (int)1440, "
-                                                                                               "framerate = (fraction) { 15, 30, 60 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Double stream HD1080
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)2160, "
-                                                                                               "framerate = (fraction) { 15, 30 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Double stream HD2K
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)2208, "
-                                                                                               "height = (int)2484, "
-                                                                                               "framerate = (fraction)15"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Double stream HD1200 (GMSL2)
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)2400, "
-                                                                                               "framerate = (fraction) { 15, 30, 60 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Double stream SVGA (GMSL2)
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)960, "
-                                                                                               "height = (int)1200, "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 120 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Color VGA
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)672, "
-                                                                                               "height =  (int)376, "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 100 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Color HD720
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1280, "
-                                                                                               "height =  (int)720, "
-                                                                                               "framerate =  (fraction)  { 15, 30, 60}"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Color HD1080
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)1080, "
-                                                                                               "framerate = (fraction) { 15, 30 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Color HD2K
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)2208, "
-                                                                                               "height = (int)1242, "
-                                                                                               "framerate = (fraction)15"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Color HD1200 (GMSL2)
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)1200, "
-                                                                                               "framerate = (fraction) { 15, 30, 60 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Color SVGA (GMSL2)
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)960, "
-                                                                                               "height = (int)600, "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 120 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Depth VGA
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)672, "
-                                                                                               "height =  (int)376, "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 100 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Depth HD720
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)1280, "
-                                                                                               "height =  (int)720, "
-                                                                                               "framerate =  (fraction)  { 15, 30, 60}"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Depth HD1080
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)1080, "
-                                                                                               "framerate = (fraction) { 15, 30 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Depth HD2K
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)2208, "
-                                                                                               "height = (int)1242, "
-                                                                                               "framerate = (fraction)15"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Depth HD1200 (GMSL2)
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)1200, "
-                                                                                               "framerate = (fraction) { 15, 30, 60 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Depth SVGA (GMSL2)
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)960, "
-                                                                                               "height = (int)600, "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 120 }")));
+static GstStaticPadTemplate gst_zedsrc_src_template =
+    GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+                            GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
+                                             "format = (string)BGRA, "
+                                             "width = (int)672, "
+                                             "height = (int)752 , "
+                                             "framerate = (fraction) { 15, 30, 60, 100 }"
+                                             ";"
+                                             "video/x-raw, "   // Double stream HD720
+                                             "format = (string)BGRA, "
+                                             "width = (int)1280, "
+                                             "height = (int)1440, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // Double stream HD1080
+                                             "format = (string)BGRA, "
+                                             "width = (int)1920, "
+                                             "height = (int)2160, "
+                                             "framerate = (fraction) { 15, 30 }"
+                                             ";"
+                                             "video/x-raw, "   // Double stream HD2K
+                                             "format = (string)BGRA, "
+                                             "width = (int)2208, "
+                                             "height = (int)2484, "
+                                             "framerate = (fraction)15"
+                                             ";"
+                                             "video/x-raw, "   // Double stream HD1200 (GMSL2)
+                                             "format = (string)BGRA, "
+                                             "width = (int)1920, "
+                                             "height = (int)2400, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // Double stream SVGA (GMSL2)
+                                             "format = (string)BGRA, "
+                                             "width = (int)960, "
+                                             "height = (int)1200, "
+                                             "framerate = (fraction) { 15, 30, 60, 120 }"
+                                             ";"
+                                             "video/x-raw, "   // Color VGA
+                                             "format = (string)BGRA, "
+                                             "width = (int)672, "
+                                             "height =  (int)376, "
+                                             "framerate = (fraction) { 15, 30, 60, 100 }"
+                                             ";"
+                                             "video/x-raw, "   // Color HD720
+                                             "format = (string)BGRA, "
+                                             "width = (int)1280, "
+                                             "height =  (int)720, "
+                                             "framerate =  (fraction)  { 15, 30, 60}"
+                                             ";"
+                                             "video/x-raw, "   // Color HD1080
+                                             "format = (string)BGRA, "
+                                             "width = (int)1920, "
+                                             "height = (int)1080, "
+                                             "framerate = (fraction) { 15, 30 }"
+                                             ";"
+                                             "video/x-raw, "   // Color HD2K
+                                             "format = (string)BGRA, "
+                                             "width = (int)2208, "
+                                             "height = (int)1242, "
+                                             "framerate = (fraction)15"
+                                             ";"
+                                             "video/x-raw, "   // Color HD1200 (GMSL2)
+                                             "format = (string)BGRA, "
+                                             "width = (int)1920, "
+                                             "height = (int)1200, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // Color SVGA (GMSL2)
+                                             "format = (string)BGRA, "
+                                             "width = (int)960, "
+                                             "height = (int)600, "
+                                             "framerate = (fraction) { 15, 30, 60, 120 }"
+                                             ";"
+                                             "video/x-raw, "   // Depth VGA
+                                             "format = (string)GRAY16_LE, "
+                                             "width = (int)672, "
+                                             "height =  (int)376, "
+                                             "framerate = (fraction) { 15, 30, 60, 100 }"
+                                             ";"
+                                             "video/x-raw, "   // Depth HD720
+                                             "format = (string)GRAY16_LE, "
+                                             "width = (int)1280, "
+                                             "height =  (int)720, "
+                                             "framerate =  (fraction)  { 15, 30, 60}"
+                                             ";"
+                                             "video/x-raw, "   // Depth HD1080
+                                             "format = (string)GRAY16_LE, "
+                                             "width = (int)1920, "
+                                             "height = (int)1080, "
+                                             "framerate = (fraction) { 15, 30 }"
+                                             ";"
+                                             "video/x-raw, "   // Depth HD2K
+                                             "format = (string)GRAY16_LE, "
+                                             "width = (int)2208, "
+                                             "height = (int)1242, "
+                                             "framerate = (fraction)15"
+                                             ";"
+                                             "video/x-raw, "   // Depth HD1200 (GMSL2)
+                                             "format = (string)GRAY16_LE, "
+                                             "width = (int)1920, "
+                                             "height = (int)1200, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // Depth SVGA (GMSL2)
+                                             "format = (string)GRAY16_LE, "
+                                             "width = (int)960, "
+                                             "height = (int)600, "
+                                             "framerate = (fraction) { 15, 30, 60, 120 }")));
 
 /* class initialization */
 G_DEFINE_TYPE(GstZedSrc, gst_zedsrc, GST_TYPE_PUSH_SRC);
@@ -584,9 +698,11 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     gobject_class->dispose = gst_zedsrc_dispose;
     gobject_class->finalize = gst_zedsrc_finalize;
 
-    gst_element_class_add_pad_template(gstelement_class, gst_static_pad_template_get(&gst_zedsrc_src_template));
+    gst_element_class_add_pad_template(gstelement_class,
+                                       gst_static_pad_template_get(&gst_zedsrc_src_template));
 
-    gst_element_class_set_static_metadata(gstelement_class, "ZED Camera Source", "Source/Video", "Stereolabs ZED Camera source",
+    gst_element_class_set_static_metadata(gstelement_class, "ZED Camera Source", "Source/Video",
+                                          "Stereolabs ZED Camera source",
                                           "Stereolabs <support@stereolabs.com>");
 
     gstbasesrc_class->start = GST_DEBUG_FUNCPTR(gst_zedsrc_start);
@@ -599,354 +715,539 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     gstpushsrc_class->fill = GST_DEBUG_FUNCPTR(gst_zedsrc_fill);
 
     /* Install GObject properties */
-    g_object_class_install_property(gobject_class, PROP_CAM_RES,
-                                    g_param_spec_enum("camera-resolution", "Camera Resolution", "Camera Resolution", GST_TYPE_ZED_RESOL, DEFAULT_PROP_CAM_RES,
-                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_CAM_RES,
+        g_param_spec_enum("camera-resolution", "Camera Resolution", "Camera Resolution",
+                          GST_TYPE_ZED_RESOL, DEFAULT_PROP_CAM_RES,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_CAM_FPS,
-                                    g_param_spec_enum("camera-fps", "Camera frame rate", "Camera frame rate", GST_TYPE_ZED_FPS, DEFAULT_PROP_CAM_FPS,
-                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_CAM_FPS,
+        g_param_spec_enum("camera-fps", "Camera frame rate", "Camera frame rate", GST_TYPE_ZED_FPS,
+                          DEFAULT_PROP_CAM_FPS,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_STREAM_TYPE,
-                                    g_param_spec_enum("stream-type", "Image stream type", "Image stream type", GST_TYPE_ZED_STREAM_TYPE,
-                                                      DEFAULT_PROP_STREAM_TYPE, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_STREAM_TYPE,
+        g_param_spec_enum("stream-type", "Image stream type", "Image stream type",
+                          GST_TYPE_ZED_STREAM_TYPE, DEFAULT_PROP_STREAM_TYPE,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_SDK_VERBOSE,
-                                    g_param_spec_boolean("sdk-verbose", "ZED SDK Verbose", "ZED SDK Verbose", DEFAULT_PROP_SDK_VERBOSE,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_SDK_VERBOSE,
+        g_param_spec_boolean("sdk-verbose", "ZED SDK Verbose", "ZED SDK Verbose",
+                             DEFAULT_PROP_SDK_VERBOSE,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_CAM_FLIP,
-                                    g_param_spec_enum("camera-image-flip", "Camera image flip", "Use the camera in forced flip/no flip or automatic mode",
-                                                      GST_TYPE_ZED_FLIP, DEFAULT_PROP_CAM_FLIP, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_CAM_FLIP,
+        g_param_spec_enum("camera-image-flip", "Camera image flip",
+                          "Use the camera in forced flip/no flip or automatic mode",
+                          GST_TYPE_ZED_FLIP, DEFAULT_PROP_CAM_FLIP,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_CAM_ID,
-                                    g_param_spec_int("camera-id", "Camera ID", "Select camera from cameraID", 0, 255, DEFAULT_PROP_CAM_ID,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_CAM_ID,
+        g_param_spec_int("camera-id", "Camera ID", "Select camera from cameraID", 0, 255,
+                         DEFAULT_PROP_CAM_ID,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_CAM_SN,
-                                    g_param_spec_int64("camera-sn", "Camera Serial Number", "Select camera from camera serial number", 0, G_MAXINT64,
-                                                       DEFAULT_PROP_CAM_SN, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_CAM_SN,
+        g_param_spec_int64("camera-sn", "Camera Serial Number",
+                           "Select camera from camera serial number", 0, G_MAXINT64,
+                           DEFAULT_PROP_CAM_SN,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_SVO_FILE,
-                                    g_param_spec_string("svo-file-path", "SVO file", "Input from SVO file", DEFAULT_PROP_SVO_FILE,
-                                                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_FILE,
+        g_param_spec_string("svo-file-path", "SVO file", "Input from SVO file",
+                            DEFAULT_PROP_SVO_FILE,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_STREAM_IP,
-                                    g_param_spec_string("input-stream-ip", "Input Stream IP", "Specify IP adress when using streaming input",
-                                                        DEFAULT_PROP_SVO_FILE, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_STREAM_IP,
+        g_param_spec_string("input-stream-ip", "Input Stream IP",
+                            "Specify IP adress when using streaming input", DEFAULT_PROP_SVO_FILE,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_STREAM_PORT,
-                                    g_param_spec_int("input-stream-port", "Input Stream Port", "Specify port when using streaming input", 1, G_MAXUINT16,
-                                                     DEFAULT_PROP_STREAM_PORT, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_STREAM_PORT,
+        g_param_spec_int("input-stream-port", "Input Stream Port",
+                         "Specify port when using streaming input", 1, G_MAXUINT16,
+                         DEFAULT_PROP_STREAM_PORT,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_DEPTH_MIN,
-                                    g_param_spec_float("depth-minimum-distance", "Minimum depth value", "Minimum depth value", 100.f, 3000.f,
-                                                       DEFAULT_PROP_DEPTH_MIN, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_DEPTH_MIN,
+        g_param_spec_float("depth-minimum-distance", "Minimum depth value", "Minimum depth value",
+                           100.f, 3000.f, DEFAULT_PROP_DEPTH_MIN,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_DEPTH_MAX,
-                                    g_param_spec_float("depth-maximum-distance", "Maximum depth value", "Maximum depth value", 500.f, 40000.f,
-                                                       DEFAULT_PROP_DEPTH_MAX, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_DEPTH_MAX,
+        g_param_spec_float("depth-maximum-distance", "Maximum depth value", "Maximum depth value",
+                           500.f, 40000.f, DEFAULT_PROP_DEPTH_MAX,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_DEPTH_MODE,
-                                    g_param_spec_enum("depth-mode", "Depth Mode", "Depth Mode", GST_TYPE_ZED_DEPTH_MODE, DEFAULT_PROP_DEPTH_MODE,
-                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_DEPTH_MODE,
+        g_param_spec_enum("depth-mode", "Depth Mode", "Depth Mode", GST_TYPE_ZED_DEPTH_MODE,
+                          DEFAULT_PROP_DEPTH_MODE,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_DIS_SELF_CALIB,
-                                    g_param_spec_boolean("camera-disable-self-calib", "Disable self calibration",
-                                                         "Disable the self calibration processing when the camera is opened", DEFAULT_PROP_DIS_SELF_CALIB,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_DIS_SELF_CALIB,
+        g_param_spec_boolean("camera-disable-self-calib", "Disable self calibration",
+                             "Disable the self calibration processing when the camera is opened",
+                             DEFAULT_PROP_DIS_SELF_CALIB,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     /*g_object_class_install_property( gobject_class, PROP_RIGHT_DEPTH_ENABLE,
-                                     g_param_spec_boolean("enable-right-side-measure", "Enable right side measure",
-                                                          "Enable the MEASURE::DEPTH_RIGHT and other
-       MEASURE::<XXX>_RIGHT at the cost of additional computation time", DEFAULT_PROP_RIGHT_DEPTH, (GParamFlags)
-       (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));*/
-
-    g_object_class_install_property(gobject_class, PROP_DEPTH_STAB,
-                                    g_param_spec_int("depth-stabilization", "Depth stabilization", "Enable depth stabilization", 0,100,DEFAULT_PROP_DEPTH_STAB,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_COORD_SYS,
-                                    g_param_spec_enum("coordinate-system", "SDK Coordinate System", "3D Coordinate System", GST_TYPE_ZED_COORD_SYS,
-                                                      DEFAULT_PROP_COORD_SYS, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_ROI,
-                                    g_param_spec_boolean("roi", "Region of interest", "Enable region of interest filtering", DEFAULT_PROP_ROI,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_ROI_X,
-                                    g_param_spec_int("roi-x", "Region of interest top left 'X' coordinate",
-                                                     "Region of interest top left 'X' coordinate (-1 to not set ROI)", -1, 2208, DEFAULT_PROP_ROI_X,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_ROI_Y,
-                                    g_param_spec_int("roi-y", "Region of interest top left 'Y' coordinate",
-                                                     "Region of interest top left 'Y' coordinate (-1 to not set ROI)", -1, 1242, DEFAULT_PROP_ROI_Y,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_ROI_W,
-                                    g_param_spec_int("roi-w", "Region of interest width", "Region of intererst width (-1 to not set ROI)", -1, 2208,
-                                                     DEFAULT_PROP_ROI_W, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_ROI_H,
-                                    g_param_spec_int("roi-h", "Region of interest height", "Region of interest height (-1 to not set ROI)", -1, 1242,
-                                                     DEFAULT_PROP_ROI_H, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_CONFIDENCE_THRESH,
-                                    g_param_spec_int("confidence-threshold", "Depth Confidence Threshold", "Specify the Depth Confidence Threshold", 0, 100,
-                                                     DEFAULT_PROP_CONFIDENCE_THRESH, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_TEXTURE_CONF_THRESH,
-                                    g_param_spec_int("texture-confidence-threshold", "Texture Confidence Threshold", "Specify the Texture Confidence Threshold",
-                                                     0, 100, DEFAULT_PROP_TEXTURE_CONF_THRESH, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_3D_REF_FRAME,
-                                    g_param_spec_enum("measure3D-reference-frame", "3D Measures Reference Frame", "Specify the 3D Reference Frame",
-                                                      GST_TYPE_ZED_3D_REF_FRAME, DEFAULT_PROP_3D_REF_FRAME,
-                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_FILL_MODE,
-                                    g_param_spec_boolean("fill-mode", "Depth Fill Mode", "Specify the Depth Fill Mode", DEFAULT_PROP_FILL_MODE,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_TRACKING,
-                                    g_param_spec_boolean("enable-positional-tracking", "Positional tracking", "Enable positional tracking",
-                                                         DEFAULT_PROP_POS_TRACKING, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_CAMERA_STATIC,
-                                    g_param_spec_boolean("set-as-static", "Camera static", "Set to TRUE if the camera is static", DEFAULT_PROP_CAMERA_STATIC,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_AREA_FILE_PATH,
-                                    g_param_spec_string("area-file-path", "Area file path",
-                                                        "Area localization file that describes the surroundings, saved"
-                                                        " from a previous tracking session.",
-                                                        DEFAULT_PROP_POS_AREA_FILE_PATH, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_ENABLE_AREA_MEMORY,
-                                    g_param_spec_boolean("enable-area-memory", "Enable area memory",
-                                                         "This mode enables the camera to remember its surroundings. "
-                                                         "This helps correct positional tracking drift, and can be "
-                                                         "helpful for positioning different cameras relative to one "
-                                                         "other in space.",
-                                                         DEFAULT_PROP_POS_ENABLE_AREA_MEMORY, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_ENABLE_IMU_FUSION,
-                                    g_param_spec_boolean("enable-imu-fusion", "Enable IMU fusion",
-                                                         "This setting allows you to enable or disable IMU fusion. "
-                                                         "When set to false, only the optical odometry will be used.",
-                                                         DEFAULT_PROP_POS_ENABLE_IMU_FUSION, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_ENABLE_POSE_SMOOTHING,
-                                    g_param_spec_boolean("enable-pose-smoothing", "Enable Pose Smoothing",
-                                                         "This mode enables smooth pose correction for small drift "
-                                                         "correction.",
-                                                         DEFAULT_PROP_POS_ENABLE_POSE_SMOOTHING, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_SET_FLOOR_AS_ORIGIN,
-                                    g_param_spec_boolean("set-floor-as-origin", "Set floor as pose origin",
-                                                         "This mode initializes the tracking to be aligned with the "
-                                                         "floor plane to better position the camera in space.",
-                                                         DEFAULT_PROP_POS_SET_FLOOR_AS_ORIGIN, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_SET_GRAVITY_AS_ORIGIN,
-                                    g_param_spec_boolean("set-gravity-as-origin", "Set gravity as pose origin",
-                                                         "This setting allows you to override of 2 of the 3 rotations from"
-                                                         "initial-world-transform using the IMU gravity default: true",
-                                                         DEFAULT_PROP_POS_SET_GRAVITY_AS_ORIGIN, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_DEPTH_MIN_RANGE,
-                                    g_param_spec_float("pos-depth-min-range", "Set depth minimum range",
-                                                       "This setting allows you to change the minmum depth used by the"
-                                                       "SDK for Positional Tracking.",
-                                                       -1, 65535, DEFAULT_PROP_POS_DEPTH_MIN_RANGE,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_INIT_X,
-                                    g_param_spec_float("initial-world-transform-x", "Initial X coordinate",
-                                                       "X position of the camera in the world frame when the camera is started", -G_MAXFLOAT, G_MAXFLOAT,
-                                                       DEFAULT_PROP_POS_INIT_X, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_INIT_Y,
-                                    g_param_spec_float("initial-world-transform-y", "Initial Y coordinate",
-                                                       "Y position of the camera in the world frame when the camera is started", -G_MAXFLOAT, G_MAXFLOAT,
-                                                       DEFAULT_PROP_POS_INIT_Y, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_INIT_Z,
-                                    g_param_spec_float("initial-world-transform-z", "Initial Z coordinate",
-                                                       "Z position of the camera in the world frame when the camera is started", -G_MAXFLOAT, G_MAXFLOAT,
-                                                       DEFAULT_PROP_POS_INIT_Z, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_INIT_ROLL,
-                                    g_param_spec_float("initial-world-transform-roll", "Initial Roll orientation",
-                                                       "Roll orientation of the camera in the world frame when the camera is started", 0.0f, 360.0f,
-                                                       DEFAULT_PROP_POS_INIT_ROLL, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_INIT_PITCH,
-                                    g_param_spec_float("initial-world-transform-pitch", "Initial Pitch orientation",
-                                                       "Pitch orientation of the camera in the world frame when the camera is started", 0.0f, 360.0f,
-                                                       DEFAULT_PROP_POS_INIT_PITCH, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_POS_INIT_YAW,
-                                    g_param_spec_float("initial-world-transform-yaw", "Initial Yaw orientation",
-                                                       "Yaw orientation of the camera in the world frame when the camera is started", 0.0f, 360.0f,
-                                                       DEFAULT_PROP_POS_INIT_YAW, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_OD_ENABLE,
-                                    g_param_spec_boolean("od-enabled", "Object Detection enable", "Set to TRUE to enable Object Detection",
-                                                         DEFAULT_PROP_OD_ENABLE, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_OD_IMAGE_SYNC,
-                                    g_param_spec_boolean("od-image-sync", "Object detection frame sync",
-                                                         "Set to TRUE to enable Object Detection frame synchronization ", DEFAULT_PROP_OD_SYNC,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_OD_TRACKING,
-                                    g_param_spec_boolean("od-enable-tracking", "Object detection tracking",
-                                                         "Set to TRUE to enable tracking for the detected objects", DEFAULT_PROP_OD_TRACKING,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    // Not yet supported
-    /*g_object_class_install_property( gobject_class, PROP_OD_SEGM,
-                                     g_param_spec_boolean("od-segm", "OD Segmentation Mask output",
-                                                          "Set to TRUE to enable segmentation mask output for the detected objects",
-                                                          DEFAULT_PROP_OD_SEGM,
-                                                          (GParamFlags) (G_PARAM_READWRITE |
+                                     g_param_spec_boolean("enable-right-side-measure", "Enable right
+       side measure", "Enable the MEASURE::DEPTH_RIGHT and other MEASURE::<XXX>_RIGHT at the cost of
+       additional computation time", DEFAULT_PROP_RIGHT_DEPTH, (GParamFlags) (G_PARAM_READWRITE |
        G_PARAM_STATIC_STRINGS)));*/
 
-    g_object_class_install_property(gobject_class, PROP_OD_DET_MODEL,
-                                    g_param_spec_enum("od-detection-model", "Object detection model", "Object Detection Model", GST_TYPE_ZED_OD_MODEL_TYPE,
-                                                      DEFAULT_PROP_OD_MODEL, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_DEPTH_STAB,
+        g_param_spec_int("depth-stabilization", "Depth stabilization", "Enable depth stabilization",
+                         0, 100, DEFAULT_PROP_DEPTH_STAB,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_FILTER_MODE,
-                                    g_param_spec_enum("od-detection-filter-mode", "Object detection filter mode", "Object Detection Filter Mode",
-                                                      GST_TYPE_ZED_OD_FILTER_MODE_TYPE, DEFAULT_PROP_OD_FILTER_MODE,
-                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_COORD_SYS,
+        g_param_spec_enum("coordinate-system", "SDK Coordinate System", "3D Coordinate System",
+                          GST_TYPE_ZED_COORD_SYS, DEFAULT_PROP_COORD_SYS,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_CONFIDENCE,
-                                    g_param_spec_float("od-confidence", "Minimum Object detection confidence threshold", "Minimum Detection Confidence", 0.0f,
-                                                       100.0f, DEFAULT_PROP_OD_CONFIDENCE, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_ROI,
+        g_param_spec_boolean("roi", "Region of interest", "Enable region of interest filtering",
+                             DEFAULT_PROP_ROI,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_MAX_RANGE,
-                                    g_param_spec_float("od-max-range", "Defines if the body fitting will be applied when using Skeleton Tracking",
-                                                       "Maximum Detection Range", -1.0f, 20000.0f, DEFAULT_PROP_OD_MAX_RANGE,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_ROI_X,
+        g_param_spec_int("roi-x", "Region of interest top left 'X' coordinate",
+                         "Region of interest top left 'X' coordinate (-1 to not set ROI)", -1, 2208,
+                         DEFAULT_PROP_ROI_X,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_BODY_FITTING,
-                                    g_param_spec_boolean("od-body-fitting", "Minimum Object detection confidence threshold",
-                                                         "Set to TRUE to enable body fitting for skeleton tracking", DEFAULT_PROP_OD_BODY_FITTING,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_ROI_Y,
+        g_param_spec_int("roi-y", "Region of interest top left 'Y' coordinate",
+                         "Region of interest top left 'Y' coordinate (-1 to not set ROI)", -1, 1242,
+                         DEFAULT_PROP_ROI_Y,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_PREDICTION_TIMEOUT_S,
-                                    g_param_spec_float("od-prediction-timeout-s", "Object detection prediction timeout (sec)",
-                                                       "Object prediction timeout (sec)", 0.0f, 1.0f, DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_ROI_W,
+        g_param_spec_int("roi-w", "Region of interest width",
+                         "Region of intererst width (-1 to not set ROI)", -1, 2208,
+                         DEFAULT_PROP_ROI_W,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE,
-                                    g_param_spec_boolean("od-allow-reduced-precision-inference", "Allow inference at reduced precision",
-                                                         "Set to TRUE to allow inference to run at a lower precision to improve runtime",
-                                                         DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_ROI_H,
+        g_param_spec_int("roi-h", "Region of interest height",
+                         "Region of interest height (-1 to not set ROI)", -1, 1242,
+                         DEFAULT_PROP_ROI_H,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_PERSON_CONF,
-                                    g_param_spec_float("od-people-conf",
-                                                       "Defines the detection confidence threashold for the PEOPLE class (-1.0 to disable the detection)",
-                                                       "People Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_PEOPLE_CONF,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_CONFIDENCE_THRESH,
+        g_param_spec_int("confidence-threshold", "Depth Confidence Threshold",
+                         "Specify the Depth Confidence Threshold", 0, 100,
+                         DEFAULT_PROP_CONFIDENCE_THRESH,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_VEHICLE_CONF,
-                                    g_param_spec_float("od-vehicle-conf",
-                                                       "Defines the detection confidence threashold for the VEHICLE class (-1.0 to disable the detection)",
-                                                       "Vehicle Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_VEHICLE_CONF,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_TEXTURE_CONF_THRESH,
+        g_param_spec_int("texture-confidence-threshold", "Texture Confidence Threshold",
+                         "Specify the Texture Confidence Threshold", 0, 100,
+                         DEFAULT_PROP_TEXTURE_CONF_THRESH,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_BAG_CONF,
-                                    g_param_spec_float("od-bag-conf",
-                                                       "Defines the detection confidence threashold for the BAG class (-1.0 to disable the detection)",
-                                                       "Bag Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_BAG_CONF,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_3D_REF_FRAME,
+        g_param_spec_enum("measure3D-reference-frame", "3D Measures Reference Frame",
+                          "Specify the 3D Reference Frame", GST_TYPE_ZED_3D_REF_FRAME,
+                          DEFAULT_PROP_3D_REF_FRAME,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_ANIMAL_CONF,
-                                    g_param_spec_float("od-animal-conf",
-                                                       "Defines the detection confidence threashold for the ANIMAL class (-1.0 to disable the detection)",
-                                                       "Animal Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_ANIMAL_CONF,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_FILL_MODE,
+        g_param_spec_boolean("fill-mode", "Depth Fill Mode", "Specify the Depth Fill Mode",
+                             DEFAULT_PROP_FILL_MODE,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_ELECTRONICS_CONF,
-                                    g_param_spec_float("od-electronics-conf",
-                                                       "Defines the detection confidence threashold for the ELECTRONICS class (-1.0 to disable the detection)",
-                                                       "Electronics Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_ELECTRONICS_CONF,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_POS_TRACKING,
+        g_param_spec_boolean("enable-positional-tracking", "Positional tracking",
+                             "Enable positional tracking", DEFAULT_PROP_POS_TRACKING,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_CAMERA_STATIC,
+        g_param_spec_boolean("set-as-static", "Camera static",
+                             "Set to TRUE if the camera is static", DEFAULT_PROP_CAMERA_STATIC,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_AREA_FILE_PATH,
+        g_param_spec_string("area-file-path", "Area file path",
+                            "Area localization file that describes the surroundings, saved"
+                            " from a previous tracking session.",
+                            DEFAULT_PROP_POS_AREA_FILE_PATH,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_ENABLE_AREA_MEMORY,
+        g_param_spec_boolean("enable-area-memory", "Enable area memory",
+                             "This mode enables the camera to remember its surroundings. "
+                             "This helps correct positional tracking drift, and can be "
+                             "helpful for positioning different cameras relative to one "
+                             "other in space.",
+                             DEFAULT_PROP_POS_ENABLE_AREA_MEMORY,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_ENABLE_IMU_FUSION,
+        g_param_spec_boolean("enable-imu-fusion", "Enable IMU fusion",
+                             "This setting allows you to enable or disable IMU fusion. "
+                             "When set to false, only the optical odometry will be used.",
+                             DEFAULT_PROP_POS_ENABLE_IMU_FUSION,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_ENABLE_POSE_SMOOTHING,
+        g_param_spec_boolean("enable-pose-smoothing", "Enable Pose Smoothing",
+                             "This mode enables smooth pose correction for small drift "
+                             "correction.",
+                             DEFAULT_PROP_POS_ENABLE_POSE_SMOOTHING,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_SET_FLOOR_AS_ORIGIN,
+        g_param_spec_boolean("set-floor-as-origin", "Set floor as pose origin",
+                             "This mode initializes the tracking to be aligned with the "
+                             "floor plane to better position the camera in space.",
+                             DEFAULT_PROP_POS_SET_FLOOR_AS_ORIGIN,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_SET_GRAVITY_AS_ORIGIN,
+        g_param_spec_boolean("set-gravity-as-origin", "Set gravity as pose origin",
+                             "This setting allows you to override of 2 of the 3 rotations from"
+                             "initial-world-transform using the IMU gravity default: true",
+                             DEFAULT_PROP_POS_SET_GRAVITY_AS_ORIGIN,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_DEPTH_MIN_RANGE,
+        g_param_spec_float("pos-depth-min-range", "Set depth minimum range",
+                           "This setting allows you to change the minmum depth used by the"
+                           "SDK for Positional Tracking.",
+                           -1, 65535, DEFAULT_PROP_POS_DEPTH_MIN_RANGE,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_INIT_X,
+        g_param_spec_float("initial-world-transform-x", "Initial X coordinate",
+                           "X position of the camera in the world frame when the camera is started",
+                           -G_MAXFLOAT, G_MAXFLOAT, DEFAULT_PROP_POS_INIT_X,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_INIT_Y,
+        g_param_spec_float("initial-world-transform-y", "Initial Y coordinate",
+                           "Y position of the camera in the world frame when the camera is started",
+                           -G_MAXFLOAT, G_MAXFLOAT, DEFAULT_PROP_POS_INIT_Y,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_INIT_Z,
+        g_param_spec_float("initial-world-transform-z", "Initial Z coordinate",
+                           "Z position of the camera in the world frame when the camera is started",
+                           -G_MAXFLOAT, G_MAXFLOAT, DEFAULT_PROP_POS_INIT_Z,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_INIT_ROLL,
+        g_param_spec_float(
+            "initial-world-transform-roll", "Initial Roll orientation",
+            "Roll orientation of the camera in the world frame when the camera is started", 0.0f,
+            360.0f, DEFAULT_PROP_POS_INIT_ROLL,
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_INIT_PITCH,
+        g_param_spec_float(
+            "initial-world-transform-pitch", "Initial Pitch orientation",
+            "Pitch orientation of the camera in the world frame when the camera is started", 0.0f,
+            360.0f, DEFAULT_PROP_POS_INIT_PITCH,
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_POS_INIT_YAW,
+        g_param_spec_float(
+            "initial-world-transform-yaw", "Initial Yaw orientation",
+            "Yaw orientation of the camera in the world frame when the camera is started", 0.0f,
+            360.0f, DEFAULT_PROP_POS_INIT_YAW,
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_ENABLE,
+        g_param_spec_boolean("od-enabled", "Object Detection enable",
+                             "Set to TRUE to enable Object Detection", DEFAULT_PROP_OD_ENABLE,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_IMAGE_SYNC,
+        g_param_spec_boolean("od-image-sync", "Object detection frame sync",
+                             "Set to TRUE to enable Object Detection frame synchronization ",
+                             DEFAULT_PROP_OD_SYNC,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_TRACKING,
+        g_param_spec_boolean("od-enable-tracking", "Object detection tracking",
+                             "Set to TRUE to enable tracking for the detected objects",
+                             DEFAULT_PROP_OD_TRACKING,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    // Not yet supported
+    // g_object_class_install_property(gobject_class, PROP_OD_SEGM,
+    //                                 g_param_spec_boolean("od-segm", "OD Segmentation Mask
+    //                                 output",
+    //                                                      "Set to TRUE to enable segmentation mask
+    //                                                      output for the detected objects",
+    //                                                      DEFAULT_PROP_OD_SEGM, (GParamFlags)
+    //                                                      (G_PARAM_READWRITE |
+    //                                                      G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_DET_MODEL,
+        g_param_spec_enum("od-detection-model", "Object detection model", "Object Detection Model",
+                          GST_TYPE_ZED_OD_MODEL_TYPE, DEFAULT_PROP_OD_MODEL,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_FILTER_MODE,
+        g_param_spec_enum("od-detection-filter-mode", "Object detection filter mode",
+                          "Object Detection Filter Mode", GST_TYPE_ZED_OD_FILTER_MODE_TYPE,
+                          DEFAULT_PROP_OD_FILTER_MODE,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_CONFIDENCE,
+        g_param_spec_float("od-confidence", "Minimum Object detection confidence threshold",
+                           "Minimum Detection Confidence", 0.0f, 100.0f, DEFAULT_PROP_OD_CONFIDENCE,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_MAX_RANGE,
+        g_param_spec_float(
+            "od-max-range",
+            "Defines if the body fitting will be applied when using Skeleton Tracking",
+            "Maximum Detection Range", -1.0f, 20000.0f, DEFAULT_PROP_OD_MAX_RANGE,
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_PREDICTION_TIMEOUT_S,
+        g_param_spec_float("od-prediction-timeout-s", "Object detection prediction timeout (sec)",
+                           "Object prediction timeout (sec)", 0.0f, 1.0f,
+                           DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE,
+        g_param_spec_boolean(
+            "od-allow-reduced-precision-inference", "Allow inference at reduced precision",
+            "Set to TRUE to allow inference to run at a lower precision to improve runtime",
+            DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE,
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_PERSON_CONF,
+        g_param_spec_float("od-people-conf",
+                           "Defines the detection confidence threashold for the PEOPLE class (-1.0 "
+                           "to disable the detection)",
+                           "People Detection Confidence Threshold", -1.0f, 100.0f,
+                           DEFAULT_PROP_OD_PEOPLE_CONF,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_VEHICLE_CONF,
+        g_param_spec_float("od-vehicle-conf",
+                           "Defines the detection confidence threashold for the VEHICLE class "
+                           "(-1.0 to disable the detection)",
+                           "Vehicle Detection Confidence Threshold", -1.0f, 100.0f,
+                           DEFAULT_PROP_OD_VEHICLE_CONF,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_BAG_CONF,
+        g_param_spec_float("od-bag-conf",
+                           "Defines the detection confidence threashold for the BAG class (-1.0 to "
+                           "disable the detection)",
+                           "Bag Detection Confidence Threshold", -1.0f, 100.0f,
+                           DEFAULT_PROP_OD_BAG_CONF,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_ANIMAL_CONF,
+        g_param_spec_float("od-animal-conf",
+                           "Defines the detection confidence threashold for the ANIMAL class (-1.0 "
+                           "to disable the detection)",
+                           "Animal Detection Confidence Threshold", -1.0f, 100.0f,
+                           DEFAULT_PROP_OD_ANIMAL_CONF,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_ELECTRONICS_CONF,
+        g_param_spec_float("od-electronics-conf",
+                           "Defines the detection confidence threashold for the ELECTRONICS class "
+                           "(-1.0 to disable the detection)",
+                           "Electronics Detection Confidence Threshold", -1.0f, 100.0f,
+                           DEFAULT_PROP_OD_ELECTRONICS_CONF,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_OD_FRUIT_VEGETABLES_CONF,
         g_param_spec_float("od-fruit-vegetables-conf",
-                           "Defines the detection confidence threashold for the FRUIT_VEGETABLES class (-1.0 to disable the detection)",
-                           "Fruit/Vegetables Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_FRUIT_VEGETABLES_CONF,
+                           "Defines the detection confidence threashold for the FRUIT_VEGETABLES "
+                           "class (-1.0 to disable the detection)",
+                           "Fruit/Vegetables Detection Confidence Threshold", -1.0f, 100.0f,
+                           DEFAULT_PROP_OD_FRUIT_VEGETABLES_CONF,
                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_OD_SPORT_CONF,
-                                    g_param_spec_float("od-sport-conf",
-                                                       "Defines the detection confidence threashold for the SPORT class (-1.0 to disable the detection)",
-                                                       "Sport Detection Confidence Threshold", -1.0f, 100.0f, DEFAULT_PROP_OD_SPORT_CONF,
-                                                       (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_OD_SPORT_CONF,
+        g_param_spec_float("od-sport-conf",
+                           "Defines the detection confidence threashold for the SPORT class (-1.0 "
+                           "to disable the detection)",
+                           "Sport Detection Confidence Threshold", -1.0f, 100.0f,
+                           DEFAULT_PROP_OD_SPORT_CONF,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_BRIGHTNESS,
-                                    g_param_spec_int("brightness", "Camera control: brightness", "Image brightness", 0, 8, DEFAULT_PROP_BRIGHTNESS,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_CONTRAST,
-                                    g_param_spec_int("contrast", "Camera control: contrast", "Image contrast", 0, 8, DEFAULT_PROP_CONTRAST,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, DEFAULT_PROP_BT_ENABLE,
+        g_param_spec_boolean("bt-enabled", "Body Tracking enable",
+                             "Set to TRUE to enable Body Tracking", DEFAULT_PROP_BT_ENABLE,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    // Not yet supported
+    // g_object_class_install_property(
+    //     gobject_class, DEFAULT_PROP_BT_SEGM,
+    //     g_param_spec_boolean(
+    //         "bt-segm", "BT Segmentation Mask output",
+    //         "Set to TRUE to enable segmentation mask output for the detected bodies",
+    //         DEFAULT_PROP_BT_SEGM, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, DEFAULT_PROP_BT_SYNC,
+        g_param_spec_boolean("bt-image-sync", "Body Tracking frame sync",
+                             "Set to TRUE to enable Body Tracking frame synchronization ",
+                             DEFAULT_PROP_BT_SYNC,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BT_DET_MODEL,
+        g_param_spec_enum("bt-detection-model", "Body Tracking model", "Body Tracking Model",
+                          GST_TYPE_ZED_BT_MODEL_TYPE, DEFAULT_PROP_BT_MODEL,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BRIGHTNESS,
+        g_param_spec_int("brightness", "Camera control: brightness", "Image brightness", 0, 8,
+                         DEFAULT_PROP_BRIGHTNESS,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_CONTRAST,
+        g_param_spec_int("contrast", "Camera control: contrast", "Image contrast", 0, 8,
+                         DEFAULT_PROP_CONTRAST,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_HUE,
-        g_param_spec_int("hue", "Camera control: hue", "Image hue", 0, 11, DEFAULT_PROP_HUE, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_SATURATION,
-                                    g_param_spec_int("saturation", "Camera control: saturation", "Image saturation", 0, 8, DEFAULT_PROP_SATURATION,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_SHARPNESS,
-                                    g_param_spec_int("sharpness", "Camera control: sharpness", "Image sharpness", 0, 8, DEFAULT_PROP_SHARPNESS,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_GAMMA,
-                                    g_param_spec_int("gamma", "Camera control: gamma", "Image gamma", 1, 9, DEFAULT_PROP_GAMMA,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("hue", "Camera control: hue", "Image hue", 0, 11, DEFAULT_PROP_HUE,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_SATURATION,
+        g_param_spec_int("saturation", "Camera control: saturation", "Image saturation", 0, 8,
+                         DEFAULT_PROP_SATURATION,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_SHARPNESS,
+        g_param_spec_int("sharpness", "Camera control: sharpness", "Image sharpness", 0, 8,
+                         DEFAULT_PROP_SHARPNESS,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_GAMMA,
+        g_param_spec_int("gamma", "Camera control: gamma", "Image gamma", 1, 9, DEFAULT_PROP_GAMMA,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_GAIN,
-        g_param_spec_int("gain", "Camera control: gain", "Camera gain", 0, 100, DEFAULT_PROP_GAIN, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_EXPOSURE,
-                                    g_param_spec_int("exposure", "Camera control: exposure", "Camera exposure", 0, 100, DEFAULT_PROP_EXPOSURE,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_AEC_AGC,
-                                    g_param_spec_boolean("aec-agc", "Camera control: automatic gain and exposure", "Camera automatic gain and exposure",
-                                                         DEFAULT_PROP_AEG_AGC, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_AEC_AGC_ROI_X,
-                                    g_param_spec_int("aec-agc-roi-x", "Camera control: auto gain/exposure ROI top left 'X' coordinate",
-                                                     "Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)", -1, 2208, DEFAULT_PROP_AEG_AGC_ROI_X,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_AEC_AGC_ROI_Y,
-                                    g_param_spec_int("aec-agc-roi-y", "Camera control: auto gain/exposure ROI top left 'Y' coordinate",
-                                                     "Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)", -1, 1242, DEFAULT_PROP_AEG_AGC_ROI_Y,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_AEC_AGC_ROI_W,
-                                    g_param_spec_int("aec-agc-roi-w", "Camera control: auto gain/exposure ROI width",
-                                                     "Auto gain/exposure ROI width (-1 to not set ROI)", -1, 2208, DEFAULT_PROP_AEG_AGC_ROI_W,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_AEC_AGC_ROI_H,
-                                    g_param_spec_int("aec-agc-roi-h", "Camera control: auto gain/exposure ROI height",
-                                                     "Auto gain/exposure ROI height (-1 to not set ROI)", -1, 1242, DEFAULT_PROP_AEG_AGC_ROI_H,
-                                                     (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_AEC_AGC_ROI_SIDE,
-                                    g_param_spec_enum("aec-agc-roi-side", "Camera control: auto gain/exposure ROI side", "Auto gain/exposure ROI side",
-                                                      GST_TYPE_ZED_SIDE, DEFAULT_PROP_AEG_AGC_ROI_SIDE,
-                                                      (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_WHITEBALANCE,
-                                    g_param_spec_int("whitebalance-temperature", "Camera control: white balance temperature", "Image white balance temperature",
-                                                     2800, 6500, DEFAULT_PROP_WHITEBALANCE, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_WHITEBALANCE_AUTO,
-                                    g_param_spec_boolean("whitebalance-auto", "Camera control: automatic whitebalance", "Image automatic white balance",
-                                                         DEFAULT_PROP_WHITEBALANCE_AUTO, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(gobject_class, PROP_LEDSTATUS,
-                                    g_param_spec_boolean("led-status", "Camera control: led status", "Camera LED on/off", DEFAULT_PROP_LEDSTATUS,
-                                                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("gain", "Camera control: gain", "Camera gain", 0, 100, DEFAULT_PROP_GAIN,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_EXPOSURE,
+        g_param_spec_int("exposure", "Camera control: exposure", "Camera exposure", 0, 100,
+                         DEFAULT_PROP_EXPOSURE,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_AEC_AGC,
+        g_param_spec_boolean("aec-agc", "Camera control: automatic gain and exposure",
+                             "Camera automatic gain and exposure", DEFAULT_PROP_AEG_AGC,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_AEC_AGC_ROI_X,
+        g_param_spec_int("aec-agc-roi-x",
+                         "Camera control: auto gain/exposure ROI top left 'X' coordinate",
+                         "Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)", -1,
+                         2208, DEFAULT_PROP_AEG_AGC_ROI_X,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_AEC_AGC_ROI_Y,
+        g_param_spec_int("aec-agc-roi-y",
+                         "Camera control: auto gain/exposure ROI top left 'Y' coordinate",
+                         "Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)", -1,
+                         1242, DEFAULT_PROP_AEG_AGC_ROI_Y,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_AEC_AGC_ROI_W,
+        g_param_spec_int("aec-agc-roi-w", "Camera control: auto gain/exposure ROI width",
+                         "Auto gain/exposure ROI width (-1 to not set ROI)", -1, 2208,
+                         DEFAULT_PROP_AEG_AGC_ROI_W,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_AEC_AGC_ROI_H,
+        g_param_spec_int("aec-agc-roi-h", "Camera control: auto gain/exposure ROI height",
+                         "Auto gain/exposure ROI height (-1 to not set ROI)", -1, 1242,
+                         DEFAULT_PROP_AEG_AGC_ROI_H,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_AEC_AGC_ROI_SIDE,
+        g_param_spec_enum("aec-agc-roi-side", "Camera control: auto gain/exposure ROI side",
+                          "Auto gain/exposure ROI side", GST_TYPE_ZED_SIDE,
+                          DEFAULT_PROP_AEG_AGC_ROI_SIDE,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_WHITEBALANCE,
+        g_param_spec_int("whitebalance-temperature", "Camera control: white balance temperature",
+                         "Image white balance temperature", 2800, 6500, DEFAULT_PROP_WHITEBALANCE,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_WHITEBALANCE_AUTO,
+        g_param_spec_boolean("whitebalance-auto", "Camera control: automatic whitebalance",
+                             "Image automatic white balance", DEFAULT_PROP_WHITEBALANCE_AUTO,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_LEDSTATUS,
+        g_param_spec_boolean("led-status", "Camera control: led status", "Camera LED on/off",
+                             DEFAULT_PROP_LEDSTATUS,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_zedsrc_reset(GstZedSrc *src) {
@@ -1036,6 +1337,21 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->od_fruit_vegetable_conf = DEFAULT_PROP_OD_FRUIT_VEGETABLES_CONF;
     src->od_sport_conf = DEFAULT_PROP_OD_SPORT_CONF;
 
+    src->body_tracking = DEFAULT_PROP_BT_ENABLE;
+    src->bt_enable_segm_output = DEFAULT_PROP_BT_SEGM;
+    src->bt_image_sync = DEFAULT_PROP_BT_SYNC;
+    src->bt_model = DEFAULT_PROP_BT_MODEL;
+    src->bt_format = DEFAULT_PROP_BT_FORMAT;
+    src->bt_reduce_precision = DEFAULT_PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE;
+    src->bt_max_range = DEFAULT_PROP_BT_MAX_RANGE;
+    src->bt_kp_sel = DEFAULT_PROP_BT_KP_SELECT;
+    src->bt_fitting = DEFAULT_PROP_BT_BODY_FITTING;
+    src->bt_enable_trk = DEFAULT_PROP_BT_TRACKING;
+    src->bt_pred_timeout = DEFAULT_PROP_BT_PREDICTION_TIMEOUT_S;
+    src->bt_rt_det_conf = DEFAULT_PROP_BT_CONFIDENCE;
+    src->bt_rt_min_kp_thresh = DEFAULT_PROP_BT_MIN_KP_THRESH;
+    src->bt_rt_skel_smoothing = DEFAULT_PROP_BT_SMOOTHING;
+
     src->brightness = DEFAULT_PROP_BRIGHTNESS;
     src->contrast = DEFAULT_PROP_CONTRAST;
     src->hue = DEFAULT_PROP_HUE;
@@ -1061,7 +1377,8 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     gst_zedsrc_reset(src);
 }
 
-void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value, GParamSpec *pspec) {
+void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value,
+                             GParamSpec *pspec) {
     GstZedSrc *src;
     const gchar *str;
 
@@ -1609,7 +1926,8 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
 
 static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 #if (ZED_SDK_MAJOR_VERSION < 4)
-    GST_ELEMENT_ERROR(src, LIBRARY, FAILED, ("Wrong ZED SDK version. SDK v4.0.x required "), (NULL));
+    GST_ELEMENT_ERROR(src, LIBRARY, FAILED, ("Wrong ZED SDK version. SDK v4.0.x required "),
+                      (NULL));
 #endif
 
     GstZedSrc *src = GST_ZED_SRC(bsrc);
@@ -1629,31 +1947,39 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     init_params.sdk_verbose = src->sdk_verbose == TRUE;
     GST_INFO(" * SDK verbose: %s", (init_params.sdk_verbose ? "TRUE" : "FALSE"));
     init_params.camera_image_flip = src->camera_image_flip;
-    GST_INFO(" * Camera flipped: %s", sl::toString(static_cast<sl::FLIP_MODE>(init_params.camera_image_flip)).c_str());
+    GST_INFO(" * Camera flipped: %s",
+             sl::toString(static_cast<sl::FLIP_MODE>(init_params.camera_image_flip)).c_str());
 
     init_params.depth_mode = static_cast<sl::DEPTH_MODE>(src->depth_mode);
     if (src->object_detection && init_params.depth_mode == sl::DEPTH_MODE::NONE) {
         init_params.depth_mode = sl::DEPTH_MODE::ULTRA;
         src->depth_mode = static_cast<gint>(init_params.depth_mode);
 
-        GST_WARNING_OBJECT(src, "Object detection requires DEPTH_MODE!=NONE. Depth mode value forced to ULTRA");
+        GST_WARNING_OBJECT(
+            src, "Object detection requires DEPTH_MODE!=NONE. Depth mode value forced to ULTRA");
 
         if (!src->pos_tracking) {
             src->pos_tracking = TRUE;
-            GST_WARNING_OBJECT(src, "Object detection requires Positional Tracking to be active. Positional Tracking "
-                                    "automatically activated");
+            GST_WARNING_OBJECT(
+                src,
+                "Object detection requires Positional Tracking to be active. Positional Tracking "
+                "automatically activated");
         }
     }
     if (src->pos_tracking && init_params.depth_mode == sl::DEPTH_MODE::NONE) {
         init_params.depth_mode = sl::DEPTH_MODE::ULTRA;
         src->depth_mode = static_cast<gint>(init_params.depth_mode);
 
-        GST_WARNING_OBJECT(src, "Positional tracking requires DEPTH_MODE!=NONE. Depth mode value forced to ULTRA");
+        GST_WARNING_OBJECT(
+            src, "Positional tracking requires DEPTH_MODE!=NONE. Depth mode value forced to ULTRA");
     }
-    if ((src->stream_type == GST_ZEDSRC_LEFT_DEPTH || src->stream_type == GST_ZEDSRC_DEPTH_16) && init_params.depth_mode == sl::DEPTH_MODE::NONE) {
+    if ((src->stream_type == GST_ZEDSRC_LEFT_DEPTH || src->stream_type == GST_ZEDSRC_DEPTH_16) &&
+        init_params.depth_mode == sl::DEPTH_MODE::NONE) {
         init_params.depth_mode = sl::DEPTH_MODE::ULTRA;
         src->depth_mode = static_cast<gint>(init_params.depth_mode);
-        GST_WARNING_OBJECT(src, "'stream-type' setting requires depth calculation. Depth mode value forced to ULTRA");
+        GST_WARNING_OBJECT(
+            src,
+            "'stream-type' setting requires depth calculation. Depth mode value forced to ULTRA");
     }
     GST_INFO(" * Depth Mode: %s", sl::toString(init_params.depth_mode).c_str());
     init_params.coordinate_units = sl::UNIT::MILLIMETER;   // ready for 16bit depth image
@@ -1665,10 +1991,11 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     init_params.depth_maximum_distance = src->depth_max_dist;
     GST_INFO(" * MAX depth: %g", init_params.depth_maximum_distance);
     init_params.depth_stabilization = src->depth_stabilization;
-    GST_INFO(" * Depth Stabilization: %d", init_params.depth_stabilization );
+    GST_INFO(" * Depth Stabilization: %d", init_params.depth_stabilization);
     init_params.enable_right_side_measure = false;   // src->enable_right_side_measure==TRUE;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib == TRUE;
-    GST_INFO(" * Disable self calibration: %s", (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
+    GST_INFO(" * Disable self calibration: %s",
+             (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
 
     std::cout << "Setting depth_mode to " << init_params.depth_mode << std::endl;
 
@@ -1700,7 +2027,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     ret = src->zed.open(init_params);
 
     if (ret != sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to open camera, '%s'", sl::toString(ret).c_str()), (NULL));
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                          ("Failed to open camera, '%s'", sl::toString(ret).c_str()), (NULL));
         return FALSE;
     }
     // <---- Open camera
@@ -1730,7 +2058,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc);
         GST_INFO(" * AEC_AGC: %s", (src->aec_agc ? "TRUE" : "FALSE"));
 
-        if (src->aec_agc_roi_x != -1 && src->aec_agc_roi_y != -1 && src->aec_agc_roi_w != -1 && src->aec_agc_roi_h != -1) {
+        if (src->aec_agc_roi_x != -1 && src->aec_agc_roi_y != -1 && src->aec_agc_roi_w != -1 &&
+            src->aec_agc_roi_h != -1) {
             sl::Rect roi;
             roi.x = src->aec_agc_roi_x;
             roi.y = src->aec_agc_roi_y;
@@ -1739,23 +2068,29 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
             sl::SIDE side = static_cast<sl::SIDE>(src->aec_agc_roi_side);
 
-            GST_INFO(" * AEC_AGC_ROI: (%d,%d)-%dx%d - Side: %d", src->aec_agc_roi_x, src->aec_agc_roi_y, src->aec_agc_roi_w, src->aec_agc_roi_h,
+            GST_INFO(" * AEC_AGC_ROI: (%d,%d)-%dx%d - Side: %d", src->aec_agc_roi_x,
+                     src->aec_agc_roi_y, src->aec_agc_roi_w, src->aec_agc_roi_h,
                      src->aec_agc_roi_side);
 
             src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side);
         }
     }
     if (src->whitebalance_temperature_auto == FALSE) {
-        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->whitebalance_temperature_auto);
-        GST_INFO(" * WHITEBALANCE_AUTO: %s", (src->whitebalance_temperature_auto ? "TRUE" : "FALSE"));
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO,
+                                   src->whitebalance_temperature_auto);
+        GST_INFO(" * WHITEBALANCE_AUTO: %s",
+                 (src->whitebalance_temperature_auto ? "TRUE" : "FALSE"));
         src->whitebalance_temperature /= 100;
         src->whitebalance_temperature *= 100;
-        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE, src->whitebalance_temperature);
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE,
+                                   src->whitebalance_temperature);
         GST_INFO(" * WHITEBALANCE_TEMPERATURE: %d", src->whitebalance_temperature);
 
     } else {
-        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->whitebalance_temperature_auto);
-        GST_INFO(" * WHITEBALANCE_AUTO: %s", (src->whitebalance_temperature_auto ? "TRUE" : "FALSE"));
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO,
+                                   src->whitebalance_temperature_auto);
+        GST_INFO(" * WHITEBALANCE_AUTO: %s",
+                 (src->whitebalance_temperature_auto ? "TRUE" : "FALSE"));
     }
     src->zed.setCameraSettings(sl::VIDEO_SETTINGS::LED_STATUS, src->led_status);
     GST_INFO(" * LED_STATUS: %s", (src->led_status ? "ON" : "OFF"));
@@ -1771,7 +2106,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
     GST_INFO(" * Depth Confidence threshold: %d", src->confidence_threshold);
     GST_INFO(" * Depth Texture Confidence threshold: %d", src->texture_confidence_threshold);
-    GST_INFO(" * 3D Reference Frame: %s", sl::toString((sl::COORDINATE_SYSTEM) src->measure3D_reference_frame).c_str());
+    GST_INFO(" * 3D Reference Frame: %s",
+             sl::toString((sl::COORDINATE_SYSTEM) src->measure3D_reference_frame).c_str());
     GST_INFO(" * Fill Mode: %s", (src->fill_mode ? "TRUE" : "FALSE"));
 
     if (src->roi) {
@@ -1779,7 +2115,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
             int roi_x_end = src->roi_x + src->roi_w;
             int roi_y_end = src->roi_y + src->roi_h;
             sl::Resolution resolution = sl::getResolution(init_params.camera_resolution);
-            if (src->roi_x < 0 || src->roi_x >= resolution.width || src->roi_y < 0 || src->roi_y >= resolution.height || roi_x_end >= resolution.width ||
+            if (src->roi_x < 0 || src->roi_x >= resolution.width || src->roi_y < 0 ||
+                src->roi_y >= resolution.height || roi_x_end >= resolution.width ||
                 roi_y_end >= resolution.height) {
 
                 sl::uchar1 uint0 = 0;
@@ -1790,11 +2127,15 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
                     for (int col = src->roi_y; col < roi_x_end; col++)
                         roi_mask.setValue(col, row, uint1);
 
-                GST_INFO(" * ROI mask: (%d,%d)-%dx%d", src->roi_x, src->roi_y, src->roi_w, src->roi_h);
+                GST_INFO(" * ROI mask: (%d,%d)-%dx%d", src->roi_x, src->roi_y, src->roi_w,
+                         src->roi_h);
 
                 ret = src->zed.setRegionOfInterest(roi_mask);
                 if (ret != sl::ERROR_CODE::SUCCESS) {
-                    GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set region of interest, '%s'", sl::toString(ret).c_str()), (NULL));
+                    GST_ELEMENT_ERROR(
+                        src, RESOURCE, NOT_FOUND,
+                        ("Failed to set region of interest, '%s'", sl::toString(ret).c_str()),
+                        (NULL));
                     return FALSE;
                 }
             }
@@ -1817,11 +2158,13 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         pos_trk_params.enable_imu_fusion = (src->enable_imu_fusion == TRUE);
         GST_INFO(" * IMU fusion: %s", (pos_trk_params.enable_imu_fusion ? "TRUE" : "FALSE"));
         pos_trk_params.enable_pose_smoothing = (src->enable_pose_smoothing == TRUE);
-        GST_INFO(" * Pose smoothing: %s", (pos_trk_params.enable_pose_smoothing ? "TRUE" : "FALSE"));
+        GST_INFO(" * Pose smoothing: %s",
+                 (pos_trk_params.enable_pose_smoothing ? "TRUE" : "FALSE"));
         pos_trk_params.set_floor_as_origin = (src->set_floor_as_origin == TRUE);
         GST_INFO(" * Floor as origin: %s", (pos_trk_params.set_floor_as_origin ? "TRUE" : "FALSE"));
         pos_trk_params.set_gravity_as_origin = (src->set_gravity_as_origin == TRUE);
-        GST_INFO(" * Gravity as origin: %s", (pos_trk_params.set_gravity_as_origin ? "TRUE" : "FALSE"));
+        GST_INFO(" * Gravity as origin: %s",
+                 (pos_trk_params.set_gravity_as_origin ? "TRUE" : "FALSE"));
         pos_trk_params.depth_min_range = src->depth_min_range;
         GST_INFO(" * Depth min range: %f", (pos_trk_params.depth_min_range));
 
@@ -1831,24 +2174,33 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         case sl::COORDINATE_SYSTEM::IMAGE:
         case sl::COORDINATE_SYSTEM::LEFT_HANDED_Y_UP:
         case sl::COORDINATE_SYSTEM::RIGHT_HANDED_Y_UP:
-            init_or.setEulerAngles(sl::float3(src->init_orient_pitch, src->init_orient_yaw, src->init_orient_roll), false);
+            init_or.setEulerAngles(
+                sl::float3(src->init_orient_pitch, src->init_orient_yaw, src->init_orient_roll),
+                false);
             break;
         case sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP:
-            init_or.setEulerAngles(sl::float3(src->init_orient_pitch, src->init_orient_roll, src->init_orient_yaw), false);
+            init_or.setEulerAngles(
+                sl::float3(src->init_orient_pitch, src->init_orient_roll, src->init_orient_yaw),
+                false);
             break;
         case sl::COORDINATE_SYSTEM::LEFT_HANDED_Z_UP:
         case sl::COORDINATE_SYSTEM::RIGHT_HANDED_Z_UP_X_FWD:
-            init_or.setEulerAngles(sl::float3(src->init_orient_roll, src->init_orient_pitch, src->init_orient_yaw), false);
+            init_or.setEulerAngles(
+                sl::float3(src->init_orient_roll, src->init_orient_pitch, src->init_orient_yaw),
+                false);
             break;
         }
 
         pos_trk_params.initial_world_transform = sl::Transform(init_or, init_pos);
-        GST_INFO(" * Initial world transform: T(%g,%g,%g) OR(%g,%g,%g)", src->init_pose_x, src->init_pose_y, src->init_pose_z, src->init_orient_roll,
-                 src->init_orient_pitch, src->init_orient_yaw);
+        GST_INFO(" * Initial world transform: T(%g,%g,%g) OR(%g,%g,%g)", src->init_pose_x,
+                 src->init_pose_y, src->init_pose_z, src->init_orient_roll, src->init_orient_pitch,
+                 src->init_orient_yaw);
 
         ret = src->zed.enablePositionalTracking(pos_trk_params);
         if (ret != sl::ERROR_CODE::SUCCESS) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to start positional tracking, '%s'", sl::toString(ret).c_str()), (NULL));
+            GST_ELEMENT_ERROR(
+                src, RESOURCE, NOT_FOUND,
+                ("Failed to start positional tracking, '%s'", sl::toString(ret).c_str()), (NULL));
             return FALSE;
         }
     }
@@ -1865,8 +2217,10 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         od_params.enable_tracking = (src->od_enable_tracking == TRUE);
         GST_INFO(" * Object tracking: %s", (od_params.enable_tracking ? "TRUE" : "FALSE"));
         od_params.enable_segmentation = (src->od_enable_segm_output == TRUE);
-        GST_INFO(" * Segmentation Mask output: %s", (od_params.enable_segmentation ? "TRUE" : "FALSE"));
-        od_params.detection_model = static_cast<sl::OBJECT_DETECTION_MODEL>(src->od_detection_model);
+        GST_INFO(" * Segmentation Mask output: %s",
+                 (od_params.enable_segmentation ? "TRUE" : "FALSE"));
+        od_params.detection_model =
+            static_cast<sl::OBJECT_DETECTION_MODEL>(src->od_detection_model);
         GST_INFO(" * Detection model: %s", sl::toString(od_params.detection_model).c_str());
         od_params.filtering_mode = static_cast<sl::OBJECT_FILTERING_MODE>(src->od_filter_mode);
         GST_INFO(" * Filter mode: %s", sl::toString(od_params.filtering_mode).c_str());
@@ -1875,7 +2229,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         od_params.prediction_timeout_s = src->od_prediction_timeout_s;
         GST_INFO(" * Prediction timeout (sec): %f", (od_params.prediction_timeout_s));
         od_params.allow_reduced_precision_inference = src->od_allow_reduced_precision_inference;
-        GST_INFO(" * Allow reduced precision inference: %s", (od_params.allow_reduced_precision_inference ? "TRUE" : "FALSE"));
+        GST_INFO(" * Allow reduced precision inference: %s",
+                 (od_params.allow_reduced_precision_inference ? "TRUE" : "FALSE"));
 
         GST_INFO(" * Confidence thresh.: %g", src->od_det_conf);
 
@@ -1889,7 +2244,9 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
         ret = src->zed.enableObjectDetection(od_params);
         if (ret != sl::ERROR_CODE::SUCCESS) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to start Object Detection, '%s'", sl::toString(ret).c_str()), (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to start Object Detection, '%s'", sl::toString(ret).c_str()),
+                              (NULL));
             return FALSE;
         }
     }
@@ -1906,7 +2263,9 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
         ret = src->zed.enableBodyTracking(bt_params);
         if (ret != sl::ERROR_CODE::SUCCESS) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to start Body Tracking, '%s'", sl::toString(ret).c_str()), (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to start Body Tracking, '%s'", sl::toString(ret).c_str()),
+                              (NULL));
             return FALSE;
         }
     }
@@ -2021,7 +2380,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
     zedRtParams.confidence_threshold = src->confidence_threshold;
     zedRtParams.texture_confidence_threshold = src->texture_confidence_threshold;
-    zedRtParams.measure3D_reference_frame = static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
+    zedRtParams.measure3D_reference_frame =
+        static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
     zedRtParams.enable_fill_mode = src->fill_mode;
     zedRtParams.remove_saturated_areas = true;
     // <---- Set runtime parameters
@@ -2030,7 +2390,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     ret = src->zed.grab(zedRtParams);
 
     if (ret != sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Grabbing failed with error '%s'", sl::toString(ret).c_str()), (NULL));
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Grabbing failed with error '%s'", sl::toString(ret).c_str()), (NULL));
         return GST_FLOW_ERROR;
     }
     // <---- ZED grab
@@ -2068,7 +2429,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
 
     if (ret != sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Grabbing failed with error '%s'", sl::toString(ret).c_str()), (NULL));
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Grabbing failed with error '%s'", sl::toString(ret).c_str()), (NULL));
         return GST_FLOW_ERROR;
     }
     // <---- Mats retrieving
@@ -2109,8 +2471,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     info.stream_type = src->stream_type;
     info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
     info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
-    if (info.grab_single_frame_height == 752 || info.grab_single_frame_height == 1440 || info.grab_single_frame_height == 2160 ||
-        info.grab_single_frame_height == 2484) {
+    if (info.grab_single_frame_height == 752 || info.grab_single_frame_height == 1440 ||
+        info.grab_single_frame_height == 2160 || info.grab_single_frame_height == 2484) {
         info.grab_single_frame_height /= 2;   // Only half buffer size if the stream is composite
     }
     // <---- Info metadata
@@ -2169,13 +2531,16 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             sens.env.env_avail = TRUE;
 
             float temp;
-            sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::BAROMETER, temp);
+            sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::BAROMETER,
+                                      temp);
             sens.env.temp = temp;
             sens.env.press = sens_data.barometer.pressure * 1e-2;
 
             float tempL, tempR;
-            sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_LEFT, tempL);
-            sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_RIGHT, tempR);
+            sens_data.temperature.get(
+                sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_LEFT, tempL);
+            sens_data.temperature.get(
+                sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_RIGHT, tempR);
             sens.temp.temp_avail = TRUE;
             sens.temp.temp_cam_left = tempL;
             sens.temp.temp_cam_right = tempR;
@@ -2193,7 +2558,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
     // <---- Sensors metadata metadata
 
-    ZedObjectData obj_data[256];   // Common Array for Detected Object and Tracked Skeletons metadata
+    ZedObjectData
+        obj_data[256];   // Common Array for Detected Object and Tracked Skeletons metadata
     guint8 obj_count = 0;
 
     // ----> Object detection metadata
@@ -2246,55 +2612,68 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                 for (auto i = det_objs.object_list.begin(); i != det_objs.object_list.end(); ++i) {
                     sl::ObjectData obj = *i;
 
-                    obj_data[idx].skeletons_avail = FALSE;   // No Skeleton info for Object Detection
+                    obj_data[idx].skeletons_avail =
+                        FALSE;   // No Skeleton info for Object Detection
 
                     obj_data[idx].id = obj.id;
                     GST_TRACE_OBJECT(src, " * [%d] Object id: %d", idx, obj.id);
 
                     obj_data[idx].label = static_cast<OBJECT_CLASS>(obj.label);
-                    GST_TRACE_OBJECT(src, " * [%d] Label: %s", idx, sl::toString(obj.label).c_str());
+                    GST_TRACE_OBJECT(src, " * [%d] Label: %s", idx,
+                                     sl::toString(obj.label).c_str());
 
                     obj_data[idx].sublabel = static_cast<OBJECT_SUBCLASS>(obj.sublabel);
-                    GST_TRACE_OBJECT(src, " * [%d] Sublabel: %s", idx, sl::toString(obj.sublabel).c_str());
+                    GST_TRACE_OBJECT(src, " * [%d] Sublabel: %s", idx,
+                                     sl::toString(obj.sublabel).c_str());
 
-                    obj_data[idx].tracking_state = static_cast<OBJECT_TRACKING_STATE>(obj.tracking_state);
-                    GST_TRACE_OBJECT(src, " * [%d] Tracking state: %s", idx, sl::toString(obj.tracking_state).c_str());
+                    obj_data[idx].tracking_state =
+                        static_cast<OBJECT_TRACKING_STATE>(obj.tracking_state);
+                    GST_TRACE_OBJECT(src, " * [%d] Tracking state: %s", idx,
+                                     sl::toString(obj.tracking_state).c_str());
 
                     obj_data[idx].action_state = static_cast<OBJECT_ACTION_STATE>(obj.action_state);
-                    GST_TRACE_OBJECT(src, " * [%d] Action state: %s", idx, sl::toString(obj.action_state).c_str());
+                    GST_TRACE_OBJECT(src, " * [%d] Action state: %s", idx,
+                                     sl::toString(obj.action_state).c_str());
 
                     obj_data[idx].confidence = obj.confidence;
                     GST_TRACE_OBJECT(src, " * [%d] Object confidence: %g", idx, obj.confidence);
 
                     memcpy(obj_data[idx].position, (void *) obj.position.ptr(), 3 * sizeof(float));
                     GST_TRACE_OBJECT(src, " * [%d] Copied position", idx);
-                    memcpy(obj_data[idx].position_covariance, (void *) obj.position_covariance, 6 * sizeof(float));
+                    memcpy(obj_data[idx].position_covariance, (void *) obj.position_covariance,
+                           6 * sizeof(float));
                     GST_TRACE_OBJECT(src, " * [%d] Copied covariance", idx);
                     memcpy(obj_data[idx].velocity, (void *) obj.velocity.ptr(), 3 * sizeof(float));
                     GST_TRACE_OBJECT(src, " * [%d] Copied velocity", idx);
 
                     if (obj.bounding_box_2d.size() > 0) {
-                        memcpy((uint8_t *) obj_data[idx].bounding_box_2d, (uint8_t *) obj.bounding_box_2d.data(),
+                        memcpy((uint8_t *) obj_data[idx].bounding_box_2d,
+                               (uint8_t *) obj.bounding_box_2d.data(),
                                obj.bounding_box_2d.size() * 2 * sizeof(unsigned int));
-                        GST_TRACE_OBJECT(src, " * [%d] Copied bbox 2D - %lu", idx, 8 * sizeof(unsigned int));
+                        GST_TRACE_OBJECT(src, " * [%d] Copied bbox 2D - %lu", idx,
+                                         8 * sizeof(unsigned int));
                     } else {
                         GST_TRACE_OBJECT(src, " * [%d] bounding_box_2d empty", idx);
                     }
                     /*for( int i=0; i<4; i++ )
                     {
-                        GST_TRACE_OBJECT( src, "\t* [%d] x_cp: %u, y_cp: %u", i, obj_data[idx].bounding_box_2d[i][0],
-                    obj_data[idx].bounding_box_2d[i][1] ); GST_TRACE_OBJECT( src, "\t* [%d] x_or: %u, y_or: %u", i,
+                        GST_TRACE_OBJECT( src, "\t* [%d] x_cp: %u, y_cp: %u", i,
+                    obj_data[idx].bounding_box_2d[i][0], obj_data[idx].bounding_box_2d[i][1] );
+                    GST_TRACE_OBJECT( src, "\t* [%d] x_or: %u, y_or: %u", i,
                     obj.bounding_box_2d[i].x, obj.bounding_box_2d[i].y );
                     }*/
 
                     if (obj.bounding_box.size() > 0) {
-                        memcpy(obj_data[idx].bounding_box_3d, (void *) obj.bounding_box.data(), 24 * sizeof(float));
-                        GST_TRACE_OBJECT(src, " * [%d] Copied bbox 3D - %lu", idx, 24 * sizeof(float));
+                        memcpy(obj_data[idx].bounding_box_3d, (void *) obj.bounding_box.data(),
+                               24 * sizeof(float));
+                        GST_TRACE_OBJECT(src, " * [%d] Copied bbox 3D - %lu", idx,
+                                         24 * sizeof(float));
                     } else {
                         GST_TRACE_OBJECT(src, " * [%d] bounding_box empty", idx);
                     }
 
-                    memcpy(obj_data[idx].dimensions, (void *) obj.dimensions.ptr(), 3 * sizeof(float));
+                    memcpy(obj_data[idx].dimensions, (void *) obj.dimensions.ptr(),
+                           3 * sizeof(float));
                     GST_TRACE_OBJECT(src, " * [%d] Copied dimensions", idx);
 
                     // if (src->od_detection_model == GST_ZEDSRC_OD_HUMAN_BODY_FAST ||
@@ -2303,20 +2682,23 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                     //     obj_data[idx].skeletons_avail = TRUE;
 
                     //     if (obj.keypoint_2d.size() > 0) {
-                    //         memcpy(obj_data[idx].keypoint_2d, (void *) obj.keypoint_2d.data(), 36 * sizeof(float));
-                    //         GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 2d - %lu", idx, obj.keypoint_2d.size());
+                    //         memcpy(obj_data[idx].keypoint_2d, (void *) obj.keypoint_2d.data(), 36
+                    //         * sizeof(float)); GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 2d -
+                    //         %lu", idx, obj.keypoint_2d.size());
                     //     } else {
                     //         GST_TRACE_OBJECT(src, " * [%d] keypoint_2d empty", idx);
                     //     }
                     //     if (obj.keypoint.size() > 0) {
-                    //         memcpy(obj_data[idx].keypoint_3d, (void *) obj.keypoint.data(), 54 * sizeof(float));
-                    //         GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 3d - %lu", idx, obj.keypoint.size());
+                    //         memcpy(obj_data[idx].keypoint_3d, (void *) obj.keypoint.data(), 54 *
+                    //         sizeof(float)); GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 3d -
+                    //         %lu", idx, obj.keypoint.size());
                     //     } else {
                     //         GST_TRACE_OBJECT(src, " * [%d] keypoint empty", idx);
                     //     }
 
                     //     if (obj.head_bounding_box_2d.size() > 0) {
-                    //         memcpy(obj_data[idx].head_bounding_box_2d, (void *) obj.head_bounding_box_2d.data(),
+                    //         memcpy(obj_data[idx].head_bounding_box_2d, (void *)
+                    //         obj.head_bounding_box_2d.data(),
                     //                8 * sizeof(unsigned int));
                     //         GST_TRACE_OBJECT(src, " * [%d] Copied head bbox 2d - %lu", idx,
                     //                          obj.head_bounding_box_2d.size());
@@ -2324,15 +2706,17 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                     //         GST_TRACE_OBJECT(src, " * [%d] head_bounding_box_2d empty", idx);
                     //     }
                     //     if (obj.head_bounding_box.size() > 0) {
-                    //         memcpy(obj_data[idx].head_bounding_box_3d, (void *) obj.head_bounding_box.data(),
+                    //         memcpy(obj_data[idx].head_bounding_box_3d, (void *)
+                    //         obj.head_bounding_box.data(),
                     //                24 * sizeof(float));
                     //         GST_TRACE_OBJECT(src, " * [%d] Copied head bbox 3d - %lu", idx,
                     //                          obj.head_bounding_box.size());
                     //     } else {
                     //         GST_TRACE_OBJECT(src, " * [%d] head_bounding_box empty", idx);
                     //     }
-                    //     memcpy(obj_data[idx].head_position, (void *) obj.head_position.ptr(), 3 * sizeof(float));
-                    //     GST_TRACE_OBJECT(src, " * [%d] Copied head position", idx);
+                    //     memcpy(obj_data[idx].head_position, (void *) obj.head_position.ptr(), 3 *
+                    //     sizeof(float)); GST_TRACE_OBJECT(src, " * [%d] Copied head position",
+                    //     idx);
                     // } else {
                     //     obj_data[idx].skeletons_avail = FALSE;
                     //     GST_TRACE_OBJECT(src, " * [%d] No Skeletons", idx);
@@ -2378,17 +2762,19 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Body Tracking metadata
 
     // ----> Timestamp meta-data
-    GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+    GST_BUFFER_TIMESTAMP(buf) =
+        GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
     GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
     // <---- Timestamp meta-data
 
     guint64 offset = GST_BUFFER_OFFSET(buf);
-    GstZedSrcMeta *meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens, src->object_detection, obj_count, obj_data, offset);
+    GstZedSrcMeta *meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens, src->object_detection,
+                                                      obj_count, obj_data, offset);
 
     // Buffer release
     gst_buffer_unmap(buf, &minfo);
-    // gst_buffer_unref(buf); // NOTE: do not uncomment to not crash
+    // gst_buffer_unref(buf); // NOTE(Walter) do not uncomment to not crash
 
     if (src->stop_requested) {
         return GST_FLOW_FLUSHING;
@@ -2404,5 +2790,5 @@ static gboolean plugin_init(GstPlugin *plugin) {
     return TRUE;
 }
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, zedsrc, "Zed camera source", plugin_init, GST_PACKAGE_VERSION, GST_PACKAGE_LICENSE, GST_PACKAGE_NAME,
-                  GST_PACKAGE_ORIGIN)
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, zedsrc, "Zed camera source", plugin_init,
+                  GST_PACKAGE_VERSION, GST_PACKAGE_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

@@ -28,9 +28,10 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_ZED_SRC          (gst_zedsrc_get_type())
-#define GST_ZED_SRC(obj)          (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_ZED_SRC, GstZedSrc))
-#define GST_ZED_SRC_CLASS(klass)  (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_ZED_SRC, GstZedSrcClass))
+#define GST_TYPE_ZED_SRC (gst_zedsrc_get_type())
+#define GST_ZED_SRC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_ZED_SRC, GstZedSrc))
+#define GST_ZED_SRC_CLASS(klass)                                                                   \
+    (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_ZED_SRC, GstZedSrcClass))
 #define GST_IS_ZED_SRC(obj)       (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_ZED_SRC))
 #define GST_IS_ZED_SRC_CLASS(obj) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_ZED_SRC))
 
@@ -99,14 +100,21 @@ struct _GstZedSrc {
     gint od_filter_mode;                             // sl::OBJECT_FILTERING_MODE filtering_mode
     gfloat od_prediction_timeout_s;                  // float prediction_timeout_s
     gboolean od_allow_reduced_precision_inference;   // bool allow_reduced_precision_inference
-    gfloat od_det_conf;                              // [runtime] float detection_confidence_threshold
-    gfloat od_person_conf;                           // [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold
-    gfloat od_vehicle_conf;                          // [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold
-    gfloat od_bag_conf;                              // [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold
-    gfloat od_animal_conf;                           // [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold
-    gfloat od_electronics_conf;                      // [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold
-    gfloat od_fruit_vegetable_conf;                  // [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold
-    gfloat od_sport_conf;                            // [runtime] std::map< OBJECT_CLASS, float > object_class_detection_confidence_threshold
+    gfloat od_det_conf;               // [runtime] float detection_confidence_threshold
+    gfloat od_person_conf;            // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_vehicle_conf;           // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_bag_conf;               // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_animal_conf;            // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_electronics_conf;       // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_fruit_vegetable_conf;   // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_sport_conf;             // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
 
     gboolean body_tracking;           // TODO(Walter)
     gboolean bt_enable_segm_output;   // TODO(Walter) bool enable_segmentation
