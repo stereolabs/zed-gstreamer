@@ -1905,8 +1905,6 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     }
     // <---- Object Detection
 
-    src->body_tracking = true;
-
     // ----> Body Tracking
     GST_INFO("BODY TRACKING PARAMETERS");
     GST_INFO(" * Object Detection status: %s", (src->body_tracking ? "ON" : "OFF"));

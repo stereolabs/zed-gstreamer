@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Example pipeline to acquire a stream at default resolution with RGB LEft and Right information and 
+# Example pipeline to acquire a stream at default resolution with RGB Left and Right information and 
 # displaying the results on screen with FPS information
 
 # 1) Start `zedsrc` to acquire RGB left and right streams
