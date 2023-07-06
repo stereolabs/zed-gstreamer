@@ -77,7 +77,7 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE("sink", GST_
                                                                                      "video/x-raw, "   // Double stream SVGA (GMSL2)
                                                                                      "format = (string)BGRA, "
                                                                                      "width = (int)960, "
-                                                                                     "height = (int)A200, "
+                                                                                     "height = (int)1200, "
                                                                                      "framerate = (fraction) { 15, 30, 60, 120 }"
                                                                                      ";"
                                                                                      "video/x-raw, "   // Color VGA
@@ -186,7 +186,7 @@ static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE("src", GST_PA
                                                                                     "video/x-raw, "   // Double stream SVGA (GMSL2)
                                                                                     "format = (string)BGRA, "
                                                                                     "width = (int)960, "
-                                                                                    "height = (int)A200, "
+                                                                                    "height = (int)1200, "
                                                                                     "framerate = (fraction) { 15, 30, 60, 120 }"
                                                                                     ";"
                                                                                     "video/x-raw, "   // Color VGA

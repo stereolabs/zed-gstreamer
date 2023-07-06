@@ -46,112 +46,112 @@ enum {
  */
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
                                                                   GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)672, "
-                                                                                               "height = (int)752 , "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 100 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Double stream HD720
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1280, "
-                                                                                               "height = (int)1440, "
-                                                                                               "framerate = (fraction) { 15, 30, 60 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Double stream HD1080
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)2160, "
-                                                                                               "framerate = (fraction) { 15, 30 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Double stream HD2K
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)2208, "
-                                                                                               "height = (int)2484, "
-                                                                                               "framerate = (fraction)15"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Double stream HD1200 (GMSL2)
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)2400, "
-                                                                                               "framerate = (fraction) { 15, 30, 60 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "   // Double stream SVGA (GMSL2)
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)960, "
-                                                                                               "height = (int)A200, "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 120 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "  // Color VGA
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)672, "
-                                                                                               "height =  (int)376, "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 100 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "  // Color HD720 
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1280, "
-                                                                                               "height =  (int)720, "
-                                                                                               "framerate =  (fraction)  { 15, 30, 60}"
-                                                                                               ";"
-                                                                                               "video/x-raw, "  // Color HD1080
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)1080, "
-                                                                                               "framerate = (fraction) { 15, 30 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "  // Color HD2K
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)2208, "
-                                                                                               "height = (int)1242, "
-                                                                                               "framerate = (fraction)15"
-                                                                                               ";"
-                                                                                               "video/x-raw, "  // Color HD1200 (GMSL2)
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)1200, "
-                                                                                               "framerate = (fraction) { 15, 30, 60 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "  // Color SVGA (GMSL2)
-                                                                                               "format = (string)BGRA, "
-                                                                                               "width = (int)960, "
-                                                                                               "height = (int)600, "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 120 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "  // Depth VGA
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)672, "
-                                                                                               "height =  (int)376, "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 100 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "  // Depth HD720
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)1280, "
-                                                                                               "height =  (int)720, "
-                                                                                               "framerate =  (fraction)  { 15, 30, 60}"
-                                                                                               ";"
-                                                                                               "video/x-raw, "  // Depth HD1080
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)1080, "
-                                                                                               "framerate = (fraction) { 15, 30 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, "  // Depth HD2K
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)2208, "
-                                                                                               "height = (int)1242, "
-                                                                                               "framerate = (fraction)15"
-                                                                                               ";"
-                                                                                               "video/x-raw, " // Depth HD1200 (GMSL2)
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)1920, "
-                                                                                               "height = (int)1200, "
-                                                                                               "framerate = (fraction) { 15, 30, 60 }"
-                                                                                               ";"
-                                                                                               "video/x-raw, " // Depth SVGA (GMSL2)
-                                                                                               "format = (string)GRAY16_LE, "
-                                                                                               "width = (int)960, "
-                                                                                               "height = (int)600, "
-                                                                                               "framerate = (fraction) { 15, 30, 60, 120 }")));
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)672, "
+                                                                                   "height = (int)752 , "
+                                                                                   "framerate = (fraction) { 15, 30, 60, 100 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Double stream HD720
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)1280, "
+                                                                                   "height = (int)1440, "
+                                                                                   "framerate = (fraction) { 15, 30, 60 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Double stream HD1080
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)1920, "
+                                                                                   "height = (int)2160, "
+                                                                                   "framerate = (fraction) { 15, 30 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Double stream HD2K
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)2208, "
+                                                                                   "height = (int)2484, "
+                                                                                   "framerate = (fraction)15"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Double stream HD1200 (GMSL2)
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)1920, "
+                                                                                   "height = (int)2400, "
+                                                                                   "framerate = (fraction) { 15, 30, 60 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Double stream SVGA (GMSL2)
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)960, "
+                                                                                   "height = (int)1200, "
+                                                                                   "framerate = (fraction) { 15, 30, 60, 120 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Color VGA
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)672, "
+                                                                                   "height =  (int)376, "
+                                                                                   "framerate = (fraction) { 15, 30, 60, 100 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Color HD720
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)1280, "
+                                                                                   "height =  (int)720, "
+                                                                                   "framerate =  (fraction)  { 15, 30, 60}"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Color HD1080
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)1920, "
+                                                                                   "height = (int)1080, "
+                                                                                   "framerate = (fraction) { 15, 30 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Color HD2K
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)2208, "
+                                                                                   "height = (int)1242, "
+                                                                                   "framerate = (fraction)15"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Color HD1200 (GMSL2)
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)1920, "
+                                                                                   "height = (int)1200, "
+                                                                                   "framerate = (fraction) { 15, 30, 60 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Color SVGA (GMSL2)
+                                                                                   "format = (string)BGRA, "
+                                                                                   "width = (int)960, "
+                                                                                   "height = (int)600, "
+                                                                                   "framerate = (fraction) { 15, 30, 60, 120 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Depth VGA
+                                                                                   "format = (string)GRAY16_LE, "
+                                                                                   "width = (int)672, "
+                                                                                   "height =  (int)376, "
+                                                                                   "framerate = (fraction) { 15, 30, 60, 100 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Depth HD720
+                                                                                   "format = (string)GRAY16_LE, "
+                                                                                   "width = (int)1280, "
+                                                                                   "height =  (int)720, "
+                                                                                   "framerate =  (fraction)  { 15, 30, 60}"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Depth HD1080
+                                                                                   "format = (string)GRAY16_LE, "
+                                                                                   "width = (int)1920, "
+                                                                                   "height = (int)1080, "
+                                                                                   "framerate = (fraction) { 15, 30 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Depth HD2K
+                                                                                   "format = (string)GRAY16_LE, "
+                                                                                   "width = (int)2208, "
+                                                                                   "height = (int)1242, "
+                                                                                   "framerate = (fraction)15"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Depth HD1200 (GMSL2)
+                                                                                   "format = (string)GRAY16_LE, "
+                                                                                   "width = (int)1920, "
+                                                                                   "height = (int)1200, "
+                                                                                   "framerate = (fraction) { 15, 30, 60 }"
+                                                                                   ";"
+                                                                                   "video/x-raw, "   // Depth SVGA (GMSL2)
+                                                                                   "format = (string)GRAY16_LE, "
+                                                                                   "width = (int)960, "
+                                                                                   "height = (int)600, "
+                                                                                   "framerate = (fraction) { 15, 30, 60, 120 }")));
 
 static GstStaticPadTemplate sink_video_factory = GST_STATIC_PAD_TEMPLATE("sink_video", GST_PAD_SINK, GST_PAD_ALWAYS,
                                                                          GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
@@ -187,7 +187,7 @@ static GstStaticPadTemplate sink_video_factory = GST_STATIC_PAD_TEMPLATE("sink_v
                                                                                           "video/x-raw, "   // Double stream SVGA (GMSL2)
                                                                                           "format = (string)BGRA, "
                                                                                           "width = (int)960, "
-                                                                                          "height = (int)A200, "
+                                                                                          "height = (int)1200, "
                                                                                           "framerate = (fraction) { 15, 30, 60, 120 }"
                                                                                           ";"
                                                                                           "video/x-raw, "   // Color VGA
