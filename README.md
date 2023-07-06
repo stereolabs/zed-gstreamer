@@ -163,7 +163,7 @@ Most of the parameters follow the same name as the C++ API. Except that `_` is r
  * `od-enabled`: Enable Object Detection - {TRUE, FALSE}
  * `od-image-sync`: Set to TRUE to enable Object Detection frame synchronization - {TRUE, FALSE}
  * `od-enable-tracking`: Set to TRUE to enable tracking for the detected objects - {TRUE, FALSE}
- * `od-detection-model`: Object Detection Model - {(0): Object Detection Multi class, (1): Object Detection Multi class ACCURATE, (2): Skeleton tracking FAST, (3): Skeleton tracking ACCURATE, (4): Object Detection Multi class MEDIUM, (5): Skeleton tracking MEDIUM, (6): Person Head, (7): Person Head ACCURATE}
+ * `od-detection-model`: Object Detection Model - {(0): Object Detection Multi class FAST, (1): Object Detection Multi class MEDIUM, (2): Object Detection Multi class ACCURATE, (3): Person Head FAST, (4): Person Head ACCURATE}
  * `od-confidence`: Minimum Detection Confidence - {0,100}
  * `od-max-range`: Maximum Detection Range - [-1,20000]
  * `od-body-fitting`: Set to TRUE to enable body fitting for skeleton tracking - {TRUE, FALSE}
