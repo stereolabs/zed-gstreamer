@@ -1596,11 +1596,48 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
 
     case PROP_BT_ENABLE:
-    case PROP_BT_DET_MODEL:
+        src->body_tracking = g_value_get_boolean(value);
+        break;
+    case PROP_BT_SEGM:
+        src->bt_enable_segm_output = g_value_get_boolean(value);
+        break;
     case PROP_BT_SYNC:
-    case DEFAULT_PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE
-
-        case PROP_BRIGHTNESS:
+        src->bt_image_sync = g_value_get_boolean(value);
+        break;
+    case PROP_BT_MODEL:
+        src->bt_model = g_value_get_int(value);
+        break;
+    case PROP_BT_FORMAT:
+        src->bt_format = g_value_get_int(value);
+        break;
+    case PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE:
+        src->bt_reduce_precision = g_value_get_boolean(value);
+        break;
+    case PROP_BT_MAX_RANGE:
+        src->bt_max_range = g_value_get_float(value);
+        break;
+    case PROP_BT_KP_SELECT:
+        src->bt_kp_sel = g_value_get_int(value);
+        break;
+    case PROP_BT_BODY_FITTING:
+        src->bt_fitting = g_value_get_boolean(value);
+        break;
+    case PROP_BT_TRACKING:
+        src->bt_enable_trk = g_value_get_boolean(value);
+        break;
+    case PROP_BT_PREDICTION_TIMEOUT_S:
+        src->bt_pred_timeout = g_value_get_float(value);
+        break;
+    case PROP_BT_CONFIDENCE:
+        src->bt_rt_det_conf = g_value_get_float(value);
+        break;
+    case PROP_BT_MIN_KP_THRESH:
+        src->bt_rt_min_kp_thresh = g_value_get_int(value);
+        break;
+    case PROP_BT_SMOOTHING:
+        src->bt_rt_skel_smoothing = g_value_get_float(value);
+        break;
+    case PROP_BRIGHTNESS:
         src->brightness = g_value_get_int(value);
         break;
     case PROP_CONTRAST:
@@ -1838,9 +1875,48 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     case PROP_OD_SPORT_CONF:
         g_value_set_float(value, src->od_sport_conf);
         break;
-
-        // TODO(Walter) add BT setter
-
+    case PROP_BT_ENABLE:
+        g_value_set_float(value, src->body_tracking);
+        break;
+    /*case PROP_BT_SEGM:
+    g_value_set_float(value, src->bt_enable_segm_output);
+    break;*/
+    case PROP_BT_SYNC:
+        g_value_set_float(value, src->bt_image_sync);
+        break;
+    case PROP_BT_MODEL:
+        g_value_set_float(value, src->bt_model);
+        break;
+    case PROP_BT_FORMAT:
+        g_value_set_float(value, src->bt_format);
+        break;
+    case PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE:
+        g_value_set_float(value, src->bt_reduce_precision);
+        break;
+    case PROP_BT_MAX_RANGE:
+        g_value_set_float(value, src->bt_max_range);
+        break;
+    case PROP_BT_KP_SELECT:
+        g_value_set_float(value, src->bt_kp_sel);
+        break;
+    case PROP_BT_BODY_FITTING:
+        g_value_set_float(value, src->bt_fitting);
+        break;
+    case PROP_BT_TRACKING:
+        g_value_set_float(value, src->bt_enable_trk);
+        break;
+    case PROP_BT_PREDICTION_TIMEOUT_S:
+        g_value_set_float(value, src->bt_pred_timeout);
+        break;
+    case PROP_BT_CONFIDENCE:
+        g_value_set_float(value, src->bt_rt_det_conf);
+        break;
+    case PROP_BT_MIN_KP_THRESH:
+        g_value_set_float(value, src->bt_rt_min_kp_thresh);
+        break;
+    case PROP_BT_SMOOTHING:
+        g_value_set_float(value, src->bt_rt_skel_smoothing);
+        break;
     case PROP_BRIGHTNESS:
         g_value_set_int(value, src->brightness);
         break;
