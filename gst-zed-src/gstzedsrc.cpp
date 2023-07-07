@@ -202,6 +202,8 @@ typedef enum {
     GST_ZEDSRC_BT_BODY_38 = 2
 } GstZedSrcBtFormat;
 
+typedef enum { GST_ZEDSRC_BT_KP_FULL = 0, GST_ZEDSRC_BT_KP_UPPER_BODY = 1 } GstZedSrcBtKpSelect;
+
 typedef enum {
     GST_ZEDSRC_SIDE_LEFT = 0,
     GST_ZEDSRC_SIDE_RIGHT = 1,
@@ -549,6 +551,25 @@ static GType gst_zedsrc_bt_format_get_type(void) {
     }
 
     return zedsrc_bt_format_type;
+}
+
+#define GST_TYPE_ZED_BT_KP_SELECT_TYPE (gst_zedsrc_bt_kp_select_get_type())
+static GType gst_zedsrc_bt_kp_select_get_type(void) {
+    static GType zedsrc_bt_kp_select_type = 0;
+
+    if (!zedsrc_bt_kp_select_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDSRC_BT_KP_FULL, "Full keypoint model.", "Full keypoint model."},
+            {GST_ZEDSRC_BT_KP_UPPER_BODY,
+             "Upper body keypoint model. Only the upper body will be outputted (from hip)",
+             "Upper body keypoint model"},
+            {0, NULL, NULL},
+        };
+
+        zedsrc_bt_kp_select_type = g_enum_register_static("GstZedSrcBtKpSelect", pattern_types);
+    }
+
+    return zedsrc_bt_kp_select_type;
 }
 
 #define GST_TYPE_ZED_DEPTH_MODE (gst_zedsrc_depth_mode_get_type())
@@ -1080,11 +1101,9 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_OD_MAX_RANGE,
-        g_param_spec_float(
-            "od-max-range",
-            "Defines if the body fitting will be applied when using Skeleton Tracking",
-            "Maximum Detection Range", -1.0f, 20000.0f, DEFAULT_PROP_OD_MAX_RANGE,
-            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_float("od-max-range", "Defines the maximum object detection range",
+                           "Maximum Detection Range", -1.0f, 20000.0f, DEFAULT_PROP_OD_MAX_RANGE,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_OD_PREDICTION_TIMEOUT_S,
@@ -1186,10 +1205,69 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_BT_DET_MODEL,
+        gobject_class, PROP_BT_MODEL,
         g_param_spec_enum("bt-detection-model", "Body Tracking model", "Body Tracking Model",
                           GST_TYPE_ZED_BT_MODEL_TYPE, DEFAULT_PROP_BT_MODEL,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BT_FORMAT,
+        g_param_spec_enum("bt-format", "Body Tracking format", "Body Tracking format",
+                          GST_TYPE_ZED_BT_FORMAT_TYPE, DEFAULT_PROP_BT_FORMAT,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE,
+        g_param_spec_boolean("bt-allow-red-prec", "Body Tracking reduced inference precision",
+                             "Set to TRUE to enable Body Tracking reduced inference precision ",
+                             DEFAULT_PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BT_MAX_RANGE,
+        g_param_spec_float("bt-max-range", "Defines the maximum Body Tracking range",
+                           "Maximum Detection Range", -1.0f, 20000.0f, DEFAULT_PROP_BT_MAX_RANGE,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BT_BODY_FITTING,
+        g_param_spec_boolean("bt-body-fitting", "Body Tracking model fitting",
+                             "Set to TRUE to enable Body Tracking model fitting ",
+                             DEFAULT_PROP_BT_BODY_FITTING,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BT_TRACKING,
+        g_param_spec_boolean("bt-body-tracking", "Body Tracking model tracking",
+                             "Set to TRUE to enable body tracking across images flow ",
+                             DEFAULT_PROP_BT_TRACKING,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BT_PREDICTION_TIMEOUT_S,
+        g_param_spec_float("bt-prediction-timeout-s", "Body Tracking prediction timeout(sec) ",
+                           "Body Tracking prediction timeout (sec)", 0.0f, 1.0f, DEFAULT_PROP_BT_PREDICTION_TIMEOUT_S,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BT_CONFIDENCE,
+        g_param_spec_float("bt-confidence", "Minimum Body tracking detection confidence threshold",
+                           "Minimum Detection Confidence", 0.0f, 100.0f, DEFAULT_PROP_BT_CONFIDENCE,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BT_MIN_KP_THRESH,
+        g_param_spec_int("bt-min-keypoints", "Minimum keypoints threshold.",
+                         "Specify the Minimum keypoints threshold.", 0, 70,
+                         DEFAULT_PROP_BT_MIN_KP_THRESH,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_BT_SMOOTHING,
+        g_param_spec_float("bt-smoothing", "Body tracking smoothing of the fitted fused skeletond",
+                           "Smoothing of the fitted fused skeleton", 0.0f, 1.0f,
+                           DEFAULT_PROP_BT_SMOOTHING,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_BRIGHTNESS,
