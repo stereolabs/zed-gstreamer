@@ -111,6 +111,9 @@ enum {
     PROP_OD_ELECTRONICS_CONF,
     PROP_OD_FRUIT_VEGETABLES_CONF,
     PROP_OD_SPORT_CONF,
+    PROP_BT_ENABLE,
+    PROP_BT_SYNC,
+    PROP_BT_DET_MODEL,
     PROP_BRIGHTNESS,
     PROP_CONTRAST,
     PROP_HUE,
@@ -175,6 +178,18 @@ typedef enum {
     GST_ZEDSRC_OD_FILTER_MODE_NMS3D,
     GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS
 } GstZedSrcOdFilterMode;
+
+typedef enum {
+    GST_ZEDSRC_BT_HUMAN_BODY_FAST = 0,
+    GST_ZEDSRC_BT_HUMAN_BODY_MEDIUM = 1,
+    GST_ZEDSRC_BT_HUMAN_BODY_ACCURATE = 2
+} GstZedSrcBtModel;
+
+typedef enum {
+    GST_ZEDSRC_BT_BODY_18 = 0,
+    GST_ZEDSRC_BT_BODY_34 = 1,
+    GST_ZEDSRC_BT_BODY_38 = 2
+} GstZedSrcBtFormat;
 
 typedef enum {
     GST_ZEDSRC_SIDE_LEFT = 0,
@@ -483,11 +498,16 @@ static GType gst_zedsrc_bt_model_get_type(void) {
 
     if (!zedsrc_bt_model_type) {
         static GEnumValue pattern_types[] = {
-            {GST_ZEDSRC_BT_HUMAN_BODY_FAST , "Keypoints based, specific to human skeleton, real time performance even on Jetson or low end GPU cards",
+            {GST_ZEDSRC_BT_HUMAN_BODY_FAST,
+             "Keypoints based, specific to human skeleton, real time performance even on Jetson or "
+             "low end GPU cards",
              "Body Tracking FAST"},
-             {GST_ZEDSRC_BT_HUMAN_BODY_MEDIUM, "Keypoints based, specific to human skeleton, compromise between accuracy and speed",
+            {GST_ZEDSRC_BT_HUMAN_BODY_MEDIUM,
+             "Keypoints based, specific to human skeleton, compromise between accuracy and speed",
              "Body Tracking MEDIUM"},
-             {GST_ZEDSRC_BT_HUMAN_BODY_ACCURATE , "Keypoints based, specific to human skeleton, state of the art accuracy, requires powerful GPU",
+            {GST_ZEDSRC_BT_HUMAN_BODY_ACCURATE,
+             "Keypoints based, specific to human skeleton, state of the art accuracy, requires "
+             "powerful GPU",
              "Body Tracking ACCURATE"},
             {0, NULL, NULL},
         };
@@ -504,11 +524,12 @@ static GType gst_zedsrc_bt_format_get_type(void) {
 
     if (!zedsrc_bt_format_type) {
         static GEnumValue pattern_types[] = {
-            {GST_ZEDSRC_BT_BODY_18 , "18 keypoints format. Basic Body format",
-             "Body 18 Key Points"},
-             {GST_ZEDSRC_BT_BODY_34, "34 keypoints format. Body format, requires body fitting enabled",
+            {GST_ZEDSRC_BT_BODY_18, "18 keypoints format. Basic Body format", "Body 18 Key Points"},
+            {GST_ZEDSRC_BT_BODY_34,
+             "34 keypoints format. Body format, requires body fitting enabled",
              "Body 34 Key Points"},
-             {GST_ZEDSRC_BT_BODY_38 , "38 keypoints format. Body format, including feet simplified face and hands",
+            {GST_ZEDSRC_BT_BODY_38,
+             "38 keypoints format. Body format, including feet simplified face and hands",
              "Body 38 Key Points"},
             {0, NULL, NULL},
         };
@@ -1133,7 +1154,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, DEFAULT_PROP_BT_ENABLE,
+        gobject_class, PROP_BT_ENABLE,
         g_param_spec_boolean("bt-enabled", "Body Tracking enable",
                              "Set to TRUE to enable Body Tracking", DEFAULT_PROP_BT_ENABLE,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
@@ -1147,7 +1168,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     //         DEFAULT_PROP_BT_SEGM, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, DEFAULT_PROP_BT_SYNC,
+        gobject_class, PROP_BT_SYNC,
         g_param_spec_boolean("bt-image-sync", "Body Tracking frame sync",
                              "Set to TRUE to enable Body Tracking frame synchronization ",
                              DEFAULT_PROP_BT_SYNC,
@@ -1562,6 +1583,9 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
     case PROP_OD_SPORT_CONF:
         src->od_sport_conf = g_value_get_float(value);
         break;
+
+        // TODO(Walter) add BT getter
+
     case PROP_BRIGHTNESS:
         src->brightness = g_value_get_int(value);
         break;
@@ -1800,6 +1824,9 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     case PROP_OD_SPORT_CONF:
         g_value_set_float(value, src->od_sport_conf);
         break;
+
+        // TODO(Walter) add BT setter
+
     case PROP_BRIGHTNESS:
         g_value_set_int(value, src->brightness);
         break;
@@ -2258,8 +2285,31 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     if (src->body_tracking) {
         sl::BodyTrackingParameters bt_params;
         bt_params.instance_module_id = BT_INSTANCE_MODULE_ID;
+        bt_params.detection_model = static_cast<sl::BODY_TRACKING_MODEL>(src->bt_model);
+        GST_INFO(" * Body Tracking model: %s", sl::toString(bt_params.detection_model).c_str());
+        bt_params.body_format = static_cast<sl::BODY_FORMAT>(src->bt_format);
+        GST_INFO(" * Body Format: %s", sl::toString(bt_params.body_format).c_str());
+        bt_params.allow_reduced_precision_inference = src->bt_reduce_precision;
+        GST_INFO(" * Allow reduced precision inference: %s",
+                 (bt_params.allow_reduced_precision_inference ? "TRUE" : "FALSE"));
+        bt_params.body_selection = static_cast<sl::BODY_KEYPOINTS_SELECTION>(src->bt_kp_sel);
+        GST_INFO(" * Body KP Selection: %s", sl::toString(bt_params.body_selection).c_str());
+        bt_params.enable_body_fitting = src->bt_fitting;
+        GST_INFO(" * Body Fitting: %s", (bt_params.enable_body_fitting ? "TRUE" : "FALSE"));
+        bt_params.enable_segmentation = src->bt_enable_segm_output;
+        GST_INFO(" * Body Segmentation: %s", (bt_params.enable_segmentation ? "TRUE" : "FALSE"));
+        bt_params.enable_tracking = src->bt_enable_trk;
+        GST_INFO(" * Tracking: %s", (bt_params.enable_tracking ? "TRUE" : "FALSE"));
+        bt_params.image_sync = src->bt_image_sync;
+        GST_INFO(" * Image sync: %s", (bt_params.image_sync ? "TRUE" : "FALSE"));
+        bt_params.max_range = src->bt_max_range;
+        GST_INFO(" * Max Range: %g m", bt_params.max_range);
+        bt_params.prediction_timeout_s = src->bt_pred_timeout;
+        GST_INFO(" * Max Range: %g sec", bt_params.prediction_timeout_s);
 
-        // TODO(Walter) Handle all the Body Tracking parameters
+        GST_INFO(" * Det. Confidence: %g sec", src->bt_rt_det_conf);
+        GST_INFO(" * Min. KP selection: %d", src->bt_rt_min_kp_thresh);
+        GST_INFO(" * Skeleton Smoothing: %g", src->bt_rt_skel_smoothing);
 
         ret = src->zed.enableBodyTracking(bt_params);
         if (ret != sl::ERROR_CODE::SUCCESS) {
@@ -2740,8 +2790,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         sl::BodyTrackingRuntimeParameters rt_params;
         rt_params.detection_confidence_threshold = src->bt_rt_det_conf;
         rt_params.minimum_keypoints_threshold = src->bt_rt_min_kp_thresh;
-
-        // TODO(Walter) Skeleton smoothing???
+        rt_params.skeleton_smoothing = src->bt_rt_skel_smoothing;
 
         sl::Bodies bodies;
         sl::ERROR_CODE ret = src->zed.retrieveBodies(bodies, rt_params);
