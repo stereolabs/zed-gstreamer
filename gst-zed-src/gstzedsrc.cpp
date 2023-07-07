@@ -112,8 +112,19 @@ enum {
     PROP_OD_FRUIT_VEGETABLES_CONF,
     PROP_OD_SPORT_CONF,
     PROP_BT_ENABLE,
+    PROP_BT_SEGM,
     PROP_BT_SYNC,
-    PROP_BT_DET_MODEL,
+    PROP_BT_MODEL,
+    PROP_BT_FORMAT,
+    PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE,
+    PROP_BT_MAX_RANGE,
+    PROP_BT_KP_SELECT,
+    PROP_BT_BODY_FITTING,
+    PROP_BT_TRACKING,
+    PROP_BT_PREDICTION_TIMEOUT_S,
+    PROP_BT_CONFIDENCE,
+    PROP_BT_MIN_KP_THRESH,
+    PROP_BT_SMOOTHING,
     PROP_BRIGHTNESS,
     PROP_CONTRAST,
     PROP_HUE,
@@ -1584,9 +1595,12 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         src->od_sport_conf = g_value_get_float(value);
         break;
 
-        // TODO(Walter) add BT getter
+    case PROP_BT_ENABLE:
+    case PROP_BT_DET_MODEL:
+    case PROP_BT_SYNC:
+    case DEFAULT_PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE
 
-    case PROP_BRIGHTNESS:
+        case PROP_BRIGHTNESS:
         src->brightness = g_value_get_int(value);
         break;
     case PROP_CONTRAST:
