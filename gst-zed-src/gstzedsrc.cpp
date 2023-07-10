@@ -1242,7 +1242,8 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_BT_PREDICTION_TIMEOUT_S,
         g_param_spec_float("bt-prediction-timeout-s", "Body Tracking prediction timeout(sec) ",
-                           "Body Tracking prediction timeout (sec)", 0.0f, 1.0f, DEFAULT_PROP_BT_PREDICTION_TIMEOUT_S,
+                           "Body Tracking prediction timeout (sec)", 0.0f, 1.0f,
+                           DEFAULT_PROP_BT_PREDICTION_TIMEOUT_S,
                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -1484,11 +1485,13 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 }
 
 void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value,
-                             GParamSpec *pspec) {
+                             GParamSpec *pspec) { 
     GstZedSrc *src;
     const gchar *str;
 
     src = GST_ZED_SRC(object);
+    
+    GST_TRACE_OBJECT(src, "gst_zedsrc_set_property");
 
     switch (property_id) {
     case PROP_CAM_RES:
@@ -1773,6 +1776,8 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     g_return_if_fail(GST_IS_ZED_SRC(object));
     src = GST_ZED_SRC(object);
 
+    GST_TRACE_OBJECT(src, "gst_zedsrc_get_property");
+
     switch (property_id) {
     case PROP_CAM_RES:
         g_value_set_enum(value, src->camera_resolution);
@@ -2054,6 +2059,8 @@ void gst_zedsrc_dispose(GObject *object) {
     g_return_if_fail(GST_IS_ZED_SRC(object));
     src = GST_ZED_SRC(object);
 
+    GST_TRACE_OBJECT(src, "gst_zedsrc_dispose");
+
     /* clean up as possible.  may be called multiple times */
 
     G_OBJECT_CLASS(gst_zedsrc_parent_class)->dispose(object);
@@ -2064,6 +2071,8 @@ void gst_zedsrc_finalize(GObject *object) {
 
     g_return_if_fail(GST_IS_ZED_SRC(object));
     src = GST_ZED_SRC(object);
+    
+    GST_TRACE_OBJECT(src, "gst_zedsrc_finalize");
 
     /* clean up object here */
     if (src->caps) {
@@ -2075,6 +2084,8 @@ void gst_zedsrc_finalize(GObject *object) {
 }
 
 static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
+    GST_TRACE_OBJECT(src, "gst_zedsrc_calculate_caps");
+
     guint32 width, height;
     gint fps;
     GstVideoInfo vinfo;
@@ -2123,7 +2134,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GstZedSrc *src = GST_ZED_SRC(bsrc);
     sl::ERROR_CODE ret;
 
-    GST_DEBUG_OBJECT(src, "start");
+    GST_TRACE_OBJECT(src, "gst_zedsrc_calculate_caps");
 
     // ----> Set init parameters
     sl::InitParameters init_params;
@@ -2141,7 +2152,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
              sl::toString(static_cast<sl::FLIP_MODE>(init_params.camera_image_flip)).c_str());
 
     init_params.depth_mode = static_cast<sl::DEPTH_MODE>(src->depth_mode);
-    if ((src->object_detection || src->body_tracking) && init_params.depth_mode == sl::DEPTH_MODE::NONE) {
+    if ((src->object_detection || src->body_tracking) &&
+        init_params.depth_mode == sl::DEPTH_MODE::NONE) {
         init_params.depth_mode = sl::DEPTH_MODE::NEURAL;
         src->depth_mode = static_cast<gint>(init_params.depth_mode);
 
@@ -2161,7 +2173,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         src->depth_mode = static_cast<gint>(init_params.depth_mode);
 
         GST_WARNING_OBJECT(
-            src, "Positional tracking requires DEPTH_MODE!=NONE. Depth mode value forced to NEURAL");
+            src,
+            "Positional tracking requires DEPTH_MODE!=NONE. Depth mode value forced to NEURAL");
     }
     if ((src->stream_type == GST_ZEDSRC_LEFT_DEPTH || src->stream_type == GST_ZEDSRC_DEPTH_16) &&
         init_params.depth_mode == sl::DEPTH_MODE::NONE) {
@@ -2287,7 +2300,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     // <---- Camera Controls
 
     // ----> Runtime parameters
-    GST_TRACE_OBJECT(src,"CAMERA RUNTIME PARAMETERS");
+    GST_TRACE_OBJECT(src, "CAMERA RUNTIME PARAMETERS");
     if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
         GST_INFO(" * Depth calculation: ON");
     } else {
@@ -2392,8 +2405,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
                 src, RESOURCE, NOT_FOUND,
                 ("Failed to start positional tracking, '%s'", sl::toString(ret).c_str()), (NULL));
             return FALSE;
-        }
-        else {
+        } else {
             GST_INFO("*** Positional Tracking enabled ***");
         }
     }
@@ -2441,8 +2453,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
                               ("Failed to start Object Detection, '%s'", sl::toString(ret).c_str()),
                               (NULL));
             return FALSE;
-        }
-        else {
+        } else {
             GST_INFO("*** Object Detection enabled ***");
         }
     }
@@ -2453,7 +2464,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Body Tracking status: %s", (src->body_tracking ? "ON" : "OFF"));
     if (src->body_tracking) {
         sl::BodyTrackingParameters bt_params;
-        bt_params.instance_module_id = (src->object_detection==TRUE?1:0);
+        bt_params.instance_module_id = (src->object_detection == TRUE ? 1 : 0);
         bt_params.detection_model = static_cast<sl::BODY_TRACKING_MODEL>(src->bt_model);
         GST_INFO(" * Body Tracking model: %s", sl::toString(bt_params.detection_model).c_str());
         bt_params.body_format = static_cast<sl::BODY_FORMAT>(src->bt_format);
@@ -2534,6 +2545,8 @@ static GstCaps *gst_zedsrc_get_caps(GstBaseSrc *bsrc, GstCaps *filter) {
 
 static gboolean gst_zedsrc_set_caps(GstBaseSrc *bsrc, GstCaps *caps) {
     GstZedSrc *src = GST_ZED_SRC(bsrc);
+    GST_TRACE_OBJECT(src, "gst_zedsrc_set_caps");
+    
     GstVideoInfo vinfo;
 
     gst_caps_get_structure(caps, 0);
@@ -2575,6 +2588,9 @@ static gboolean gst_zedsrc_unlock_stop(GstBaseSrc *bsrc) {
 
 static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstZedSrc *src = GST_ZED_SRC(psrc);
+    
+    GST_TRACE_OBJECT(src, "gst_zedsrc_fill");
+
     sl::ERROR_CODE ret;
     GstMapInfo minfo;
     GstClock *clock;
@@ -2582,7 +2598,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     static int temp_ugly_buf_index = 0;
 
-    GST_TRACE_OBJECT(src, "gst_zedsrc_fill");
+    
 
     if (!src->is_started) {
         src->acq_start_time = gst_clock_get_time(gst_element_get_clock(GST_ELEMENT(src)));
@@ -2593,7 +2609,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // ----> Set runtime parameters
     sl::RuntimeParameters zedRtParams;   // runtime parameters
 
-    GST_TRACE_OBJECT(src,"CAMERA RUNTIME PARAMETERS");
+    GST_TRACE_OBJECT(src, "CAMERA RUNTIME PARAMETERS");
     if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
         zedRtParams.enable_depth = false;
     } else {
@@ -2840,21 +2856,20 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                     GST_LOG_OBJECT(src, " * [%d] Object id: %d", idx, obj.id);
 
                     obj_data[idx].label = static_cast<OBJECT_CLASS>(obj.label);
-                    GST_LOG_OBJECT(src, " * [%d] Label: %s", idx,
-                                     sl::toString(obj.label).c_str());
+                    GST_LOG_OBJECT(src, " * [%d] Label: %s", idx, sl::toString(obj.label).c_str());
 
                     obj_data[idx].sublabel = static_cast<OBJECT_SUBCLASS>(obj.sublabel);
                     GST_LOG_OBJECT(src, " * [%d] Sublabel: %s", idx,
-                                     sl::toString(obj.sublabel).c_str());
+                                   sl::toString(obj.sublabel).c_str());
 
                     obj_data[idx].tracking_state =
                         static_cast<OBJECT_TRACKING_STATE>(obj.tracking_state);
                     GST_LOG_OBJECT(src, " * [%d] Tracking state: %s", idx,
-                                     sl::toString(obj.tracking_state).c_str());
+                                   sl::toString(obj.tracking_state).c_str());
 
                     obj_data[idx].action_state = static_cast<OBJECT_ACTION_STATE>(obj.action_state);
                     GST_LOG_OBJECT(src, " * [%d] Action state: %s", idx,
-                                     sl::toString(obj.action_state).c_str());
+                                   sl::toString(obj.action_state).c_str());
 
                     obj_data[idx].confidence = obj.confidence;
                     GST_LOG_OBJECT(src, " * [%d] Object confidence: %g", idx, obj.confidence);
@@ -2872,7 +2887,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                                (uint8_t *) obj.bounding_box_2d.data(),
                                obj.bounding_box_2d.size() * 2 * sizeof(unsigned int));
                         GST_LOG_OBJECT(src, " * [%d] Copied bbox 2D - %lu", idx,
-                                         8 * sizeof(unsigned int));
+                                       8 * sizeof(unsigned int));
                     } else {
                         GST_LOG_OBJECT(src, " * [%d] bounding_box_2d empty", idx);
                     }
@@ -2881,7 +2896,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                         memcpy(obj_data[idx].bounding_box_3d, (void *) obj.bounding_box.data(),
                                24 * sizeof(float));
                         GST_LOG_OBJECT(src, " * [%d] Copied bbox 3D - %lu", idx,
-                                         24 * sizeof(float));
+                                       24 * sizeof(float));
                     } else {
                         GST_LOG_OBJECT(src, " * [%d] bounding_box empty", idx);
                     }
@@ -2931,7 +2946,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                 }
             }
         } else {
-            GST_WARNING_OBJECT(src, "Body Tracking problem: %s - %s", sl::toString(ret).c_str(), sl::toVerbose(ret).c_str());
+            GST_WARNING_OBJECT(src, "Body Tracking problem: %s - %s", sl::toString(ret).c_str(),
+                               sl::toVerbose(ret).c_str());
         }
     }
     // <---- Body Tracking metadata
