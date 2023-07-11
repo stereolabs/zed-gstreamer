@@ -387,10 +387,10 @@ static GstFlowReturn gst_zed_od_overlay_transform_ip(GstBaseTransform *base, Gst
         return GST_FLOW_ERROR;
     }
 
-    GST_TRACE_OBJECT(filter, "Cam. Model: %d", meta->info.cam_model);
-    GST_TRACE_OBJECT(filter, "Stream type: %d", meta->info.stream_type);
-    GST_TRACE_OBJECT(filter, "Grab frame Size: %d x %d", meta->info.grab_single_frame_width, meta->info.grab_single_frame_height);
-    GST_TRACE_OBJECT(filter, "Filter frame Size: %d x %d", filter->img_left_w, filter->img_left_h);
+    GST_LOG_OBJECT(filter, "Cam. Model: %d", meta->info.cam_model);
+    GST_LOG_OBJECT(filter, "Stream type: %d", meta->info.stream_type);
+    GST_LOG_OBJECT(filter, "Grab frame Size: %d x %d", meta->info.grab_single_frame_width, meta->info.grab_single_frame_height);
+    GST_LOG_OBJECT(filter, "Filter frame Size: %d x %d", filter->img_left_w, filter->img_left_h);
 
     gboolean rescaled = FALSE;
     gfloat scaleW = 1.0f;
@@ -402,7 +402,7 @@ static GstFlowReturn gst_zed_od_overlay_transform_ip(GstBaseTransform *base, Gst
     }
 
     if (meta->od_enabled) {
-        GST_TRACE_OBJECT(filter, "Detected %d objects", meta->obj_count);
+        GST_LOG_OBJECT(filter, "Detected %d objects", meta->obj_count);
         // Draw 2D detections
         draw_objects(filter, ocv_left, meta->obj_count, meta->objects, scaleW, scaleH);
     }
@@ -431,12 +431,12 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
 
         cv::Rect roi_render(0, 0, image.size().width, image.size().height);
 
-        GST_TRACE("Object: %d", i);
-        GST_TRACE(" * Id: %d [%d]", (int) objs[i].label, (int) objs[i].sublabel);
-        GST_TRACE(" * Pos: %g,%g,%g", objs[i].position[0], objs[i].position[1], objs[i].position[2]);
+        GST_LOG_OBJECT(filter,"Object: %d", i);
+        GST_LOG_OBJECT(filter," * Id: %d [%d]", (int) objs[i].label, (int) objs[i].sublabel);
+        GST_LOG_OBJECT(filter," * Pos: %g,%g,%g", objs[i].position[0], objs[i].position[1], objs[i].position[2]);
 
         if (objs[i].skeletons_avail == FALSE) {
-            GST_TRACE("Scale: %g, %g", scaleW, scaleH);
+            GST_LOG_OBJECT(filter,"Scale: %g, %g", scaleW, scaleH);
 
             // ----> Bounding box
 
@@ -591,10 +591,11 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
             }
             // <---- Text info
         } else {
-            GST_TRACE("Scale: %g, %g", scaleW, scaleH);
+            GST_LOG_OBJECT(filter,"Scale: %g, %g", scaleW, scaleH);
+            GST_LOG_OBJECT(filter,"Format: %d", objs[i].skel_format);
             // ----> Skeletons
             {
-                switch (objs[i].skel_model) {
+                switch (objs[i].skel_format) {
                 case 18:
                     // ----> Bones
                     for (const auto &parts : skeleton::BODY_18_BONES) {
@@ -603,12 +604,12 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                             cv::Point2f kp_a;
                             kp_a.x = objs[i].keypoint_2d[skeleton::getIdx_18(parts.first)][0] * scaleW;
                             kp_a.y = objs[i].keypoint_2d[skeleton::getIdx_18(parts.first)][1] * scaleH;
-                            GST_TRACE("kp_a: %g, %g", kp_a.x, kp_a.y);
+                            GST_LOG_OBJECT(filter,"kp_a: %g, %g", kp_a.x, kp_a.y);
 
                             cv::Point2f kp_b;
                             kp_b.x = objs[i].keypoint_2d[skeleton::getIdx_18(parts.second)][0] * scaleW;
                             kp_b.y = objs[i].keypoint_2d[skeleton::getIdx_18(parts.second)][1] * scaleH;
-                            GST_TRACE("kp_b: %g, %g", kp_b.x, kp_b.y);
+                            GST_LOG_OBJECT(filter,"kp_b: %g, %g", kp_b.x, kp_b.y);
 
                             if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
                                 cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
@@ -636,12 +637,12 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                             cv::Point2f kp_a;
                             kp_a.x = objs[i].keypoint_2d[skeleton::getIdx_34(parts.first)][0] * scaleW;
                             kp_a.y = objs[i].keypoint_2d[skeleton::getIdx_34(parts.first)][1] * scaleH;
-                            GST_TRACE("kp_a: %g, %g", kp_a.x, kp_a.y);
+                            GST_LOG_OBJECT(filter,"kp_a: %g, %g", kp_a.x, kp_a.y);
 
                             cv::Point2f kp_b;
                             kp_b.x = objs[i].keypoint_2d[skeleton::getIdx_34(parts.second)][0] * scaleW;
                             kp_b.y = objs[i].keypoint_2d[skeleton::getIdx_34(parts.second)][1] * scaleH;
-                            GST_TRACE("kp_b: %g, %g", kp_b.x, kp_b.y);
+                            GST_LOG_OBJECT(filter,"kp_b: %g, %g", kp_b.x, kp_b.y);
 
                             if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
                                 cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
@@ -669,12 +670,12 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                             cv::Point2f kp_a;
                             kp_a.x = objs[i].keypoint_2d[skeleton::getIdx_38(parts.first)][0] * scaleW;
                             kp_a.y = objs[i].keypoint_2d[skeleton::getIdx_38(parts.first)][1] * scaleH;
-                            GST_TRACE("kp_a: %g, %g", kp_a.x, kp_a.y);
+                            GST_LOG_OBJECT(filter,"kp_a: %g, %g", kp_a.x, kp_a.y);
 
                             cv::Point2f kp_b;
                             kp_b.x = objs[i].keypoint_2d[skeleton::getIdx_38(parts.second)][0] * scaleW;
                             kp_b.y = objs[i].keypoint_2d[skeleton::getIdx_38(parts.second)][1] * scaleH;
-                            GST_TRACE("kp_b: %g, %g", kp_b.x, kp_b.y);
+                            GST_LOG_OBJECT(filter,"kp_b: %g, %g", kp_b.x, kp_b.y);
 
                             if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
                                 cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
@@ -702,12 +703,12 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                             cv::Point2f kp_a;
                             kp_a.x = objs[i].keypoint_2d[skeleton::getIdx_70(parts.first)][0] * scaleW;
                             kp_a.y = objs[i].keypoint_2d[skeleton::getIdx_70(parts.first)][1] * scaleH;
-                            GST_TRACE("kp_a: %g, %g", kp_a.x, kp_a.y);
+                            GST_LOG_OBJECT(filter,"kp_a: %g, %g", kp_a.x, kp_a.y);
 
                             cv::Point2f kp_b;
                             kp_b.x = objs[i].keypoint_2d[skeleton::getIdx_70(parts.second)][0] * scaleW;
                             kp_b.y = objs[i].keypoint_2d[skeleton::getIdx_70(parts.second)][1] * scaleH;
-                            GST_TRACE("kp_b: %g, %g", kp_b.x, kp_b.y);
+                            GST_LOG_OBJECT(filter,"kp_b: %g, %g", kp_b.x, kp_b.y);
 
                             if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
                                 cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
@@ -720,6 +721,8 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                             cv::Point2f cv_kp;
                             cv_kp.x = objs[i].keypoint_2d[j][0] * scaleW;
                             cv_kp.y = objs[i].keypoint_2d[j][1] * scaleH;
+                            GST_LOG_OBJECT(filter,"Joint: %g, %g", cv_kp.x, cv_kp.y);
+
                             if (roi_render.contains(cv_kp)) {
                                 cv::circle(image, cv_kp, 3, color + cv::Scalar(50, 50, 50), -1, cv::LINE_AA);
                             }

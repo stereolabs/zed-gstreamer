@@ -26,6 +26,10 @@
 #include "gst-zed-meta/gstzedmeta.h"
 #include "gstzedsrc.h"
 
+// AI Module
+#define OD_INSTANCE_MODULE_ID 0
+#define BT_INSTANCE_MODULE_ID 1
+
 GST_DEBUG_CATEGORY_STATIC(gst_zedsrc_debug);
 #define GST_CAT_DEFAULT gst_zedsrc_debug
 
@@ -1485,12 +1489,12 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 }
 
 void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value,
-                             GParamSpec *pspec) { 
+                             GParamSpec *pspec) {
     GstZedSrc *src;
     const gchar *str;
 
     src = GST_ZED_SRC(object);
-    
+
     GST_TRACE_OBJECT(src, "gst_zedsrc_set_property");
 
     switch (property_id) {
@@ -1681,10 +1685,10 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         src->bt_image_sync = g_value_get_boolean(value);
         break;
     case PROP_BT_MODEL:
-        src->bt_model = g_value_get_int(value);
+        src->bt_model = g_value_get_enum(value);
         break;
     case PROP_BT_FORMAT:
-        src->bt_format = g_value_get_int(value);
+        src->bt_format = g_value_get_enum(value);
         break;
     case PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE:
         src->bt_reduce_precision = g_value_get_boolean(value);
@@ -1693,7 +1697,7 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         src->bt_max_range = g_value_get_float(value);
         break;
     case PROP_BT_KP_SELECT:
-        src->bt_kp_sel = g_value_get_int(value);
+        src->bt_kp_sel = g_value_get_enum(value);
         break;
     case PROP_BT_BODY_FITTING:
         src->bt_fitting = g_value_get_boolean(value);
@@ -1954,7 +1958,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_float(value, src->od_sport_conf);
         break;
     case PROP_BT_ENABLE:
-        g_value_set_float(value, src->body_tracking);
+        g_value_set_boolean(value, src->body_tracking);
         break;
     /*case PROP_BT_SEGM:
     g_value_set_float(value, src->bt_enable_segm_output);
@@ -1963,13 +1967,13 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_float(value, src->bt_image_sync);
         break;
     case PROP_BT_MODEL:
-        g_value_set_float(value, src->bt_model);
+        g_value_set_enum(value, src->bt_model);
         break;
     case PROP_BT_FORMAT:
-        g_value_set_float(value, src->bt_format);
+        g_value_set_enum(value, src->bt_format);
         break;
     case PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE:
-        g_value_set_float(value, src->bt_reduce_precision);
+        g_value_set_boolean(value, src->bt_reduce_precision);
         break;
     case PROP_BT_MAX_RANGE:
         g_value_set_float(value, src->bt_max_range);
@@ -1978,7 +1982,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_float(value, src->bt_kp_sel);
         break;
     case PROP_BT_BODY_FITTING:
-        g_value_set_float(value, src->bt_fitting);
+        g_value_set_boolean(value, src->bt_fitting);
         break;
     case PROP_BT_TRACKING:
         g_value_set_float(value, src->bt_enable_trk);
@@ -2071,7 +2075,7 @@ void gst_zedsrc_finalize(GObject *object) {
 
     g_return_if_fail(GST_IS_ZED_SRC(object));
     src = GST_ZED_SRC(object);
-    
+
     GST_TRACE_OBJECT(src, "gst_zedsrc_finalize");
 
     /* clean up object here */
@@ -2416,7 +2420,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Object Detection status: %s", (src->object_detection ? "ON" : "OFF"));
     if (src->object_detection) {
         sl::ObjectDetectionParameters od_params;
-        od_params.instance_module_id = 0;
+        od_params.instance_module_id = OD_INSTANCE_MODULE_ID;
         od_params.image_sync = (src->od_image_sync == TRUE);
         GST_INFO(" * Image sync: %s", (od_params.image_sync ? "TRUE" : "FALSE"));
         od_params.enable_tracking = (src->od_enable_tracking == TRUE);
@@ -2450,7 +2454,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         ret = src->zed.enableObjectDetection(od_params);
         if (ret != sl::ERROR_CODE::SUCCESS) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to start Object Detection, '%s'", sl::toString(ret).c_str()),
+                              ("Failed to start Object Detection: '%s' - %s",
+                               sl::toString(ret).c_str(), sl::toVerbose(ret).c_str()),
                               (NULL));
             return FALSE;
         } else {
@@ -2464,7 +2469,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Body Tracking status: %s", (src->body_tracking ? "ON" : "OFF"));
     if (src->body_tracking) {
         sl::BodyTrackingParameters bt_params;
-        bt_params.instance_module_id = (src->object_detection == TRUE ? 1 : 0);
+        bt_params.instance_module_id = BT_INSTANCE_MODULE_ID;
         bt_params.detection_model = static_cast<sl::BODY_TRACKING_MODEL>(src->bt_model);
         GST_INFO(" * Body Tracking model: %s", sl::toString(bt_params.detection_model).c_str());
         bt_params.body_format = static_cast<sl::BODY_FORMAT>(src->bt_format);
@@ -2494,7 +2499,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         ret = src->zed.enableBodyTracking(bt_params);
         if (ret != sl::ERROR_CODE::SUCCESS) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to start Body Tracking, '%s'", sl::toString(ret).c_str()),
+                              ("Failed to start Body Tracking: '%s' - %s",
+                               sl::toString(ret).c_str(), sl::toVerbose(ret).c_str()),
                               (NULL));
             return FALSE;
         } else {
@@ -2546,7 +2552,7 @@ static GstCaps *gst_zedsrc_get_caps(GstBaseSrc *bsrc, GstCaps *filter) {
 static gboolean gst_zedsrc_set_caps(GstBaseSrc *bsrc, GstCaps *caps) {
     GstZedSrc *src = GST_ZED_SRC(bsrc);
     GST_TRACE_OBJECT(src, "gst_zedsrc_set_caps");
-    
+
     GstVideoInfo vinfo;
 
     gst_caps_get_structure(caps, 0);
@@ -2588,7 +2594,7 @@ static gboolean gst_zedsrc_unlock_stop(GstBaseSrc *bsrc) {
 
 static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstZedSrc *src = GST_ZED_SRC(psrc);
-    
+
     GST_TRACE_OBJECT(src, "gst_zedsrc_fill");
 
     sl::ERROR_CODE ret;
@@ -2597,8 +2603,6 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstClockTime clock_time;
 
     static int temp_ugly_buf_index = 0;
-
-    
 
     if (!src->is_started) {
         src->acq_start_time = gst_clock_get_time(gst_element_get_clock(GST_ELEMENT(src)));
@@ -2628,7 +2632,9 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     if (ret != sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error '%s'", sl::toString(ret).c_str()), (NULL));
+                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                           sl::toVerbose(ret).c_str()),
+                          (NULL));
         return GST_FLOW_ERROR;
     }
     // <---- ZED grab
@@ -2667,7 +2673,9 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     if (ret != sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error '%s'", sl::toString(ret).c_str()), (NULL));
+                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                           sl::toVerbose(ret).c_str()),
+                          (NULL));
         return GST_FLOW_ERROR;
     }
     // <---- Mats retrieving
@@ -2835,7 +2843,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         rt_params.object_class_detection_confidence_threshold = class_det_conf;
 
         sl::Objects det_objs;
-        sl::ERROR_CODE ret = src->zed.retrieveObjects(det_objs, rt_params);
+        sl::ERROR_CODE ret = src->zed.retrieveObjects(det_objs, rt_params, OD_INSTANCE_MODULE_ID);
 
         if (ret == sl::ERROR_CODE::SUCCESS) {
             if (det_objs.is_new) {
@@ -2911,14 +2919,15 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                 obj_count = 0;
             }
         } else {
-            GST_WARNING_OBJECT(src, "Object detection problem: %s", sl::toString(ret).c_str());
+            GST_WARNING_OBJECT(src, "Object detection problem: '%s' - %s",
+                               sl::toString(ret).c_str(), sl::toVerbose(ret).c_str());
         }
     }
     // <---- Object detection metadata
 
     // ----> Body Tracking metadata
     if (src->body_tracking) {
-        size_t b_idx = obj_count;
+        guint8 b_idx = obj_count;
 
         GST_LOG_OBJECT(src, "Body Tracking enabled");
 
@@ -2928,7 +2937,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         rt_params.skeleton_smoothing = src->bt_rt_skel_smoothing;
 
         sl::Bodies bodies;
-        sl::ERROR_CODE ret = src->zed.retrieveBodies(bodies, rt_params);
+        sl::ERROR_CODE ret = src->zed.retrieveBodies(bodies, rt_params, BT_INSTANCE_MODULE_ID);
 
         if (ret == sl::ERROR_CODE::SUCCESS) {
             if (bodies.is_new) {
@@ -2942,11 +2951,128 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                 for (auto i = bodies.body_list.begin(); i != bodies.body_list.end(); ++i) {
                     sl::BodyData obj = *i;
 
+                    // ----> General Info
+                    obj_data[b_idx].skeletons_avail = TRUE;   // Skeleton info is available
+
+                    obj_data[b_idx].id = obj.id;
+                    GST_LOG_OBJECT(src, " * [%d] Object id: %d", b_idx, obj.id);
+
+                    obj_data[b_idx].label = OBJECT_CLASS::PERSON;
+                    GST_LOG_OBJECT(src, " * [%d] Label: %s", b_idx,
+                                   sl::toString(sl::OBJECT_CLASS::PERSON).c_str());
+
+                    obj_data[b_idx].sublabel = OBJECT_SUBCLASS::PERSON;
+                    GST_LOG_OBJECT(src, " * [%d] Sublabel: %s", b_idx,
+                                   sl::toString(sl::OBJECT_SUBCLASS::PERSON).c_str());
+
+                    obj_data[b_idx].tracking_state =
+                        static_cast<OBJECT_TRACKING_STATE>(obj.tracking_state);
+                    GST_LOG_OBJECT(src, " * [%d] Tracking state: %s", b_idx,
+                                   sl::toString(obj.tracking_state).c_str());
+
+                    obj_data[b_idx].action_state =
+                        static_cast<OBJECT_ACTION_STATE>(obj.action_state);
+                    GST_LOG_OBJECT(src, " * [%d] Action state: %s", b_idx,
+                                   sl::toString(obj.action_state).c_str());
+
+                    obj_data[b_idx].confidence = obj.confidence;
+                    GST_LOG_OBJECT(src, " * [%d] Object confidence: %g", b_idx, obj.confidence);
+
+                    memcpy(obj_data[b_idx].position, (void *) obj.position.ptr(),
+                           3 * sizeof(float));
+                    GST_LOG_OBJECT(src, " * [%d] Copied position", b_idx);
+                    memcpy(obj_data[b_idx].position_covariance, (void *) obj.position_covariance,
+                           6 * sizeof(float));
+                    GST_LOG_OBJECT(src, " * [%d] Copied covariance", b_idx);
+                    memcpy(obj_data[b_idx].velocity, (void *) obj.velocity.ptr(),
+                           3 * sizeof(float));
+                    GST_LOG_OBJECT(src, " * [%d] Copied velocity", b_idx);
+                    // <---- General Info
+
+                    // ----> Bounding Box
+                    if (obj.bounding_box_2d.size() > 0) {
+                        memcpy((uint8_t *) obj_data[b_idx].bounding_box_2d,
+                               (uint8_t *) obj.bounding_box_2d.data(),
+                               obj.bounding_box_2d.size() * 2 * sizeof(unsigned int));
+                        GST_LOG_OBJECT(src, " * [%d] Copied bbox 2D - %lu", b_idx,
+                                       8 * sizeof(unsigned int));
+                    } else {
+                        GST_LOG_OBJECT(src, " * [%d] bounding_box_2d empty", b_idx);
+                    }
+
+                    if (obj.bounding_box.size() > 0) {
+                        memcpy(obj_data[b_idx].bounding_box_3d, (void *) obj.bounding_box.data(),
+                               24 * sizeof(float));
+                        GST_LOG_OBJECT(src, " * [%d] Copied bbox 3D - %lu", b_idx,
+                                       24 * sizeof(float));
+                    } else {
+                        GST_LOG_OBJECT(src, " * [%d] bounding_box empty", b_idx);
+                    }
+
+                    memcpy(obj_data[b_idx].dimensions, (void *) obj.dimensions.ptr(),
+                           3 * sizeof(float));
+                    GST_LOG_OBJECT(src, " * [%d] Copied dimensions", b_idx);
+                    // <---- Bounding Box
+
+                    // ----> Skeleton
+                    switch (static_cast<sl::BODY_FORMAT>(src->bt_format)) {
+                    case sl::BODY_FORMAT::BODY_18:
+                        obj_data[b_idx].skel_format = 18;
+                        break;
+                    case sl::BODY_FORMAT::BODY_34:
+                        obj_data[b_idx].skel_format = 34;
+                        break;
+                    case sl::BODY_FORMAT::BODY_38:
+                        obj_data[b_idx].skel_format = 38;
+                        break;
+                    case sl::BODY_FORMAT::BODY_70:
+                        obj_data[b_idx].skel_format = 70;
+                        break;
+                    }
+
+                    if (obj.keypoint_2d.size() > 0) {
+                        memcpy(obj_data[b_idx].keypoint_2d, (void *) obj.keypoint_2d.data(),
+                               36 * sizeof(float));
+                        GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 2d - %lu", b_idx,
+                                         obj.keypoint_2d.size());
+                    } else {
+                        GST_TRACE_OBJECT(src, " * [%d] keypoint_2d empty", b_idx);
+                    }
+                    if (obj.keypoint.size() > 0) {
+                        memcpy(obj_data[b_idx].keypoint_3d, (void *) obj.keypoint.data(),
+                               54 * sizeof(float));
+                        GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 3d - %lu", b_idx,
+                                         obj.keypoint.size());
+                    } else {
+                        GST_TRACE_OBJECT(src, " * [%d] keypoint empty", b_idx);
+                    }
+
+                    if (obj.head_bounding_box_2d.size() > 0) {
+                        memcpy(obj_data[b_idx].head_bounding_box_2d,
+                               (void *) obj.head_bounding_box_2d.data(), 8 * sizeof(unsigned int));
+                        GST_TRACE_OBJECT(src, " * [%d] Copied head bbox 2d - %lu", b_idx,
+                                         obj.head_bounding_box_2d.size());
+                    } else {
+                        GST_TRACE_OBJECT(src, " * [%d] head_bounding_box_2d empty", b_idx);
+                    }
+                    if (obj.head_bounding_box.size() > 0) {
+                        memcpy(obj_data[b_idx].head_bounding_box_3d,
+                               (void *) obj.head_bounding_box.data(), 24 * sizeof(float));
+                        GST_TRACE_OBJECT(src, " * [%d] Copied head bbox 3d - %lu", b_idx,
+                                         obj.head_bounding_box.size());
+                    } else {
+                        GST_TRACE_OBJECT(src, " * [%d] head_bounding_box empty", b_idx);
+                    }
+                    memcpy(obj_data[b_idx].head_position, (void *) obj.head_position.ptr(),
+                           3 * sizeof(float));
+                    GST_TRACE_OBJECT(src, " * [%d] Copied head position", b_idx);
+                    // <---- Skeleton
+
                     b_idx++;
                 }
             }
         } else {
-            GST_WARNING_OBJECT(src, "Body Tracking problem: %s - %s", sl::toString(ret).c_str(),
+            GST_WARNING_OBJECT(src, "Body Tracking problem: '%s' - %s", sl::toString(ret).c_str(),
                                sl::toVerbose(ret).c_str());
         }
     }
@@ -2960,7 +3086,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Timestamp meta-data
 
     guint64 offset = GST_BUFFER_OFFSET(buf);
-    GstZedSrcMeta *meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens, src->object_detection,
+    GstZedSrcMeta *meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
+                                                      src->object_detection | src->body_tracking,
                                                       obj_count, obj_data, offset);
 
     // Buffer release

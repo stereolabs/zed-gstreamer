@@ -116,20 +116,20 @@ struct _GstZedSrc {
     gfloat od_sport_conf;             // [runtime] std::map< OBJECT_CLASS, float >
                                       // object_class_detection_confidence_threshold
 
-    gboolean body_tracking;           // TODO(Walter)
-    gboolean bt_enable_segm_output;   // TODO(Walter) bool enable_segmentation
-    gboolean bt_image_sync;           // TODO(Walter) bool image_sync
-    gint bt_model;                    // TODO(Walter) sl::BODY_TRACKING_MODEL detection_model
-    gint bt_format;                   // TODO(Walter) sl::BODY_FORMAT body_format
-    gboolean bt_reduce_precision;     // TODO(Walter) bool allow_reduced_precision_inference
-    gfloat bt_max_range;              // TODO(Walter) float max_range
-    gint bt_kp_sel;                   // TODO(Walter) sl::BODY_KEYPOINTS_SELECTION body_selection
-    gboolean bt_fitting;              // TODO(Walter) bool enable_body_fitting
-    gboolean bt_enable_trk;           // TODO(Walter) bool enable_tracking
-    gfloat bt_pred_timeout;           // TODO(Walter) float prediction_timeout_s
-    gfloat bt_rt_det_conf;            // TODO(Walter) [runtime] float detection_confidence_threshold
-    gint bt_rt_min_kp_thresh;         // TODO(Walter) [runtime] int minimum_keypoints_threshold
-    gfloat bt_rt_skel_smoothing;      // TODO(Walter) [runtime] float skeleton_smoothing
+    gboolean body_tracking;
+    gboolean bt_enable_segm_output;   // bool enable_segmentation
+    gboolean bt_image_sync;           // bool image_sync
+    gint bt_model;                    // sl::BODY_TRACKING_MODEL detection_model
+    gint bt_format;                   // sl::BODY_FORMAT body_format
+    gboolean bt_reduce_precision;     // bool allow_reduced_precision_inference
+    gfloat bt_max_range;              // float max_range
+    gint bt_kp_sel;                   // sl::BODY_KEYPOINTS_SELECTION body_selection
+    gboolean bt_fitting;              // bool enable_body_fitting
+    gboolean bt_enable_trk;           // bool enable_tracking
+    gfloat bt_pred_timeout;           // float prediction_timeout_s
+    gfloat bt_rt_det_conf;            // [runtime] float detection_confidence_threshold
+    gint bt_rt_min_kp_thresh;         // [runtime] int minimum_keypoints_threshold
+    gfloat bt_rt_skel_smoothing;      // [runtime] float skeleton_smoothing
 
     gint brightness;
     gint contrast;

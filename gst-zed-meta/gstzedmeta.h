@@ -167,7 +167,7 @@ struct _ZedObjectData {
 
     gboolean skeletons_avail;
 
-    gint skel_model;   // indicates if it's 18, 34, 38, or 70 skeleton model
+    gint skel_format;   // indicates if it's 18, 34, 38, or 70 skeleton model
 
     gfloat keypoint_2d[70][2];   // Negative coordinates -> point not valid
     gfloat keypoint_3d[70][3];   // Nan coordinates -> point not valid
