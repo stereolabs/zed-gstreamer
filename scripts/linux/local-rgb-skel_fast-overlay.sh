@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Example pipeline to acquire a stream at default resolution with RGB and Skeleton Tracking information and 
 # displaying the results
@@ -9,6 +9,6 @@
 # 3) Convert the stream and display it with FPS information
 
 gst-launch-1.0 \
-zedsrc stream-type=2 od-enabled=true od-detection-model=1 camera-resolution=2 camera-fps=30 ! queue ! \
+zedsrc stream-type=0 bt-enabled=true bt-detection-model=0 ! queue ! \
 zedodoverlay ! queue ! \
 autovideoconvert ! fpsdisplaysink
