@@ -8,6 +8,6 @@
 # 3) Convert the stream and display it with FPS information
 
 gst-launch-1.0 \
-zedsrc stream-type=0 od-enabled=true bt-enabled=true bt-format=0 ! queue ! \
+zedsrc stream-type=0 od-enabled=true bt-enabled=true ! queue ! \
 zedodoverlay ! queue ! \
 autovideoconvert ! fpsdisplaysink

@@ -3032,7 +3032,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
                     if (obj.keypoint_2d.size() > 0) {
                         memcpy(obj_data[b_idx].keypoint_2d, (void *) obj.keypoint_2d.data(),
-                               36 * sizeof(float));
+                               2 * obj_data[b_idx].skel_format * sizeof(float));
                         GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 2d - %lu", b_idx,
                                          obj.keypoint_2d.size());
                     } else {
@@ -3040,7 +3040,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                     }
                     if (obj.keypoint.size() > 0) {
                         memcpy(obj_data[b_idx].keypoint_3d, (void *) obj.keypoint.data(),
-                               54 * sizeof(float));
+                               3 * obj_data[b_idx].skel_format * sizeof(float));
                         GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 3d - %lu", b_idx,
                                          obj.keypoint.size());
                     } else {
