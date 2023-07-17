@@ -1964,7 +1964,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     g_value_set_float(value, src->bt_enable_segm_output);
     break;*/
     case PROP_BT_SYNC:
-        g_value_set_float(value, src->bt_image_sync);
+        g_value_set_boolean(value, src->bt_image_sync);
         break;
     case PROP_BT_MODEL:
         g_value_set_enum(value, src->bt_model);
@@ -1985,7 +1985,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_boolean(value, src->bt_fitting);
         break;
     case PROP_BT_TRACKING:
-        g_value_set_float(value, src->bt_enable_trk);
+        g_value_set_boolean(value, src->bt_enable_trk);
         break;
     case PROP_BT_PREDICTION_TIMEOUT_S:
         g_value_set_float(value, src->bt_pred_timeout);
@@ -1994,7 +1994,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_float(value, src->bt_rt_det_conf);
         break;
     case PROP_BT_MIN_KP_THRESH:
-        g_value_set_float(value, src->bt_rt_min_kp_thresh);
+        g_value_set_int(value, src->bt_rt_min_kp_thresh);
         break;
     case PROP_BT_SMOOTHING:
         g_value_set_float(value, src->bt_rt_skel_smoothing);
@@ -3025,9 +3025,9 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                     case sl::BODY_FORMAT::BODY_38:
                         obj_data[b_idx].skel_format = 38;
                         break;
-                    case sl::BODY_FORMAT::BODY_70:
-                        obj_data[b_idx].skel_format = 70;
-                        break;
+                    // case sl::BODY_FORMAT::BODY_70:
+                    //     obj_data[b_idx].skel_format = 70;
+                    //     break;
                     }
 
                     if (obj.keypoint_2d.size() > 0) {
