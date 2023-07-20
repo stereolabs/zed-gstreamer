@@ -1,6 +1,10 @@
 LATEST CHANGES
 ==============
 
+2023-07-20
+----------
+* `sdk-verbose` is now an integer [0,1000] parameter
+
 2023-07-06
 ----------
 * Add new `jetson` script folder

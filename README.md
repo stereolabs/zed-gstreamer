@@ -401,9 +401,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   saturation          : Image saturation
                         flags: readable, writable
                         Integer. Range: 0 - 8 Default: 4 
-  sdk-verbose         : ZED SDK Verbose
+  sdk-verbose         : ZED SDK Verbose level
                         flags: readable, writable
-                        Boolean. Default: false
+                        Integer. Range: 0 - 1000 Default: 0 
   set-as-static       : Set to TRUE if the camera is static
                         flags: readable, writable
                         Boolean. Default: false

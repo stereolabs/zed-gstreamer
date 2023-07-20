@@ -49,7 +49,7 @@ struct _GstZedSrc {
     // ----> Properties
     gint camera_resolution;   // Camera resolution [enum]
     gint camera_fps;          // Camera FPS
-    gboolean sdk_verbose;
+    gint sdk_verbose;
     gint camera_image_flip;
     gint camera_id;
     gint64 camera_sn;

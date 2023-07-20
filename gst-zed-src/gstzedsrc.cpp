@@ -216,7 +216,7 @@ typedef enum {
 // INITIALIZATION
 #define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::AUTO)
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_15FPS
-#define DEFAULT_PROP_SDK_VERBOSE    FALSE
+#define DEFAULT_PROP_SDK_VERBOSE    0
 #define DEFAULT_PROP_CAM_FLIP       2
 #define DEFAULT_PROP_CAM_ID         0
 #define DEFAULT_PROP_CAM_SN         0
@@ -788,9 +788,9 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_SDK_VERBOSE,
-        g_param_spec_boolean("sdk-verbose", "ZED SDK Verbose", "ZED SDK Verbose",
-                             DEFAULT_PROP_SDK_VERBOSE,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("sdk-verbose", "ZED SDK Verbose", "ZED SDK Verbose level", 0, 1000,
+                         DEFAULT_PROP_SDK_VERBOSE,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_CAM_FLIP,
@@ -1505,7 +1505,7 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         src->camera_fps = g_value_get_enum(value);
         break;
     case PROP_SDK_VERBOSE:
-        src->sdk_verbose = g_value_get_boolean(value);
+        src->sdk_verbose = g_value_get_int(value);
         break;
     case PROP_CAM_FLIP:
         src->camera_image_flip = g_value_get_enum(value);
@@ -1790,7 +1790,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_enum(value, src->camera_fps);
         break;
     case PROP_SDK_VERBOSE:
-        g_value_set_boolean(value, src->sdk_verbose);
+        g_value_set_int(value, src->sdk_verbose);
         break;
     case PROP_CAM_FLIP:
         g_value_set_enum(value, src->camera_image_flip);
