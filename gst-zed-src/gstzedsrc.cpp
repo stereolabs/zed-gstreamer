@@ -992,7 +992,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_POS_SET_GRAVITY_AS_ORIGIN,
         g_param_spec_boolean("set-gravity-as-origin", "Set gravity as pose origin",
-                             "This setting allows you to override of 2 of the 3 rotations from"
+                             "This setting allows you to override of 2 of the 3 rotations from "
                              "initial-world-transform using the IMU gravity default: true",
                              DEFAULT_PROP_POS_SET_GRAVITY_AS_ORIGIN,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
@@ -1000,7 +1000,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_POS_DEPTH_MIN_RANGE,
         g_param_spec_float("pos-depth-min-range", "Set depth minimum range",
-                           "This setting allows you to change the minmum depth used by the"
+                           "This setting allows you to change the minmum depth used by the "
                            "SDK for Positional Tracking.",
                            -1, 65535, DEFAULT_PROP_POS_DEPTH_MIN_RANGE,
                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
@@ -1272,91 +1272,91 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_BRIGHTNESS,
-        g_param_spec_int("brightness", "Camera control: brightness", "Image brightness", 0, 8,
+        g_param_spec_int("ctrl-brightness", "Camera control: brightness", "Image brightness", 0, 8,
                          DEFAULT_PROP_BRIGHTNESS,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_CONTRAST,
-        g_param_spec_int("contrast", "Camera control: contrast", "Image contrast", 0, 8,
+        g_param_spec_int("ctrl-contrast", "Camera control: contrast", "Image contrast", 0, 8,
                          DEFAULT_PROP_CONTRAST,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_HUE,
-        g_param_spec_int("hue", "Camera control: hue", "Image hue", 0, 11, DEFAULT_PROP_HUE,
+        g_param_spec_int("ctrl-hue", "Camera control: hue", "Image hue", 0, 11, DEFAULT_PROP_HUE,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_SATURATION,
-        g_param_spec_int("saturation", "Camera control: saturation", "Image saturation", 0, 8,
+        g_param_spec_int("ctrl-saturation", "Camera control: saturation", "Image saturation", 0, 8,
                          DEFAULT_PROP_SATURATION,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_SHARPNESS,
-        g_param_spec_int("sharpness", "Camera control: sharpness", "Image sharpness", 0, 8,
+        g_param_spec_int("ctrl-sharpness", "Camera control: sharpness", "Image sharpness", 0, 8,
                          DEFAULT_PROP_SHARPNESS,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_GAMMA,
-        g_param_spec_int("gamma", "Camera control: gamma", "Image gamma", 1, 9, DEFAULT_PROP_GAMMA,
+        g_param_spec_int("ctrl-gamma", "Camera control: gamma", "Image gamma", 1, 9, DEFAULT_PROP_GAMMA,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_GAIN,
-        g_param_spec_int("gain", "Camera control: gain", "Camera gain", 0, 100, DEFAULT_PROP_GAIN,
+        g_param_spec_int("ctrl-gain", "Camera control: gain", "Camera gain", 0, 100, DEFAULT_PROP_GAIN,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_EXPOSURE,
-        g_param_spec_int("exposure", "Camera control: exposure", "Camera exposure", 0, 100,
+        g_param_spec_int("ctrl-exposure", "Camera control: exposure", "Camera exposure", 0, 100,
                          DEFAULT_PROP_EXPOSURE,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC,
-        g_param_spec_boolean("aec-agc", "Camera control: automatic gain and exposure",
+        g_param_spec_boolean("ctrl-aec-agc", "Camera control: automatic gain and exposure",
                              "Camera automatic gain and exposure", DEFAULT_PROP_AEG_AGC,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
-        g_param_spec_int("aec-agc-roi-x",
+        g_param_spec_int("ctrl-aec-agc-roi-x",
                          "Camera control: auto gain/exposure ROI top left 'X' coordinate",
                          "Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)", -1,
                          2208, DEFAULT_PROP_AEG_AGC_ROI_X,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_Y,
-        g_param_spec_int("aec-agc-roi-y",
+        g_param_spec_int("ctrl-aec-agc-roi-y",
                          "Camera control: auto gain/exposure ROI top left 'Y' coordinate",
                          "Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)", -1,
                          1242, DEFAULT_PROP_AEG_AGC_ROI_Y,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_W,
-        g_param_spec_int("aec-agc-roi-w", "Camera control: auto gain/exposure ROI width",
+        g_param_spec_int("ctrl-aec-agc-roi-w", "Camera control: auto gain/exposure ROI width",
                          "Auto gain/exposure ROI width (-1 to not set ROI)", -1, 2208,
                          DEFAULT_PROP_AEG_AGC_ROI_W,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_H,
-        g_param_spec_int("aec-agc-roi-h", "Camera control: auto gain/exposure ROI height",
+        g_param_spec_int("ctrl-aec-agc-roi-h", "Camera control: auto gain/exposure ROI height",
                          "Auto gain/exposure ROI height (-1 to not set ROI)", -1, 1242,
                          DEFAULT_PROP_AEG_AGC_ROI_H,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_SIDE,
-        g_param_spec_enum("aec-agc-roi-side", "Camera control: auto gain/exposure ROI side",
+        g_param_spec_enum("ctrl-aec-agc-roi-side", "Camera control: auto gain/exposure ROI side",
                           "Auto gain/exposure ROI side", GST_TYPE_ZED_SIDE,
                           DEFAULT_PROP_AEG_AGC_ROI_SIDE,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_WHITEBALANCE,
-        g_param_spec_int("whitebalance-temperature", "Camera control: white balance temperature",
+        g_param_spec_int("ctrl-whitebalance-temperature", "Camera control: white balance temperature",
                          "Image white balance temperature", 2800, 6500, DEFAULT_PROP_WHITEBALANCE,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_WHITEBALANCE_AUTO,
-        g_param_spec_boolean("whitebalance-auto", "Camera control: automatic whitebalance",
+        g_param_spec_boolean("ctrl-whitebalance-auto", "Camera control: automatic whitebalance",
                              "Image automatic white balance", DEFAULT_PROP_WHITEBALANCE_AUTO,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_LEDSTATUS,
-        g_param_spec_boolean("led-status", "Camera control: led status", "Camera LED on/off",
+        g_param_spec_boolean("ctrl-led-status", "Camera control: led status", "Camera LED on/off",
                              DEFAULT_PROP_LEDSTATUS,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
@@ -3025,9 +3025,9 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                     case sl::BODY_FORMAT::BODY_38:
                         obj_data[b_idx].skel_format = 38;
                         break;
-                    // case sl::BODY_FORMAT::BODY_70:
-                    //     obj_data[b_idx].skel_format = 70;
-                    //     break;
+                        // case sl::BODY_FORMAT::BODY_70:
+                        //     obj_data[b_idx].skel_format = 70;
+                        //     break;
                     }
 
                     if (obj.keypoint_2d.size() > 0) {

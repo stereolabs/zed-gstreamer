@@ -122,36 +122,9 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 Most of the properties follow the same name as the C++ API. Except that `_` is replaced by `-` to follow gstreamer common formatting.
 
 ```
-  aec-agc             : Camera automatic gain and exposure
-                        flags: readable, writable
-                        Boolean. Default: true
-  aec-agc-roi-h       : Auto gain/exposure ROI height (-1 to not set ROI)
-                        flags: readable, writable
-                        Integer. Range: -1 - 1242 Default: -1 
-  aec-agc-roi-side    : Auto gain/exposure ROI side
-                        flags: readable, writable
-                        Enum "GstZedsrcSide" Default: 2, "BOTH"
-                           (0): LEFT             - Left side only
-                           (1): RIGHT            - Right side only
-                           (2): BOTH             - Left and Right side
-  aec-agc-roi-w       : Auto gain/exposure ROI width (-1 to not set ROI)
-                        flags: readable, writable
-                        Integer. Range: -1 - 2208 Default: -1 
-  aec-agc-roi-x       : Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)
-                        flags: readable, writable
-                        Integer. Range: -1 - 2208 Default: -1 
-  aec-agc-roi-y       : Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)
-                        flags: readable, writable
-                        Integer. Range: -1 - 1242 Default: -1 
   area-file-path      : Area localization file that describes the surroundings, saved from a previous tracking session.
                         flags: readable, writable
                         String. Default: ""
-  blocksize           : Size in bytes to read per buffer (-1 = default)
-                        flags: readable, writable
-                        Unsigned Integer. Range: 0 - 4294967295 Default: 4096 
-  brightness          : Image brightness
-                        flags: readable, writable
-                        Integer. Range: 0 - 8 Default: 4 
   bt-allow-red-prec   : Set to TRUE to enable Body Tracking reduced inference precision 
                         flags: readable, writable
                         Boolean. Default: false
@@ -230,9 +203,6 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   confidence-threshold: Specify the Depth Confidence Threshold
                         flags: readable, writable
                         Integer. Range: 0 - 100 Default: 50 
-  contrast            : Image contrast
-                        flags: readable, writable
-                        Integer. Range: 0 - 8 Default: 4 
   coordinate-system   : 3D Coordinate System
                         flags: readable, writable
                         Enum "GstZedsrcStreamType" Default: 0, "Image"
@@ -242,6 +212,60 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (3): Right handed, Z up - Right-Handed with Z pointing up and Y forward. Used in 3DSMax.
                            (4): Left handed, Z up - Left-Handed with Z axis pointing up and X forward. Used in Unreal Engine.
                            (5): Right handed, Z up, X fwd - Right-Handed with Z pointing up and X forward. Used in ROS (REP 103).
+  ctrl-aec-agc        : Camera automatic gain and exposure
+                        flags: readable, writable
+                        Boolean. Default: true
+  ctrl-aec-agc-roi-h  : Auto gain/exposure ROI height (-1 to not set ROI)
+                        flags: readable, writable
+                        Integer. Range: -1 - 1242 Default: -1 
+  ctrl-aec-agc-roi-side: Auto gain/exposure ROI side
+                        flags: readable, writable
+                        Enum "GstZedsrcSide" Default: 2, "BOTH"
+                           (0): LEFT             - Left side only
+                           (1): RIGHT            - Right side only
+                           (2): BOTH             - Left and Right side
+  ctrl-aec-agc-roi-w  : Auto gain/exposure ROI width (-1 to not set ROI)
+                        flags: readable, writable
+                        Integer. Range: -1 - 2208 Default: -1 
+  ctrl-aec-agc-roi-x  : Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)
+                        flags: readable, writable
+                        Integer. Range: -1 - 2208 Default: -1 
+  ctrl-aec-agc-roi-y  : Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)
+                        flags: readable, writable
+                        Integer. Range: -1 - 1242 Default: -1 
+  ctrl-brightness     : Image brightness
+                        flags: readable, writable
+                        Integer. Range: 0 - 8 Default: 4 
+  ctrl-contrast       : Image contrast
+                        flags: readable, writable
+                        Integer. Range: 0 - 8 Default: 4 
+  ctrl-exposure       : Camera exposure
+                        flags: readable, writable
+                        Integer. Range: 0 - 100 Default: 80 
+  ctrl-gain           : Camera gain
+                        flags: readable, writable
+                        Integer. Range: 0 - 100 Default: 60 
+  ctrl-gamma          : Image gamma
+                        flags: readable, writable
+                        Integer. Range: 1 - 9 Default: 8 
+  ctrl-hue            : Image hue
+                        flags: readable, writable
+                        Integer. Range: 0 - 11 Default: 0 
+  ctrl-led-status     : Camera LED on/off
+                        flags: readable, writable
+                        Boolean. Default: true
+  ctrl-saturation     : Image saturation
+                        flags: readable, writable
+                        Integer. Range: 0 - 8 Default: 4 
+  ctrl-sharpness      : Image sharpness
+                        flags: readable, writable
+                        Integer. Range: 0 - 8 Default: 4 
+  ctrl-whitebalance-auto: Image automatic white balance
+                        flags: readable, writable
+                        Boolean. Default: true
+  ctrl-whitebalance-temperature: Image white balance temperature
+                        flags: readable, writable
+                        Integer. Range: 2800 - 6500 Default: 4600 
   depth-maximum-distance: Maximum depth value
                         flags: readable, writable
                         Float. Range:             500 -           40000 Default:           20000 
@@ -274,21 +298,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   enable-positional-tracking: Enable positional tracking
                         flags: readable, writable
                         Boolean. Default: false
-  exposure            : Camera exposure
-                        flags: readable, writable
-                        Integer. Range: 0 - 100 Default: 80 
   fill-mode           : Specify the Depth Fill Mode
                         flags: readable, writable
                         Boolean. Default: false
-  gain                : Camera gain
-                        flags: readable, writable
-                        Integer. Range: 0 - 100 Default: 60 
-  gamma               : Image gamma
-                        flags: readable, writable
-                        Integer. Range: 1 - 9 Default: 8 
-  hue                 : Image hue
-                        flags: readable, writable
-                        Integer. Range: 0 - 11 Default: 0 
   initial-world-transform-pitch: Pitch orientation of the camera in the world frame when the camera is started
                         flags: readable, writable
                         Float. Range:               0 -             360 Default:               0 
@@ -313,9 +325,6 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   input-stream-port   : Specify port when using streaming input
                         flags: readable, writable
                         Integer. Range: 1 - 65535 Default: 30000 
-  led-status          : Camera LED on/off
-                        flags: readable, writable
-                        Boolean. Default: true
   measure3D-reference-frame: Specify the 3D Reference Frame
                         flags: readable, writable
                         Enum "GstZedsrc3dMeasRefFrame" Default: 0, "WORLD"
@@ -386,7 +395,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   parent              : The parent of the object
                         flags: readable, writable, 0x2000
                         Object of type "GstObject"
-  pos-depth-min-range : This setting allows you to change the minmum depth used by theSDK for Positional Tracking.
+  pos-depth-min-range : This setting allows you to change the minmum depth used by the SDK for Positional Tracking.
                         flags: readable, writable
                         Float. Range:              -1 -           65535 Default:              -1 
   roi                 : Enable region of interest filtering
@@ -404,9 +413,6 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   roi-y               : Region of interest top left 'Y' coordinate (-1 to not set ROI)
                         flags: readable, writable
                         Integer. Range: -1 - 1242 Default: -1 
-  saturation          : Image saturation
-                        flags: readable, writable
-                        Integer. Range: 0 - 8 Default: 4 
   sdk-verbose         : ZED SDK Verbose level
                         flags: readable, writable
                         Integer. Range: 0 - 1000 Default: 0 
@@ -416,12 +422,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   set-floor-as-origin : This mode initializes the tracking to be aligned with the floor plane to better position the camera in space.
                         flags: readable, writable
                         Boolean. Default: false
-  set-gravity-as-origin: This setting allows you to override of 2 of the 3 rotations frominitial-world-transform using the IMU gravity default: true
+  set-gravity-as-origin: This setting allows you to override of 2 of the 3 rotations from initial-world-transform using the IMU gravity default: true
                         flags: readable, writable
                         Boolean. Default: true
-  sharpness           : Image sharpness
-                        flags: readable, writable
-                        Integer. Range: 0 - 8 Default: 4 
   stream-type         : Image stream type
                         flags: readable, writable
                         Enum "GstZedSrcCoordSys" Default: 0, "Left image [BGRA]"
@@ -435,16 +438,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         String. Default: ""
   texture-confidence-threshold: Specify the Texture Confidence Threshold
                         flags: readable, writable
-                        Integer. Range: 0 - 100 Default: 100 
-  typefind            : Run typefind before negotiating (deprecated, non-functional)
-                        flags: readable, writable, deprecated
-                        Boolean. Default: false
-  whitebalance-auto   : Image automatic white balance
-                        flags: readable, writable
-                        Boolean. Default: true
-  whitebalance-temperature: Image white balance temperature
-                        flags: readable, writable
-                        Integer. Range: 2800 - 6500 Default: 4600  
+                        Integer. Range: 0 - 100 Default: 100
 ```
 
 ### `ZED Video Demuxer Element` properties
