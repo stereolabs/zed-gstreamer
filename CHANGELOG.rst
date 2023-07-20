@@ -14,14 +14,14 @@ LATEST CHANGES
 ----------
 
 * Add new parameter `od-detection-filter-mode`
-* Add new parameter `od-person-conf`
-* Add new parameter `od-vehicle-conf`
-* Add new parameter `od-bag-conf`
-* Add new parameter `od-animal-conf`
-* Add new parameter `od-electronics-conf`
-* Add new parameter `od-fruit-vegetables-conf`
-* Add new parameter `od-electronics-conf`
-* Add new parameter `od-sport-conf`
+* Add new parameter `od-conf-person`
+* Add new parameter `od-conf-vehicle`
+* Add new parameter `od-conf-bag`
+* Add new parameter `od-conf-animal`
+* Add new parameter `od-conf-electronics`
+* Add new parameter `od-conf-fruit-vegetables`
+* Add new parameter `od-conf-electronics`
+* Add new parameter `od-conf-sport`
 
 2023-06-27
 ----------

@@ -321,16 +321,34 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Enum "GstZedsrc3dMeasRefFrame" Default: 0, "WORLD"
                            (0): WORLD            - The positional tracking pose transform will contains the motion with reference to the world frame.
                            (1): CAMERA           - The  pose transform will contains the motion with reference to the previous camera frame.
+  name                : The name of the object
+                        flags: readable, writable, 0x2000
+                        String. Default: "zedsrc0"
   num-buffers         : Number of buffers to output before sending EOS (-1 = unlimited)
                         flags: readable, writable
                         Integer. Range: -1 - 2147483647 Default: -1 
   od-allow-reduced-precision-inference: Set to TRUE to allow inference to run at a lower precision to improve runtime
                         flags: readable, writable
                         Boolean. Default: false
-  od-animal-conf      : Animal Detection Confidence Threshold
+  od-conf-animal      : Animal Detection Confidence Threshold
                         flags: readable, writable
                         Float. Range:              -1 -             100 Default:              35 
-  od-bag-conf         : Bag Detection Confidence Threshold
+  od-conf-bag         : Bag Detection Confidence Threshold
+                        flags: readable, writable
+                        Float. Range:              -1 -             100 Default:              35 
+  od-conf-electronics : Electronics Detection Confidence Threshold
+                        flags: readable, writable
+                        Float. Range:              -1 -             100 Default:              35 
+  od-conf-fruit-vegetables: Fruit/Vegetables Detection Confidence Threshold
+                        flags: readable, writable
+                        Float. Range:              -1 -             100 Default:              35 
+  od-conf-people      : People Detection Confidence Threshold
+                        flags: readable, writable
+                        Float. Range:              -1 -             100 Default:              35 
+  od-conf-sport       : Sport Detection Confidence Threshold
+                        flags: readable, writable
+                        Float. Range:              -1 -             100 Default:              35 
+  od-conf-vehicle     : Vehicle Detection Confidence Threshold
                         flags: readable, writable
                         Float. Range:              -1 -             100 Default:              35 
   od-confidence       : Minimum Detection Confidence
@@ -350,36 +368,24 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (2): Object Detection Multi class ACCURATE - Any objects, bounding box based, more accurate but slower than the base model
                            (3): Person Head FAST - Bounding Box detector specialized in person heads, particularly well suited for crowded environments, the person localization is also improved
                            (4): Person Head ACCURATE - Bounding Box detector specialized in person heads, particularly well suited for crowded environments, the person localization is also improved, more accurate but slower than the base model
-  od-electronics-conf : Electronics Detection Confidence Threshold
-                        flags: readable, writable
-                        Float. Range:              -1 -             100 Default:              35 
   od-enable-tracking  : Set to TRUE to enable tracking for the detected objects
                         flags: readable, writable
                         Boolean. Default: true
   od-enabled          : Set to TRUE to enable Object Detection
                         flags: readable, writable
                         Boolean. Default: false
-  od-fruit-vegetables-conf: Fruit/Vegetables Detection Confidence Threshold
-                        flags: readable, writable
-                        Float. Range:              -1 -             100 Default:              35 
   od-image-sync       : Set to TRUE to enable Object Detection frame synchronization 
                         flags: readable, writable
                         Boolean. Default: true
   od-max-range        : Maximum Detection Range
                         flags: readable, writable
                         Float. Range:              -1 -           20000 Default:           20000 
-  od-people-conf      : People Detection Confidence Threshold
-                        flags: readable, writable
-                        Float. Range:              -1 -             100 Default:              35 
   od-prediction-timeout-s: Object prediction timeout (sec)
                         flags: readable, writable
                         Float. Range:               0 -               1 Default:             0.2 
-  od-sport-conf       : Sport Detection Confidence Threshold
-                        flags: readable, writable
-                        Float. Range:              -1 -             100 Default:              35 
-  od-vehicle-conf     : Vehicle Detection Confidence Threshold
-                        flags: readable, writable
-                        Float. Range:              -1 -             100 Default:              35 
+  parent              : The parent of the object
+                        flags: readable, writable, 0x2000
+                        Object of type "GstObject"
   pos-depth-min-range : This setting allows you to change the minmum depth used by theSDK for Positional Tracking.
                         flags: readable, writable
                         Float. Range:              -1 -           65535 Default:              -1 
@@ -438,7 +444,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Boolean. Default: true
   whitebalance-temperature: Image white balance temperature
                         flags: readable, writable
-                        Integer. Range: 2800 - 6500 Default: 4600 
+                        Integer. Range: 2800 - 6500 Default: 4600  
 ```
 
 ### `ZED Video Demuxer Element` properties

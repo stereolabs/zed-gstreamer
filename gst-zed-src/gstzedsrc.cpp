@@ -1122,7 +1122,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_OD_PERSON_CONF,
-        g_param_spec_float("od-people-conf",
+        g_param_spec_float("od-conf-people",
                            "Defines the detection confidence threashold for the PEOPLE class (-1.0 "
                            "to disable the detection)",
                            "People Detection Confidence Threshold", -1.0f, 100.0f,
@@ -1131,7 +1131,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_OD_VEHICLE_CONF,
-        g_param_spec_float("od-vehicle-conf",
+        g_param_spec_float("od-conf-vehicle",
                            "Defines the detection confidence threashold for the VEHICLE class "
                            "(-1.0 to disable the detection)",
                            "Vehicle Detection Confidence Threshold", -1.0f, 100.0f,
@@ -1140,7 +1140,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_OD_BAG_CONF,
-        g_param_spec_float("od-bag-conf",
+        g_param_spec_float("od-conf-bag",
                            "Defines the detection confidence threashold for the BAG class (-1.0 to "
                            "disable the detection)",
                            "Bag Detection Confidence Threshold", -1.0f, 100.0f,
@@ -1149,7 +1149,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_OD_ANIMAL_CONF,
-        g_param_spec_float("od-animal-conf",
+        g_param_spec_float("od-conf-animal",
                            "Defines the detection confidence threashold for the ANIMAL class (-1.0 "
                            "to disable the detection)",
                            "Animal Detection Confidence Threshold", -1.0f, 100.0f,
@@ -1158,7 +1158,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_OD_ELECTRONICS_CONF,
-        g_param_spec_float("od-electronics-conf",
+        g_param_spec_float("od-conf-electronics",
                            "Defines the detection confidence threashold for the ELECTRONICS class "
                            "(-1.0 to disable the detection)",
                            "Electronics Detection Confidence Threshold", -1.0f, 100.0f,
@@ -1167,7 +1167,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_OD_FRUIT_VEGETABLES_CONF,
-        g_param_spec_float("od-fruit-vegetables-conf",
+        g_param_spec_float("od-conf-fruit-vegetables",
                            "Defines the detection confidence threashold for the FRUIT_VEGETABLES "
                            "class (-1.0 to disable the detection)",
                            "Fruit/Vegetables Detection Confidence Threshold", -1.0f, 100.0f,
@@ -1176,7 +1176,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_OD_SPORT_CONF,
-        g_param_spec_float("od-sport-conf",
+        g_param_spec_float("od-conf-sport",
                            "Defines the detection confidence threashold for the SPORT class (-1.0 "
                            "to disable the detection)",
                            "Sport Detection Confidence Threshold", -1.0f, 100.0f,
