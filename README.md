@@ -589,7 +589,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 ```    
     gst-launch-1.0 \
-    zedsrc stream-type=0 od-enabled=true od-detection-model=0 camera-resolution=2 camera-fps=30 ! queue ! \
+    zedsrc stream-type=0 od-enabled=true od-detection-model=0 ! queue ! \
     zedodoverlay ! queue ! \
     autovideoconvert ! fpsdisplaysink
 ```
@@ -601,7 +601,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 ```    
     gst-launch-1.0 \
-    zedsrc stream-type=2 od-enabled=true od-detection-model=1 camera-resolution=0 camera-fps=15 ! queue ! \
+    zedsrc stream-type=2 bt-enabled=true bt-detection-model=0 ! queue ! \
     zedodoverlay ! queue ! \
     autovideoconvert ! fpsdisplaysink
 ```
@@ -613,7 +613,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 ```
     gst-launch-1.0 \
-    zedsrc stream-type=0 od-enabled=true od-detection-model=2 camera-resolution=0 camera-fps=15  ! queue ! \
+    zedsrc stream-type=0 bt-enabled=true bt-detection-model=2 ! queue ! \
     zedodoverlay ! queue ! \
     autovideoconvert ! fpsdisplaysink
 ```
@@ -625,7 +625,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 ```
     gst-launch-1.0 \
-    zedsrc stream-type=4 camera-resolution=2 camera-fps=30 od-enabled=true od-detection-model=1 ! \
+    zedsrc stream-type=4 bt-enabled=true bt-detection-model=0 ! \
     zeddemux name=demux \
     demux.src_left ! queue ! zedodoverlay ! queue ! autovideoconvert ! fpsdisplaysink \
     demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
@@ -639,7 +639,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 ```
     gst-launch-1.0 \
     zeddatamux name=mux \
-    zedsrc stream-type=4 camera-resolution=0 camera-fps=15 od-enabled=true od-detection-model=1 ! \
+    zedsrc stream-type=4 bt-enabled=true bt-detection-model=0 ! \
     zeddemux stream-data=true is-depth=true name=demux \
     demux.src_aux ! queue ! autovideoconvert ! videoscale ! video/x-raw,width=672,height=376 ! queue ! fpsdisplaysink \
     demux.src_data ! mux.sink_data \
