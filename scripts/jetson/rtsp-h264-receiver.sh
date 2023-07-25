@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Example pipeline to start an RTSP client on the same machine of the server
 

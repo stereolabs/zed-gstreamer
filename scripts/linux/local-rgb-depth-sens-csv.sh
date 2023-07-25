@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Example pipeline to acquire a stream at default resolution with RGB, Depth and Sensor Data and save them to a CSV file for logging
 

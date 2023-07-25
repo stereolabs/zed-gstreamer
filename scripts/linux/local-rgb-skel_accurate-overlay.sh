@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Example pipeline to acquire a stream at default resolution with RGB and Skeleton Tracking information and 
 # displaying the results

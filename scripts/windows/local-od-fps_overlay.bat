@@ -7,7 +7,7 @@
 :: 4) Display the depth stream with FPS info using the `fpsdisplaysink` sink plugin.
 
 gst-launch-1.0 ^
-zedsrc stream-type=4 camera-resolution=2 camera-fps=30 od-enabled=true od-detection-model=2 ! ^
+zedsrc stream-type=4 bt-enabled=true bt-detection-model=0 ! ^
 zeddemux name=demux ^
 demux.src_left ! queue ! zedodoverlay ! queue ! autovideoconvert ! fpsdisplaysink ^
 demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink

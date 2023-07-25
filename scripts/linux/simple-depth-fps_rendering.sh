@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Example pipeline to acquire a depth stream and render it dispaying the current FPS using default values for each parameter
 

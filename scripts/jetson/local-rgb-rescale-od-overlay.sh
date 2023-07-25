@@ -16,7 +16,7 @@
 
 gst-launch-1.0 \
 zeddatamux name=mux \
-zedsrc stream-type=4 camera-resolution=1 camera-fps=30 od-detection-model=0 od-enabled=true ! \
+zedsrc stream-type=4 od-detection-model=0 od-enabled=true ! \
 zeddemux stream-data=true is-depth=true name=demux \
 demux.src_aux ! queue ! autovideoconvert ! videoscale ! video/x-raw,width=672,height=376 ! queue ! fpsdisplaysink \
 demux.src_data ! mux.sink_data \

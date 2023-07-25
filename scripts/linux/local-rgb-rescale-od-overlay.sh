@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Example pipeline to resize 2K RGB and depth stream to VGA resolution for display purpose remuxing the Object 
 # Detection metadata as input for `zedodoverlay`

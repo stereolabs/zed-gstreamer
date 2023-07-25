@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 # Example pipeline to acquire a stream and send it on local network with H264 encoding
 
