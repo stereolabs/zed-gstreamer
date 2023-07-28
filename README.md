@@ -32,7 +32,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 ### Prerequisites
 
- * ZED SDK v4.0.x
+ * [ZED SDK v4.0.x](https://www.stereolabs.com/developers/release/)
  * CMake (v3.6+)
  * GStreamer 1.0
 
