@@ -26,42 +26,38 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_ZEDDATAMUX (gst_zeddatamux_get_type())
-#define GST_ZEDDATAMUX(obj)   (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ZEDDATAMUX,GstZedDataMux))
-#define GST_ZEDDATAMUX_CLASS(klass)   (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_ZEDDATAMUX,GstZedDataMuxClass))
-#define GST_IS_ZEDDATAMUX(obj)   (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_ZEDDATAMUX))
-#define GST_IS_ZEDDATAMUX_CLASS(obj)   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_ZEDDATAMUX))
+#define GST_TYPE_ZEDDATAMUX          (gst_zeddatamux_get_type())
+#define GST_ZEDDATAMUX(obj)          (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_ZEDDATAMUX, GstZedDataMux))
+#define GST_ZEDDATAMUX_CLASS(klass)  (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_ZEDDATAMUX, GstZedDataMuxClass))
+#define GST_IS_ZEDDATAMUX(obj)       (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_ZEDDATAMUX))
+#define GST_IS_ZEDDATAMUX_CLASS(obj) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_ZEDDATAMUX))
 
 typedef struct _GstZedDataMux GstZedDataMux;
 typedef struct _GstZedDataMuxClass GstZedDataMuxClass;
 
-struct _GstZedDataMux
-{
-  GstElement element;
+struct _GstZedDataMux {
+    GstElement element;
 
-  GstPad* sinkpad_video;
-  GstPad* sinkpad_data;
-  GstPad* srcpad;
+    GstPad *sinkpad_video;
+    GstPad *sinkpad_data;
+    GstPad *srcpad;
 
-  GstCaps* caps;
+    GstCaps *caps;
 
-  GstClockTime last_data_ts;
-  GstClockTime last_video_ts;
+    GstClockTime last_data_ts;
+    GstClockTime last_video_ts;
 
-  GstBuffer* last_video_buf;
-  gsize last_video_buf_size;
-  GstBuffer* last_data_buf;
-  gsize last_data_buf_size;
+    GstBuffer *last_video_buf;
+    gsize last_video_buf_size;
+    GstBuffer *last_data_buf;
+    gsize last_data_buf_size;
 };
 
-struct _GstZedDataMuxClass
-{
+struct _GstZedDataMuxClass {
     GstElementClass base_zeddatamux_class;
-
-
 };
 
-GType gst_zeddatamux_get_type (void);
+GType gst_zeddatamux_get_type(void);
 
 G_END_DECLS
 

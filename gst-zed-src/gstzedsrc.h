@@ -28,53 +28,52 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_ZED_SRC   (gst_zedsrc_get_type())
-#define GST_ZED_SRC(obj)   (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_ZED_SRC,GstZedSrc))
-#define GST_ZED_SRC_CLASS(klass)   (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_ZED_SRC,GstZedSrcClass))
-#define GST_IS_ZED_SRC(obj)   (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_ZED_SRC))
-#define GST_IS_ZED_SRC_CLASS(obj)   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_ZED_SRC))
+#define GST_TYPE_ZED_SRC (gst_zedsrc_get_type())
+#define GST_ZED_SRC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_ZED_SRC, GstZedSrc))
+#define GST_ZED_SRC_CLASS(klass)                                                                   \
+    (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_ZED_SRC, GstZedSrcClass))
+#define GST_IS_ZED_SRC(obj)       (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_ZED_SRC))
+#define GST_IS_ZED_SRC_CLASS(obj) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_ZED_SRC))
 
 typedef struct _GstZedSrc GstZedSrc;
 typedef struct _GstZedSrcClass GstZedSrcClass;
 
-struct _GstZedSrc
-{
-    GstPushSrc base_zedsrc;    
+struct _GstZedSrc {
+    GstPushSrc base_zedsrc;
 
     // ZED camera object
     sl::Camera zed;
 
-
-    gboolean is_started; // grab started flag
+    gboolean is_started;   // grab started flag
 
     // ----> Properties
-    gint camera_resolution;     // Camera resolution [enum]
-    gint camera_fps;            // Camera FPS
-    gboolean sdk_verbose;
+    gint camera_resolution;   // Camera resolution [enum]
+    gint camera_fps;          // Camera FPS
+    gint sdk_verbose;
     gint camera_image_flip;
     gint camera_id;
     gint64 camera_sn;
     GString svo_file;
     GString stream_ip;
     gint stream_port;
-    gint stream_type;    
+    gint stream_type;
     gfloat depth_min_dist;
     gfloat depth_max_dist;
-    gint depth_mode;            // Depth mode [enum]
+    gint depth_mode;   // Depth mode [enum]
     gboolean camera_disable_self_calib;
-    gboolean depth_stabilization;
+    gint depth_stabilization;
     gint coord_sys;
     gboolean roi;
     gint roi_x;
     gint roi_y;
     gint roi_w;
     gint roi_h;
-    //gboolean enable_right_side_measure;
+    // gboolean enable_right_side_measure;
 
     gint confidence_threshold;
     gint texture_confidence_threshold;
     gint measure3D_reference_frame;
-    gint sensing_mode;
+    gboolean fill_mode;
 
     gboolean pos_tracking;
     gboolean camera_static;
@@ -93,15 +92,44 @@ struct _GstZedSrc
     gfloat init_orient_yaw;
 
     gboolean object_detection;
-    gboolean od_image_sync;
-    gboolean od_enable_tracking;
-    gboolean od_enable_mask_output;
-    gint od_detection_model;
-    gfloat od_det_conf;
-    gfloat od_max_range;
-    gboolean od_body_fitting;
-    gfloat od_prediction_timeout_s;
-    gboolean od_allow_reduced_precision_inference;
+    gboolean od_image_sync;                          // bool image_sync
+    gboolean od_enable_tracking;                     // bool enable_tracking
+    gboolean od_enable_segm_output;                  // bool enable_segmentation TODO
+    gint od_detection_model;                         // sl::OBJECT_DETECTION_MODEL detection_model
+    gfloat od_max_range;                             // float max_range
+    gint od_filter_mode;                             // sl::OBJECT_FILTERING_MODE filtering_mode
+    gfloat od_prediction_timeout_s;                  // float prediction_timeout_s
+    gboolean od_allow_reduced_precision_inference;   // bool allow_reduced_precision_inference
+    gfloat od_det_conf;               // [runtime] float detection_confidence_threshold
+    gfloat od_person_conf;            // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_vehicle_conf;           // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_bag_conf;               // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_animal_conf;            // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_electronics_conf;       // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_fruit_vegetable_conf;   // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+    gfloat od_sport_conf;             // [runtime] std::map< OBJECT_CLASS, float >
+                                      // object_class_detection_confidence_threshold
+
+    gboolean body_tracking;
+    gboolean bt_enable_segm_output;   // bool enable_segmentation
+    gboolean bt_image_sync;           // bool image_sync
+    gint bt_model;                    // sl::BODY_TRACKING_MODEL detection_model
+    gint bt_format;                   // sl::BODY_FORMAT body_format
+    gboolean bt_reduce_precision;     // bool allow_reduced_precision_inference
+    gfloat bt_max_range;              // float max_range
+    gint bt_kp_sel;                   // sl::BODY_KEYPOINTS_SELECTION body_selection
+    gboolean bt_fitting;              // bool enable_body_fitting
+    gboolean bt_enable_trk;           // bool enable_tracking
+    gfloat bt_pred_timeout;           // float prediction_timeout_s
+    gfloat bt_rt_det_conf;            // [runtime] float detection_confidence_threshold
+    gint bt_rt_min_kp_thresh;         // [runtime] int minimum_keypoints_threshold
+    gfloat bt_rt_skel_smoothing;      // [runtime] float skeleton_smoothing
 
     gint brightness;
     gint contrast;
@@ -132,12 +160,11 @@ struct _GstZedSrc
     gboolean stop_requested;
 };
 
-struct _GstZedSrcClass
-{
+struct _GstZedSrcClass {
     GstPushSrcClass base_zedsrc_class;
 };
 
-G_GNUC_INTERNAL GType gst_zedsrc_get_type (void);
+G_GNUC_INTERNAL GType gst_zedsrc_get_type(void);
 
 G_END_DECLS
 

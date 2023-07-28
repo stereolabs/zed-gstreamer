@@ -22,19 +22,19 @@
 #ifndef __GST_ZED_OD_OVERLAY_H__
 #define __GST_ZED_OD_OVERLAY_H__
 
-#include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+#include <gst/gst.h>
 
 G_BEGIN_DECLS
 
 #define GST_TYPE_ZED_OD_OVERLAY (gst_zed_od_overlay_get_type())
-G_DECLARE_FINAL_TYPE (GstZedOdOverlay, gst_zed_od_overlay, GST, ZED_OD_OVERLAY, GstBaseTransform)
+G_DECLARE_FINAL_TYPE(GstZedOdOverlay, gst_zed_od_overlay, GST, ZED_OD_OVERLAY, GstBaseTransform)
 
 struct _GstZedOdOverlay {
-  GstBaseTransform element;
+    GstBaseTransform element;
 
-  guint img_left_w;
-  guint img_left_h;
+    guint img_left_w;
+    guint img_left_h;
 };
 
 G_END_DECLS

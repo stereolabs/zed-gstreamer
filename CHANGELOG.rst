@@ -1,27 +1,79 @@
 LATEST CHANGES
 ==============
 
+ZED SDK v4.0
+-------------
+
+* Compatible with ZED SDK v4.x.y
+* Add support for ZED X and ZED X Mini cameras
+* Update `camera-resolution` and `camera-fps` parameters to match the new options
+* Add new `jetson` script folder
+* `sdk-verbose` is now an integer [0,1000] parameter
+* `depth-stabilization` is now an integer [0,100] parameter
+* Add new property `od-detection-filter-mode`
+* Add new property `od-conf-person`
+* Add new property `od-conf-vehicle`
+* Add new property `od-conf-bag`
+* Add new property `od-conf-animal`
+* Add new property `od-conf-electronics`
+* Add new property `od-conf-fruit-vegetables`
+* Add new property `od-conf-electronics`
+* Add new property `od-conf-sport`
+* Change `sensing-mode` to `fill-mode`
+* Add new property `bt-allow-red-prec`
+* Add new property `bt-body-fitting`
+* Add new property `bt-body-tracking`
+* Add new property `bt-confidence `
+* Add new property `bt-detection-model`
+* Add new property `bt-enabled`
+* Add new property `bt-format`
+* Add new property `bt-image-sync`
+* Add new property `bt-max-range`
+* Add new property `bt-min-keypoints`
+* Add new property `bt-prediction-timeout-s`
+* Add new property `bt-smoothing`
+* Change `ctrl-aec-agc` to `ctrl-aec-agc`
+* Change `ctrl-aec-agc-roi-h` to `ctrl-aec-agc-roi-h`
+* Change `ctrl-aec-agc-roi-side` to `ctrl-aec-agc-roi-side`
+* Change `ctrl-aec-agc-roi-w` to `ctrl-aec-agc-roi-w`
+* Change `ctrl-aec-agc-roi-x` to `ctrl-aec-agc-roi-x`
+* Change `ctrl-aec-agc-roi-y` to `ctrl-aec-agc-roi-y`
+* Change `ctrl-brightness` to `ctrl-brightness`
+* Change `ctrl-contrast` to `ctrl-contrast`
+* Change `ctrl-exposure` to `ctrl-exposure`
+* Change `ctrl-gain` to `ctrl-gain`
+* Change `ctrl-gamma` to `ctrl-gamma`
+* Change `ctrl-hue` to `ctrl-hue`
+* Change `ctrl-led-status` to `ctrl-led-status`
+* Change `ctrl-saturation` to `ctrl-saturation`
+* Change `ctrl-sharpness` to `ctrl-sharpness`
+* Change `ctrl-whitebalance-auto` to `ctrl-whitebalance-auto`
+* Change `ctrl-whitebalance-temperature` to `ctrl-whitebalance-temperature`
+
 ZED SDK v3.8
 -------------
+
 - Add support for Region of Interest [Thx @ryanppeters]
   * Add `roi` parameter
   * Add `roi-x` parameter
   * Add `roi-y` parameter
   * Add `roi-w` parameter
   * Add `roi-h` parameter
-- Add `set-gravity-as-origin` parameter [Thx @ryanppeters] 
-- Add `od-prediction-timeout-s` parameter [Thx @ryanppeters]
-- Add `od-allow-reduced-precision-inference` parameter [Thx @ryanppeters]
+- Add `set-gravity-as-origin` property [Thx @ryanppeters] 
+- Add `od-prediction-timeout-s` property [Thx @ryanppeters]
+- Add `od-allow-reduced-precision-inference` property [Thx @ryanppeters]
 - Add new field `frame_id` to `GstZedSrcMeta`  in order to track the meta/buffer throughout the GStreamer pipeline (when working with source code) [Thx @ryanppeters]
 - Add support for new Object Detection models in `od-detection-model` (Person Head and Person Head ACCURATE)
 
 ZED SDK v3.7
 -------------
+
 - Fix issue with texture confidence threshold invalidating the depth map
 - Add support for NEURAL depth mode
 
 ZED SDK v3.5
 -------------
+
 - Add compatibility fix for ZED SDK v3.5
 - Add support for new camera model "ZED 2i"
 - Improve Depth Handling and new `zedsrc` parameters
@@ -63,17 +115,20 @@ ZED SDK v3.5
 
 ZED SDK v3.4
 -------------
+
 - Add compatibility fix for ZED SDK v3.4
 - Add support for UINT16 Depth map
 
 ZED SDK v3.3 (2020-11-27)
 --------------------------
+
 - Add compatibility fix for ZED SDK v3.3
 - Add support for multiple OD class
 - Add support for MULTICLASS ACCURATE
 
 Release v0.1 (2020-08-24)
 --------------------------
+
 - ZED GStreamer package for Linux and Windows
 - zedsrc: acquires camera color image and depth map and pushes them in a GStreamer pipeline.
 - zedmeta: GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data).

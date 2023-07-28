@@ -21,56 +21,51 @@
 
 #include "gstzedmeta.h"
 #include <gst/gstbuffer.h>
-#include <gst/video/video.h>
 #include <gst/video/gstvideofilter.h>
 #include <gst/video/gstvideometa.h>
+#include <gst/video/video.h>
 
 #ifndef GST_DISABLE_GST_DEBUG
 #define GST_CAT_DEFAULT ensure_debug_category()
-static GstDebugCategory *
-ensure_debug_category (void)
-{
+static GstDebugCategory *ensure_debug_category(void) {
     static gsize cat_gonce = 0;
 
-    if (g_once_init_enter (&cat_gonce)) {
+    if (g_once_init_enter(&cat_gonce)) {
         gsize cat_done;
 
-        cat_done = (gsize) _gst_debug_category_new ("zedsrcmeta", 0, "zedsrcmeta");
+        cat_done = (gsize) _gst_debug_category_new("zedsrcmeta", 0, "zedsrcmeta");
 
-        g_once_init_leave (&cat_gonce, cat_done);
+        g_once_init_leave(&cat_gonce, cat_done);
     }
 
     return (GstDebugCategory *) cat_gonce;
 }
 #else
 #define ensure_debug_category() /* NOOP */
-#endif /* GST_DISABLE_GST_DEBUG */
+#endif                          /* GST_DISABLE_GST_DEBUG */
 
-GType gst_zed_src_meta_api_get_type()
-{
-    GST_TRACE( "gst_zed_src_meta_api_get_type");
+GType gst_zed_src_meta_api_get_type() {
+    GST_TRACE("gst_zed_src_meta_api_get_type");
 
     static GType type;
 
-    static const gchar *tags[] =
-    { /*GST_META_TAG_VIDEO_STR, GST_META_TAG_VIDEO_SIZE_STR,
-        GST_META_TAG_VIDEO_ORIENTATION_STR,*/ NULL
-    };
+    static const gchar *tags[] = {/*GST_META_TAG_VIDEO_STR, GST_META_TAG_VIDEO_SIZE_STR,
+                                    GST_META_TAG_VIDEO_ORIENTATION_STR,*/
+                                  NULL};
 
-    if (g_once_init_enter (&type)) {
-        GType _type = gst_meta_api_type_register( "GstZedSrcMetaAPI", tags );
+    if (g_once_init_enter(&type)) {
+        GType _type = gst_meta_api_type_register("GstZedSrcMetaAPI", tags);
 
-        g_once_init_leave (&type, _type);
+        g_once_init_leave(&type, _type);
     }
 
     return type;
 }
 
-static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer* buffer)
-{
-    GST_TRACE( "gst_zed_src_meta_init");
+static gboolean gst_zed_src_meta_init(GstMeta *meta, gpointer params, GstBuffer *buffer) {
+    GST_TRACE("gst_zed_src_meta_init");
 
-    GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
+    GstZedSrcMeta *emeta = (GstZedSrcMeta *) meta;
 
     emeta->info.cam_model = 0;
     emeta->info.stream_type = 0;
@@ -87,15 +82,13 @@ static gboolean gst_zed_src_meta_init(GstMeta * meta, gpointer params, GstBuffer
     return true;
 }
 
-static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
-                                            GstBuffer* buffer, GQuark type, gpointer data)
-{
-    GST_TRACE( "gst_zed_src_meta_transform [%u]", type);
+static gboolean gst_zed_src_meta_transform(GstBuffer *transbuf, GstMeta *meta, GstBuffer *buffer, GQuark type, gpointer data) {
+    GST_TRACE("gst_zed_src_meta_transform [%u]", type);
 
-    GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
+    GstZedSrcMeta *emeta = (GstZedSrcMeta *) meta;
 
     // ----> Scale transformation
-    // TODO understand how `videoscale` filter hands this part because there is something weird with
+    // TODO understand how `videoscale` filter handleds this part because there is something weird with
     //      metadata tags handling
     //    if( GST_VIDEO_META_TRANSFORM_IS_SCALE(type) )
     //    {
@@ -112,78 +105,55 @@ static gboolean gst_zed_src_meta_transform( GstBuffer* transbuf, GstMeta * meta,
     //    }
     // <---- Scale transformation
 
-    if(GST_META_TRANSFORM_IS_COPY(type))
-    {
-        GST_DEBUG( "Transform copy" );
+    if (GST_META_TRANSFORM_IS_COPY(type)) {
+        GST_DEBUG("Transform copy");
     }
 
-    gst_buffer_add_zed_src_meta( transbuf,
-                                 emeta->info,
-                                 emeta->pose,
-                                 emeta->sens,
-                                 emeta->od_enabled,
-                                 emeta->obj_count,
-                                 emeta->objects, 
-                                 emeta->frame_id);
-
+    gst_buffer_add_zed_src_meta(transbuf, emeta->info, emeta->pose, emeta->sens, emeta->od_enabled, emeta->obj_count, emeta->objects, emeta->frame_id);
 
     return TRUE;
 }
 
-static void gst_zed_src_meta_free(GstMeta * meta, GstBuffer * buffer)
-{
-    GST_TRACE( "gst_zed_src_meta_free" );
+static void gst_zed_src_meta_free(GstMeta *meta, GstBuffer *buffer) {
+    GST_TRACE("gst_zed_src_meta_free");
 
-    GstZedSrcMeta* emeta = (GstZedSrcMeta*) meta;
+    GstZedSrcMeta *emeta = (GstZedSrcMeta *) meta;
 }
 
-const GstMetaInfo* gst_zed_src_meta_get_info (void)
-{
-    GST_TRACE( "gst_zed_src_meta_get_info" );
+const GstMetaInfo *gst_zed_src_meta_get_info(void) {
+    GST_TRACE("gst_zed_src_meta_get_info");
 
     static const GstMetaInfo *meta_info = NULL;
 
-    if (g_once_init_enter (&meta_info)) {
-        const GstMetaInfo *mi = gst_meta_register(GST_ZED_SRC_META_API_TYPE,
-                                                  "GstZedSrcMeta",
-                                                  sizeof(GstZedSrcMeta),
-                                                  gst_zed_src_meta_init,
-                                                  gst_zed_src_meta_free,
-                                                  gst_zed_src_meta_transform);
-        g_once_init_leave( &meta_info, mi );
-
+    if (g_once_init_enter(&meta_info)) {
+        const GstMetaInfo *mi = gst_meta_register(GST_ZED_SRC_META_API_TYPE, "GstZedSrcMeta", sizeof(GstZedSrcMeta), gst_zed_src_meta_init,
+                                                  gst_zed_src_meta_free, gst_zed_src_meta_transform);
+        g_once_init_leave(&meta_info, mi);
     }
 
     return meta_info;
 }
 
-GstZedSrcMeta* gst_buffer_add_zed_src_meta( GstBuffer* buffer,
-                                            ZedInfo &info,
-                                            ZedPose &pose,
-                                            ZedSensors& sens,
-                                            gboolean od_enabled,
-                                            guint8 obj_count,
-                                            ZedObjectData* objects,
-                                            guint64 frame_id)
-{
-    GST_TRACE( "gst_buffer_add_zed_src_meta" );
+GstZedSrcMeta *gst_buffer_add_zed_src_meta(GstBuffer *buffer, ZedInfo &info, ZedPose &pose, ZedSensors &sens, gboolean od_enabled, guint8 obj_count,
+                                           ZedObjectData *objects, guint64 frame_id) {
+    GST_TRACE("gst_buffer_add_zed_src_meta");
 
     GST_DEBUG("Add GstZedSrcMeta");
 
-    GstZedSrcMeta* meta;
+    GstZedSrcMeta *meta;
 
-    g_return_val_if_fail (GST_IS_BUFFER (buffer), NULL);
+    g_return_val_if_fail(GST_IS_BUFFER(buffer), NULL);
 
-    meta = (GstZedSrcMeta *) gst_buffer_add_meta( buffer, GST_ZED_SRC_META_INFO, NULL);
+    meta = (GstZedSrcMeta *) gst_buffer_add_meta(buffer, GST_ZED_SRC_META_INFO, NULL);
 
-    memcpy( &meta->info, &info, sizeof(ZedInfo));
-    memcpy( &meta->pose, &pose, sizeof(ZedPose));
-    memcpy( &meta->sens, &sens, sizeof(ZedSensors));
+    memcpy(&meta->info, &info, sizeof(ZedInfo));
+    memcpy(&meta->pose, &pose, sizeof(ZedPose));
+    memcpy(&meta->sens, &sens, sizeof(ZedSensors));
 
     meta->od_enabled = od_enabled;
     meta->obj_count = obj_count;
 
-    memcpy( &meta->objects, objects, obj_count*sizeof(ZedObjectData));
+    memcpy(&meta->objects, objects, obj_count * sizeof(ZedObjectData));
 
     meta->frame_id = frame_id;
 
