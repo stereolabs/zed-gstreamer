@@ -1,8 +1,8 @@
 LATEST CHANGES
 ==============
 
-ZED SDK v4.0
--------------
+ZED SDK v4.0.8
+--------------
 
 * Compatible with ZED SDK v4.x.y
 * Add support for ZED X and ZED X Mini cameras
