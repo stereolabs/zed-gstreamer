@@ -11,6 +11,16 @@ set(CMAKE_SHARED_LIBRARY_PREFIX "lib")
 # add local cmake modules
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
 
+include(FindNVTegraRelease)
+FindNVTegraRelease()
+
+if(L4T_FOUND)
+    message("Running on NVIDIA Jetson")
+    message(" * Release Version: ${L4T_RELEASE}")
+    message(" * Revision: ${L4T_REVISION}")
+    message(" * Patch: ${L4T_PATCH}")
+endif()
+
 include(MacroLogFeature)
 
 find_package(GStreamer REQUIRED COMPONENTS base)
@@ -48,7 +58,7 @@ include_directories(
     )
 
 # values used when registering plugins
-add_definitions(-DGST_PACKAGE_VERSION="3.5")
+add_definitions(-DGST_PACKAGE_VERSION="4.1")
 add_definitions(-DGST_PACKAGE_LICENSE="LGPL")
 add_definitions(-DGST_PACKAGE_ORIGIN="https://github.com/stereolabs/zed-gstreamer")
 add_definitions(-DGST_PACKAGE_NAME="${CMAKE_PROJECT_NAME}")
@@ -121,6 +131,13 @@ if(ZED_FOUND)
     add_subdirectory(gst-zed-src)
 else()
     message( "ZED SDK not available. 'zedsrc' will not be installed")
+endif()
+if(L4T_FOUND) 
+    if(L4T_RELEASE EQUAL "35")
+        if(${L4T_REVISION} EQUAL "3" OR ${L4T_REVISION} EQUAL "4" )
+            add_subdirectory(gst-zedxone-src)
+        endif()
+    endif()
 endif()
 add_subdirectory(gst-zed-demux)
 add_subdirectory(gst-zed-data-mux)

@@ -24,7 +24,7 @@
 #include <gst/video/video.h>
 
 #include "gst-zed-meta/gstzedmeta.h"
-#include "gstzedsrc.h"
+#include "gstzedxonesrc.h"
 
 // AI Module
 #define OD_INSTANCE_MODULE_ID 0
