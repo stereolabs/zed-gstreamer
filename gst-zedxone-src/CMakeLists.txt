@@ -17,6 +17,8 @@ add_library(${libname} MODULE
 		${HEADERS}
 )
 
+message("   ${libname}: OS Unix - L4T")
+
 if (CMAKE_BUILD_TYPE EQUAL "DEBUG")
 		message("   ${libname}: Debug mode")
 		add_definitions(-g)
