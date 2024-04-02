@@ -53,7 +53,7 @@ include_directories(
     .
     ${GSTREAMER_INCLUDE_DIR}
     ${GLIB2_INCLUDE_DIR}
-    )
+)
 
 # values used when registering plugins
 add_definitions(-DGST_PACKAGE_VERSION="4.1")
@@ -61,6 +61,8 @@ add_definitions(-DGST_PACKAGE_LICENSE="LGPL")
 add_definitions(-DGST_PACKAGE_ORIGIN="https://github.com/stereolabs/zed-gstreamer")
 add_definitions(-DGST_PACKAGE_NAME="${CMAKE_PROJECT_NAME}")
 add_definitions(-DPACKAGE="${CMAKE_PROJECT_NAME} package")
+
+add_definitions(-Werror=return-type)
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     if(WIN32)
