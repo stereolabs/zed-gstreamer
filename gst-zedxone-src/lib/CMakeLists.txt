@@ -1,7 +1,21 @@
 cmake_minimum_required(VERSION "3.6")
 project(zedarguscapture)
 
+################################################
+## Generate symbols for IDE indexer (VSCode)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
+endif()
+
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+
+add_definitions(-Werror=return-type)
 
 set(libname zedarguscapture)
 

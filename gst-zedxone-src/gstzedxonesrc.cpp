@@ -93,7 +93,7 @@ typedef enum {
 // INITIALIZATION
 #define DEFAULT_PROP_CAM_RES        GST_ZEDXONESRC_1080P
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDXONESRC_15FPS
-#define DEFAULT_PROP_VERBOSE_LVL    3
+#define DEFAULT_PROP_VERBOSE_LVL    4
 #define DEFAULT_PROP_CAM_ID         0
 //#define DEFAULT_PROP_CAM_SN         0
 
@@ -681,7 +681,6 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     int major, minor, patch;
     oc::ArgusVirtualCapture::getVersion(major, minor, patch);
     GST_INFO("ZED Argus Capture Version: %d.%d.%d",major,minor,patch);
-
 
     std::vector<oc::ArgusDevice> devs = oc::ArgusBayerCapture::getArgusDevices();
     for (int i = 0; i < devs.size(); i++) {
