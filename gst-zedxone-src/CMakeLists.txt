@@ -10,7 +10,9 @@ set(HEADERS
   gstzedxonesrc.h
 )
 
-link_directories(${LIBRARY_INSTALL_DIR})
+link_directories(
+  ${LIBRARY_INSTALL_DIR}
+)
 
 message( " * ${libname} plugin added")
 
@@ -36,7 +38,7 @@ target_link_libraries (
   ${GSTREAMER_LIBRARY}
   ${GSTREAMER_BASE_LIBRARY}
   ${GSTREAMER_VIDEO_LIBRARY}
-  ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
+  ${CMAKE_CURRENT_BINARY_DIR}/lib/libzedarguscapture.so  
 )
 
 install(TARGETS ${libname} LIBRARY DESTINATION ${PLUGIN_INSTALL_DIR})

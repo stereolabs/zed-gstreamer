@@ -93,7 +93,7 @@ typedef enum {
 // INITIALIZATION
 #define DEFAULT_PROP_CAM_RES        GST_ZEDXONESRC_1080P
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDXONESRC_15FPS
-#define DEFAULT_PROP_VERBOSE_LVL    0
+#define DEFAULT_PROP_VERBOSE_LVL    3
 #define DEFAULT_PROP_CAM_ID         0
 //#define DEFAULT_PROP_CAM_SN         0
 
@@ -678,9 +678,25 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
       return FALSE;
     }
 
+    int major, minor, patch;
+    oc::ArgusVirtualCapture::getVersion(major, minor, patch);
+    GST_INFO("ZED Argus Capture Version: %d.%d.%d",major,minor,patch);
+
+
+    std::vector<oc::ArgusDevice> devs = oc::ArgusBayerCapture::getArgusDevices();
+    for (int i = 0; i < devs.size(); i++) {
+        GST_INFO("##################");
+        GST_INFO(" Device: %d",devs.at(i).id);
+        GST_INFO(" Name: %s",devs.at(i).name.c_str());
+        GST_INFO(" Badge: %s",devs.at(i).badge.c_str());
+        GST_INFO(" Available: %s",(devs.at(i).available?"TRUE":"FALSE"));
+    }
+    GST_INFO("***********************");
+
+
     GST_INFO("CAMERA INITIALIZATION PARAMETERS");
 
-    oc::ArgusCameraConfig config;    
+    oc::ArgusCameraConfig config;
     config.mDeviceId = src->camera_id;
     GST_INFO(" * Camera ID: %d", src->camera_id);
     config.mWidth = width;
@@ -688,15 +704,17 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Camera resolution: %d x %d", (int)width, (int)height);
     config.mFPS = src->camera_fps;
     GST_INFO(" * Camera FPS: %d", src->camera_fps);
-    config.mChannel = 4;
+    //config.mChannel = 4;
     GST_INFO(" * Camera channels: %d", config.mChannel);
-    config.mSwapRB = src->swap_rb;
-    GST_INFO(" * Camera resolution: %s", (src->swap_rb?"TRUE":"FALSE"));
+    //config.mSwapRB = src->swap_rb;
+    GST_INFO(" * Swap RB: %s", (src->swap_rb?"TRUE":"FALSE"));
     config.verbose_level = src->verbose_level;
-    GST_INFO(" * Verbose level: %d", src->verbose_level);    
+    GST_INFO(" * Verbose level: %d", src->verbose_level);
     // <---- Set config parameters
 
     // ----> Open camera
+    GST_INFO("Camera opening: #%d", (int)config.mDeviceId);
+
     oc::ARGUS_STATE ret = src->zed.openCamera(config);
 
     if (ret != oc::ARGUS_STATE::OK) {
@@ -704,6 +722,9 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
                           ("Failed to open camera, '%s'", oc::ARGUS_STATE2str(ret).c_str()), (NULL));
         return FALSE;
     }
+    GST_INFO("Camera ready");
+    GST_INFO(" * %dx%d@%dFPS", src->zed.getWidth(), src->zed.getHeight(),
+             src->zed.getFPS());
     // <---- Open camera
 
     // ----> Camera Controls
@@ -798,7 +819,6 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_fill");
 
-    sl::ERROR_CODE ret;
     GstMapInfo minfo;
     GstClock *clock;
     GstClockTime clock_time;
@@ -811,34 +831,12 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         src->is_started = TRUE;
     }
 
-    // ----> Set runtime parameters
-    sl::RuntimeParameters zedRtParams;   // runtime parameters
-
-    GST_TRACE_OBJECT(src, "CAMERA RUNTIME PARAMETERS");
-    if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
-        zedRtParams.enable_depth = false;
-    } else {
-        zedRtParams.enable_depth = true;
+    // ----> Check if a new frame is available
+    // TODO(Walter) USe a while to wait for a new frame?
+    if(!src->zed.isNewFrame()) {
+      return GST_FLOW_OK;
     }
-    zedRtParams.confidence_threshold = src->confidence_threshold;
-    zedRtParams.texture_confidence_threshold = src->texture_confidence_threshold;
-    zedRtParams.measure3D_reference_frame =
-        static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
-    zedRtParams.enable_fill_mode = src->fill_mode;
-    zedRtParams.remove_saturated_areas = true;
-    // <---- Set runtime parameters
-
-    // ----> ZED grab
-    ret = src->zed.grab(zedRtParams);
-
-    if (ret != sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
-                           sl::toVerbose(ret).c_str()),
-                          (NULL));
-        return GST_FLOW_ERROR;
-    }
-    // <---- ZED grab
+    // <---- Check if a new frame is available
 
     // ----> Clock update
     clock = gst_element_get_clock(GST_ELEMENT(src));
@@ -852,432 +850,82 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         return GST_FLOW_ERROR;
     }
 
-    // ZED Mats
-    sl::Mat left_img;
-    sl::Mat right_img;
-    sl::Mat depth_data;
-
-    // ----> Mats retrieving
-    if (src->stream_type == GST_ZEDXONESRC_ONLY_LEFT) {
-        ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
-    } else if (src->stream_type == GST_ZEDXONESRC_ONLY_RIGHT) {
-        ret = src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU);
-    } else if (src->stream_type == GST_ZEDXONESRC_LEFT_RIGHT) {
-        ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
-        ret = src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU);
-    } else if (src->stream_type == GST_ZEDXONESRC_DEPTH_16) {
-        ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU);
-    } else if (src->stream_type == GST_ZEDXONESRC_LEFT_DEPTH) {
-        ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
-        ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU);
-    }
-
-    if (ret != sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
-                           sl::toVerbose(ret).c_str()),
-                          (NULL));
+    // ----> Check memory size
+    gsize data_size = static_cast<gsize>(src->zed.getWidth() * src->zed.getHeight() *
+                    src->zed.getNumberOfChannels());
+    if(minfo.size!=data_size) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("ZED X One Data size mismatch!"), (NULL));
         return GST_FLOW_ERROR;
     }
-    // <---- Mats retrieving
+    // <---- Check memory size
 
     // ----> Memory copy
-    if (src->stream_type == GST_ZEDXONESRC_DEPTH_16) {
-        memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
-    } else if (src->stream_type == GST_ZEDXONESRC_LEFT_RIGHT) {
-        // Left RGB data on half top
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
-
-        // Right RGB data on half bottom
-        memcpy((minfo.data + minfo.size / 2), right_img.getPtr<sl::uchar4>(), minfo.size / 2);
-    } else if (src->stream_type == GST_ZEDXONESRC_LEFT_DEPTH) {
-        // RGB data on half top
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
-
-        // Depth data on half bottom
-        uint32_t *gst_data = (uint32_t *) (minfo.data + minfo.size / 2);
-
-        sl::float1 *depthDataPtr = depth_data.getPtr<sl::float1>();
-
-        for (unsigned long i = 0; i < minfo.size / 8; i++) {
-            *(gst_data++) = static_cast<uint32_t>(*(depthDataPtr++));
-
-            // printf( "#%lu: %u / %g %u \n", i, *(gst_data-1), *(depthDataPtr-1),
-            // static_cast<uint32_t>(*(depthDataPtr-1)));
-        }
-    } else {
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
-    }
+    memcpy(minfo.data, src->zed.getPixels(), minfo.size);
     // <---- Memory copy
 
-    // ----> Info metadata
-    sl::CameraInformation cam_info = src->zed.getCameraInformation();
-    ZedInfo info;
-    info.cam_model = (gint) cam_info.camera_model;
-    info.stream_type = src->stream_type;
-    info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
-    info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
-    if (info.grab_single_frame_height == 752 || info.grab_single_frame_height == 1440 ||
-        info.grab_single_frame_height == 2160 || info.grab_single_frame_height == 2484) {
-        info.grab_single_frame_height /= 2;   // Only half buffer size if the stream is composite
-    }
-    // <---- Info metadata
+    // // ----> Info metadata
+    // sl::CameraInformation cam_info = src->zed.getCameraInformation();
+    // ZedInfo info;
+    // info.cam_model = (gint) cam_info.camera_model;
+    // info.stream_type = src->stream_type;
+    // info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
+    // info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
+    // if (info.grab_single_frame_height == 752 || info.grab_single_frame_height == 1440 ||
+    //     info.grab_single_frame_height == 2160 || info.grab_single_frame_height == 2484) {
+    //     info.grab_single_frame_height /= 2;   // Only half buffer size if the stream is composite
+    // }
+    // // <---- Info metadata
 
-    // ----> Positional Tracking metadata
-    ZedPose pose;
-    if (src->pos_tracking) {
-        sl::Pose cam_pose;
-        sl::POSITIONAL_TRACKING_STATE state = src->zed.getPosition(cam_pose);
+    // // ----> Sensors metadata
+    // ZedSensors sens;
+    // if (src->zed.getCameraInformation().camera_model != sl::MODEL::ZED) {
+    //     sens.sens_avail = TRUE;
+    //     sens.imu.imu_avail = TRUE;
 
-        sl::Translation pos = cam_pose.getTranslation();
-        pose.pose_avail = true;
-        pose.pos_tracking_state = static_cast<int>(state);
-        pose.pos[0] = pos(0);
-        pose.pos[1] = pos(1);
-        pose.pos[2] = pos(2);
+    //     sl::SensorsData sens_data;
+    //     src->zed.getSensorsData(sens_data, sl::TIME_REFERENCE::IMAGE);
 
-        sl::Orientation orient = cam_pose.getOrientation();
-        sl::float3 euler = orient.getRotationMatrix().getEulerAngles();
-        pose.orient[0] = euler[0];
-        pose.orient[1] = euler[1];
-        pose.orient[2] = euler[2];
-    } else {
-        pose.pose_avail = FALSE;
-        pose.pos_tracking_state = static_cast<int>(sl::POSITIONAL_TRACKING_STATE::OFF);
-        pose.pos[0] = 0.0;
-        pose.pos[1] = 0.0;
-        pose.pos[2] = 0.0;
-        pose.orient[0] = 0.0;
-        pose.orient[1] = 0.0;
-        pose.orient[2] = 0.0;
-    }
-    // <---- Positional Tracking
+    //     sens.imu.acc[0] = sens_data.imu.linear_acceleration.x;
+    //     sens.imu.acc[1] = sens_data.imu.linear_acceleration.y;
+    //     sens.imu.acc[2] = sens_data.imu.linear_acceleration.z;
+    //     sens.imu.gyro[0] = sens_data.imu.angular_velocity.x;
+    //     sens.imu.gyro[1] = sens_data.imu.angular_velocity.y;
+    //     sens.imu.gyro[2] = sens_data.imu.angular_velocity.z;
 
-    // ----> Sensors metadata
-    ZedSensors sens;
-    if (src->zed.getCameraInformation().camera_model != sl::MODEL::ZED) {
-        sens.sens_avail = TRUE;
-        sens.imu.imu_avail = TRUE;
+    //     if (src->zed.getCameraInformation().camera_model != sl::MODEL::ZED_M) {
+    //         sens.mag.mag_avail = TRUE;
+    //         sens.mag.mag[0] = sens_data.magnetometer.magnetic_field_calibrated.x;
+    //         sens.mag.mag[1] = sens_data.magnetometer.magnetic_field_calibrated.y;
+    //         sens.mag.mag[2] = sens_data.magnetometer.magnetic_field_calibrated.z;
+    //         sens.env.env_avail = TRUE;
 
-        sl::SensorsData sens_data;
-        src->zed.getSensorsData(sens_data, sl::TIME_REFERENCE::IMAGE);
+    //         float temp;
+    //         sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::BAROMETER,
+    //                                   temp);
+    //         sens.env.temp = temp;
+    //         sens.env.press = sens_data.barometer.pressure * 1e-2;
 
-        sens.imu.acc[0] = sens_data.imu.linear_acceleration.x;
-        sens.imu.acc[1] = sens_data.imu.linear_acceleration.y;
-        sens.imu.acc[2] = sens_data.imu.linear_acceleration.z;
-        sens.imu.gyro[0] = sens_data.imu.angular_velocity.x;
-        sens.imu.gyro[1] = sens_data.imu.angular_velocity.y;
-        sens.imu.gyro[2] = sens_data.imu.angular_velocity.z;
-
-        if (src->zed.getCameraInformation().camera_model != sl::MODEL::ZED_M) {
-            sens.mag.mag_avail = TRUE;
-            sens.mag.mag[0] = sens_data.magnetometer.magnetic_field_calibrated.x;
-            sens.mag.mag[1] = sens_data.magnetometer.magnetic_field_calibrated.y;
-            sens.mag.mag[2] = sens_data.magnetometer.magnetic_field_calibrated.z;
-            sens.env.env_avail = TRUE;
-
-            float temp;
-            sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::BAROMETER,
-                                      temp);
-            sens.env.temp = temp;
-            sens.env.press = sens_data.barometer.pressure * 1e-2;
-
-            float tempL, tempR;
-            sens_data.temperature.get(
-                sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_LEFT, tempL);
-            sens_data.temperature.get(
-                sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_RIGHT, tempR);
-            sens.temp.temp_avail = TRUE;
-            sens.temp.temp_cam_left = tempL;
-            sens.temp.temp_cam_right = tempR;
-        } else {
-            sens.mag.mag_avail = FALSE;
-            sens.env.env_avail = FALSE;
-            sens.temp.temp_avail = FALSE;
-        }
-    } else {
-        sens.sens_avail = FALSE;
-        sens.imu.imu_avail = FALSE;
-        sens.mag.mag_avail = FALSE;
-        sens.env.env_avail = FALSE;
-        sens.temp.temp_avail = FALSE;
-    }
-    // <---- Sensors metadata metadata
-
-    ZedObjectData
-        obj_data[256];   // Common Array for Detected Object and Tracked Skeletons metadata
-    guint8 obj_count = 0;
-
-    // ----> Object detection metadata
-    if (src->object_detection) {
-        GST_LOG_OBJECT(src, "Object Detection enabled");
-
-        sl::ObjectDetectionRuntimeParameters rt_params;
-        rt_params.detection_confidence_threshold = src->od_det_conf;
-
-        std::vector<sl::OBJECT_CLASS> class_filter;
-        if (src->od_person_conf > 0.0f)
-            class_filter.push_back(sl::OBJECT_CLASS::PERSON);
-        if (src->od_vehicle_conf > 0.0f)
-            class_filter.push_back(sl::OBJECT_CLASS::VEHICLE);
-        if (src->od_animal_conf > 0.0f)
-            class_filter.push_back(sl::OBJECT_CLASS::ANIMAL);
-        if (src->od_bag_conf > 0.0f)
-            class_filter.push_back(sl::OBJECT_CLASS::BAG);
-        if (src->od_electronics_conf > 0.0f)
-            class_filter.push_back(sl::OBJECT_CLASS::ELECTRONICS);
-        if (src->od_fruit_vegetable_conf > 0.0f)
-            class_filter.push_back(sl::OBJECT_CLASS::FRUIT_VEGETABLE);
-        if (src->od_sport_conf > 0.0f)
-            class_filter.push_back(sl::OBJECT_CLASS::SPORT);
-        rt_params.object_class_filter = class_filter;
-
-        std::map<sl::OBJECT_CLASS, float> class_det_conf;
-        class_det_conf[sl::OBJECT_CLASS::PERSON] = src->od_person_conf;
-        class_det_conf[sl::OBJECT_CLASS::VEHICLE] = src->od_vehicle_conf;
-        class_det_conf[sl::OBJECT_CLASS::ANIMAL] = src->od_animal_conf;
-        class_det_conf[sl::OBJECT_CLASS::ELECTRONICS] = src->od_electronics_conf;
-        class_det_conf[sl::OBJECT_CLASS::BAG] = src->od_bag_conf;
-        class_det_conf[sl::OBJECT_CLASS::FRUIT_VEGETABLE] = src->od_fruit_vegetable_conf;
-        class_det_conf[sl::OBJECT_CLASS::SPORT] = src->od_sport_conf;
-
-        rt_params.object_class_detection_confidence_threshold = class_det_conf;
-
-        sl::Objects det_objs;
-        sl::ERROR_CODE ret = src->zed.retrieveObjects(det_objs, rt_params, OD_INSTANCE_MODULE_ID);
-
-        if (ret == sl::ERROR_CODE::SUCCESS) {
-            if (det_objs.is_new) {
-                GST_LOG_OBJECT(src, "OD new data");
-
-                obj_count = det_objs.object_list.size();
-
-                GST_LOG_OBJECT(src, "Number of detected objects: %d", obj_count);
-
-                uint8_t idx = 0;
-                for (auto i = det_objs.object_list.begin(); i != det_objs.object_list.end(); ++i) {
-                    sl::ObjectData obj = *i;
-
-                    obj_data[idx].skeletons_avail =
-                        FALSE;   // No Skeleton info for Object Detection
-
-                    obj_data[idx].id = obj.id;
-                    GST_LOG_OBJECT(src, " * [%d] Object id: %d", idx, obj.id);
-
-                    obj_data[idx].label = static_cast<OBJECT_CLASS>(obj.label);
-                    GST_LOG_OBJECT(src, " * [%d] Label: %s", idx, sl::toString(obj.label).c_str());
-
-                    obj_data[idx].sublabel = static_cast<OBJECT_SUBCLASS>(obj.sublabel);
-                    GST_LOG_OBJECT(src, " * [%d] Sublabel: %s", idx,
-                                   sl::toString(obj.sublabel).c_str());
-
-                    obj_data[idx].tracking_state =
-                        static_cast<OBJECT_TRACKING_STATE>(obj.tracking_state);
-                    GST_LOG_OBJECT(src, " * [%d] Tracking state: %s", idx,
-                                   sl::toString(obj.tracking_state).c_str());
-
-                    obj_data[idx].action_state = static_cast<OBJECT_ACTION_STATE>(obj.action_state);
-                    GST_LOG_OBJECT(src, " * [%d] Action state: %s", idx,
-                                   sl::toString(obj.action_state).c_str());
-
-                    obj_data[idx].confidence = obj.confidence;
-                    GST_LOG_OBJECT(src, " * [%d] Object confidence: %g", idx, obj.confidence);
-
-                    memcpy(obj_data[idx].position, (void *) obj.position.ptr(), 3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied position", idx);
-                    memcpy(obj_data[idx].position_covariance, (void *) obj.position_covariance,
-                           6 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied covariance", idx);
-                    memcpy(obj_data[idx].velocity, (void *) obj.velocity.ptr(), 3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied velocity", idx);
-
-                    if (obj.bounding_box_2d.size() > 0) {
-                        memcpy((uint8_t *) obj_data[idx].bounding_box_2d,
-                               (uint8_t *) obj.bounding_box_2d.data(),
-                               obj.bounding_box_2d.size() * 2 * sizeof(unsigned int));
-                        GST_LOG_OBJECT(src, " * [%d] Copied bbox 2D - %lu", idx,
-                                       8 * sizeof(unsigned int));
-                    } else {
-                        GST_LOG_OBJECT(src, " * [%d] bounding_box_2d empty", idx);
-                    }
-
-                    if (obj.bounding_box.size() > 0) {
-                        memcpy(obj_data[idx].bounding_box_3d, (void *) obj.bounding_box.data(),
-                               24 * sizeof(float));
-                        GST_LOG_OBJECT(src, " * [%d] Copied bbox 3D - %lu", idx,
-                                       24 * sizeof(float));
-                    } else {
-                        GST_LOG_OBJECT(src, " * [%d] bounding_box empty", idx);
-                    }
-
-                    memcpy(obj_data[idx].dimensions, (void *) obj.dimensions.ptr(),
-                           3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied dimensions", idx);
-
-                    idx++;
-                }
-            } else {
-                obj_count = 0;
-            }
-        } else {
-            GST_WARNING_OBJECT(src, "Object detection problem: '%s' - %s",
-                               sl::toString(ret).c_str(), sl::toVerbose(ret).c_str());
-        }
-    }
-    // <---- Object detection metadata
-
-    // ----> Body Tracking metadata
-    if (src->body_tracking) {
-        guint8 b_idx = obj_count;
-
-        GST_LOG_OBJECT(src, "Body Tracking enabled");
-
-        sl::BodyTrackingRuntimeParameters rt_params;
-        rt_params.detection_confidence_threshold = src->bt_rt_det_conf;
-        rt_params.minimum_keypoints_threshold = src->bt_rt_min_kp_thresh;
-        rt_params.skeleton_smoothing = src->bt_rt_skel_smoothing;
-
-        sl::Bodies bodies;
-        sl::ERROR_CODE ret = src->zed.retrieveBodies(bodies, rt_params, BT_INSTANCE_MODULE_ID);
-
-        if (ret == sl::ERROR_CODE::SUCCESS) {
-            if (bodies.is_new) {
-                GST_LOG_OBJECT(src, "BT new data");
-
-                int bodies_count = bodies.body_list.size();
-
-                GST_LOG_OBJECT(src, "Number of detected bodies: %d", bodies_count);
-                obj_count += bodies_count;
-
-                for (auto i = bodies.body_list.begin(); i != bodies.body_list.end(); ++i) {
-                    sl::BodyData obj = *i;
-
-                    // ----> General Info
-                    obj_data[b_idx].skeletons_avail = TRUE;   // Skeleton info is available
-
-                    obj_data[b_idx].id = obj.id;
-                    GST_LOG_OBJECT(src, " * [%d] Object id: %d", b_idx, obj.id);
-
-                    obj_data[b_idx].label = OBJECT_CLASS::PERSON;
-                    GST_LOG_OBJECT(src, " * [%d] Label: %s", b_idx,
-                                   sl::toString(sl::OBJECT_CLASS::PERSON).c_str());
-
-                    obj_data[b_idx].sublabel = OBJECT_SUBCLASS::PERSON;
-                    GST_LOG_OBJECT(src, " * [%d] Sublabel: %s", b_idx,
-                                   sl::toString(sl::OBJECT_SUBCLASS::PERSON).c_str());
-
-                    obj_data[b_idx].tracking_state =
-                        static_cast<OBJECT_TRACKING_STATE>(obj.tracking_state);
-                    GST_LOG_OBJECT(src, " * [%d] Tracking state: %s", b_idx,
-                                   sl::toString(obj.tracking_state).c_str());
-
-                    obj_data[b_idx].action_state =
-                        static_cast<OBJECT_ACTION_STATE>(obj.action_state);
-                    GST_LOG_OBJECT(src, " * [%d] Action state: %s", b_idx,
-                                   sl::toString(obj.action_state).c_str());
-
-                    obj_data[b_idx].confidence = obj.confidence;
-                    GST_LOG_OBJECT(src, " * [%d] Object confidence: %g", b_idx, obj.confidence);
-
-                    memcpy(obj_data[b_idx].position, (void *) obj.position.ptr(),
-                           3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied position", b_idx);
-                    memcpy(obj_data[b_idx].position_covariance, (void *) obj.position_covariance,
-                           6 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied covariance", b_idx);
-                    memcpy(obj_data[b_idx].velocity, (void *) obj.velocity.ptr(),
-                           3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied velocity", b_idx);
-                    // <---- General Info
-
-                    // ----> Bounding Box
-                    if (obj.bounding_box_2d.size() > 0) {
-                        memcpy((uint8_t *) obj_data[b_idx].bounding_box_2d,
-                               (uint8_t *) obj.bounding_box_2d.data(),
-                               obj.bounding_box_2d.size() * 2 * sizeof(unsigned int));
-                        GST_LOG_OBJECT(src, " * [%d] Copied bbox 2D - %lu", b_idx,
-                                       8 * sizeof(unsigned int));
-                    } else {
-                        GST_LOG_OBJECT(src, " * [%d] bounding_box_2d empty", b_idx);
-                    }
-
-                    if (obj.bounding_box.size() > 0) {
-                        memcpy(obj_data[b_idx].bounding_box_3d, (void *) obj.bounding_box.data(),
-                               24 * sizeof(float));
-                        GST_LOG_OBJECT(src, " * [%d] Copied bbox 3D - %lu", b_idx,
-                                       24 * sizeof(float));
-                    } else {
-                        GST_LOG_OBJECT(src, " * [%d] bounding_box empty", b_idx);
-                    }
-
-                    memcpy(obj_data[b_idx].dimensions, (void *) obj.dimensions.ptr(),
-                           3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied dimensions", b_idx);
-                    // <---- Bounding Box
-
-                    // ----> Skeleton
-                    switch (static_cast<sl::BODY_FORMAT>(src->bt_format)) {
-                    case sl::BODY_FORMAT::BODY_18:
-                        obj_data[b_idx].skel_format = 18;
-                        break;
-                    case sl::BODY_FORMAT::BODY_34:
-                        obj_data[b_idx].skel_format = 34;
-                        break;
-                    case sl::BODY_FORMAT::BODY_38:
-                        obj_data[b_idx].skel_format = 38;
-                        break;
-                        // case sl::BODY_FORMAT::BODY_70:
-                        //     obj_data[b_idx].skel_format = 70;
-                        //     break;
-                    }
-
-                    if (obj.keypoint_2d.size() > 0) {
-                        memcpy(obj_data[b_idx].keypoint_2d, (void *) obj.keypoint_2d.data(),
-                               2 * obj_data[b_idx].skel_format * sizeof(float));
-                        GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 2d - %lu", b_idx,
-                                         obj.keypoint_2d.size());
-                    } else {
-                        GST_TRACE_OBJECT(src, " * [%d] keypoint_2d empty", b_idx);
-                    }
-                    if (obj.keypoint.size() > 0) {
-                        memcpy(obj_data[b_idx].keypoint_3d, (void *) obj.keypoint.data(),
-                               3 * obj_data[b_idx].skel_format * sizeof(float));
-                        GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 3d - %lu", b_idx,
-                                         obj.keypoint.size());
-                    } else {
-                        GST_TRACE_OBJECT(src, " * [%d] keypoint empty", b_idx);
-                    }
-
-                    if (obj.head_bounding_box_2d.size() > 0) {
-                        memcpy(obj_data[b_idx].head_bounding_box_2d,
-                               (void *) obj.head_bounding_box_2d.data(), 8 * sizeof(unsigned int));
-                        GST_TRACE_OBJECT(src, " * [%d] Copied head bbox 2d - %lu", b_idx,
-                                         obj.head_bounding_box_2d.size());
-                    } else {
-                        GST_TRACE_OBJECT(src, " * [%d] head_bounding_box_2d empty", b_idx);
-                    }
-                    if (obj.head_bounding_box.size() > 0) {
-                        memcpy(obj_data[b_idx].head_bounding_box_3d,
-                               (void *) obj.head_bounding_box.data(), 24 * sizeof(float));
-                        GST_TRACE_OBJECT(src, " * [%d] Copied head bbox 3d - %lu", b_idx,
-                                         obj.head_bounding_box.size());
-                    } else {
-                        GST_TRACE_OBJECT(src, " * [%d] head_bounding_box empty", b_idx);
-                    }
-                    memcpy(obj_data[b_idx].head_position, (void *) obj.head_position.ptr(),
-                           3 * sizeof(float));
-                    GST_TRACE_OBJECT(src, " * [%d] Copied head position", b_idx);
-                    // <---- Skeleton
-
-                    b_idx++;
-                }
-            }
-        } else {
-            GST_WARNING_OBJECT(src, "Body Tracking problem: '%s' - %s", sl::toString(ret).c_str(),
-                               sl::toVerbose(ret).c_str());
-        }
-    }
-    // <---- Body Tracking metadata
+    //         float tempL, tempR;
+    //         sens_data.temperature.get(
+    //             sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_LEFT, tempL);
+    //         sens_data.temperature.get(
+    //             sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_RIGHT, tempR);
+    //         sens.temp.temp_avail = TRUE;
+    //         sens.temp.temp_cam_left = tempL;
+    //         sens.temp.temp_cam_right = tempR;
+    //     } else {
+    //         sens.mag.mag_avail = FALSE;
+    //         sens.env.env_avail = FALSE;
+    //         sens.temp.temp_avail = FALSE;
+    //     }
+    // } else {
+    //     sens.sens_avail = FALSE;
+    //     sens.imu.imu_avail = FALSE;
+    //     sens.mag.mag_avail = FALSE;
+    //     sens.env.env_avail = FALSE;
+    //     sens.temp.temp_avail = FALSE;
+    // }
+    // // <---- Sensors metadata metadata
 
     // ----> Timestamp meta-data
     GST_BUFFER_TIMESTAMP(buf) =
@@ -1286,10 +934,10 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
     // <---- Timestamp meta-data
 
-    guint64 offset = GST_BUFFER_OFFSET(buf);
-    GstZedSrcMeta *meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
-                                                      src->object_detection | src->body_tracking,
-                                                      obj_count, obj_data, offset);
+    // guint64 offset = GST_BUFFER_OFFSET(buf);
+    // GstZedSrcMeta *meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
+    //                                                   src->object_detection | src->body_tracking,
+    //                                                   obj_count, obj_data, offset);
 
     // Buffer release
     gst_buffer_unmap(buf, &minfo);

@@ -1,14 +1,11 @@
-cmake_minimum_required(VERSION 2.8)
-project (arguscapture)
+cmake_minimum_required(VERSION "3.6")
+project(zedarguscapture)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(COMMAND cmake_policy)
-	cmake_policy(SET CMP0004 OLD)
-endif(COMMAND cmake_policy)
-set(LIB_NAME arguscapture)
+set(libname zedarguscapture)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_DEBUG_POSTFIX "d")
 
@@ -18,8 +15,6 @@ if(${TegraMM_FOUND})
 else()
   message(STATUS "Could not find Tegra Multimedia API")
 endif()
-
-
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES aarch64)
 set(TegraMM_LIBRARY_DIRS "/usr/lib/aarch64-linux-gnu" "/usr/lib/aarch64-linux-gnu/tegra")
@@ -45,7 +40,6 @@ include_directories(${HDR_FOLDER})
 FILE(GLOB_RECURSE ARGUS_CAPTURE_SRC "${SRC_FOLDER}/*.c*")
 FILE(GLOB_RECURSE ARGUS_CAPTURE_HDR "${HDR_FOLDER}/*.h*")
 
-
 ## Definitions
 add_definitions(-O3)
 
@@ -67,25 +61,24 @@ IF(NOT WIN32)
     ENDIF()
 ENDIF()
 
-message(${TegraMM_COMMON_SOURCES})
-message("          \n              ")
-message(${SPECIAL_OS_LIBS})
+message("TegraMM_COMMON_SOURCES:")
+message("${TegraMM_COMMON_SOURCES}")
+message("SPECIAL_OS_LIBS:")
+message("${SPECIAL_OS_LIBS}")
 
 ### Add sources for library
-add_library(${LIB_NAME} SHARED ${ARGUS_CAPTURE_SRC} ${ARGUS_CAPTURE_HDR} ${TegraMM_COMMON_SOURCES})
+add_library(${libname} SHARED ${ARGUS_CAPTURE_SRC} ${ARGUS_CAPTURE_HDR} ${TegraMM_COMMON_SOURCES})
+
 ### Link library with deps
-target_link_libraries(${LIB_NAME} ${SPECIAL_OS_LIBS})
+target_link_libraries(${libname} ${SPECIAL_OS_LIBS} drm X11)
 
-set(ARGUSCAPTURE_PUBLIC_INCLUDE_FILES "include/ArgusCapture.hpp")
-SET(ARGUS_CAPTURE_LIB_DIR /usr/local/lib)
-SET(ARGUS_CAPTURE_INC_DIR /usr/local/include)
-
-set_target_properties(${LIB_NAME}
-    PROPERTIES
-    PUBLIC_HEADER "${ARGUSCAPTURE_PUBLIC_INCLUDE_FILES}"
+set_target_properties(${libname} PROPERTIES
+    PUBLIC_HEADER "${ARGUS_CAPTURE_HDR}"
 )
 
-install(TARGETS ${LIB_NAME}
-  RUNTIME DESTINATION ${ARGUS_CAPTURE_LIB_DIR}
-  LIBRARY DESTINATION ${ARGUS_CAPTURE_LIB_DIR}
-  PUBLIC_HEADER DESTINATION ${ARGUS_CAPTURE_INC_DIR})
+install( TARGETS ${libname}
+    LIBRARY DESTINATION ${LIBRARY_INSTALL_DIR}
+    PUBLIC_HEADER DESTINATION ${INCLUDE_INSTALL_DIR}
+)
+
+ 
