@@ -26,6 +26,7 @@
 #include "gst-zed-meta/gstzedmeta.h"
 #include "gstzedxonesrc.h"
 
+#include <chrono>
 
 GST_DEBUG_CATEGORY_STATIC(gst_zedxonesrc_debug);
 #define GST_CAT_DEFAULT gst_zedxonesrc_debug
@@ -54,6 +55,7 @@ enum {
     PROP_VERBOSE_LVL,
     PROP_CAM_ID,
     PROP_SWAP_RB,
+    PROP_TIMEOUT_MSEC,
     //PROP_CAM_SN,
     PROP_BRIGHTNESS,
     PROP_CONTRAST,
@@ -293,12 +295,18 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
         g_param_spec_int("camera-id", "Camera ID", "Select camera from cameraID", 0, 255,
                          DEFAULT_PROP_CAM_ID,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-                         
+
     g_object_class_install_property(
         gobject_class, PROP_SWAP_RB,
         g_param_spec_boolean("swap-rb", "Swap RB",
                              "Swap Red and Blue color channels", DEFAULT_PROP_SWAP_RB,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_TIMEOUT_MSEC,
+        g_param_spec_int("camera-timeout", "Timeout [msec]", "Connection timeout in milliseconds", 100, 100000000,
+                         DEFAULT_PROP_TIMEOUT_MSEC,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     // g_object_class_install_property(
     //     gobject_class, PROP_CAM_SN,
@@ -417,6 +425,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->verbose_level = DEFAULT_PROP_VERBOSE_LVL;
     src->camera_id = DEFAULT_PROP_CAM_ID;
     src->swap_rb = DEFAULT_PROP_SWAP_RB;
+    src->cam_timeout_msec = DEFAULT_PROP_TIMEOUT_MSEC;
     // src->camera_sn = DEFAULT_PROP_CAM_SN;
 
     src->brightness = DEFAULT_PROP_BRIGHTNESS;
@@ -469,6 +478,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_SWAP_RB:
         src->swap_rb = g_value_get_boolean(value);
+        break;
+    case PROP_TIMEOUT_MSEC:
+        src->cam_timeout_msec = g_value_get_int(value);
         break;
     // case PROP_CAM_SN:
     //     src->camera_sn = g_value_get_int64(value);
@@ -550,6 +562,9 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_SWAP_RB:
         g_value_set_boolean(value, src->swap_rb);
+        break;
+    case PROP_TIMEOUT_MSEC:
+        g_value_set_int(value, src->cam_timeout_msec);
         break;
     // case PROP_CAM_SN:
     //     g_value_set_int64(value, src->camera_sn);
@@ -714,6 +729,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Swap RB: %s", (src->swap_rb?"TRUE":"FALSE"));
     config.verbose_level = src->verbose_level;
     GST_INFO(" * Verbose level: %d", src->verbose_level);
+
+    GST_INFO(" * Connection timeout: %d msec", src->cam_timeout_msec);
     // <---- Set config parameters
 
     // ----> Open camera
@@ -836,10 +853,14 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
 
     // ----> Check if a new frame is available
-    // TODO(Walter) Add a timeout here!
-    int count = 0;
+    auto start = std::chrono::system_clock::now();
     while (!src->zed->isNewFrame()) {
-      ++count;
+        auto end = std::chrono::system_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        if(elapsed.count()>src->cam_timeout_msec) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Camera timeout. Disconnected?"), (NULL));
+            return GST_FLOW_ERROR;
+        }
     }
     // <---- Check if a new frame is available
 
