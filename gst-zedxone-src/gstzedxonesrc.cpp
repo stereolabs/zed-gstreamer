@@ -53,7 +53,8 @@ enum {
     PROP_CAM_FPS,
     PROP_VERBOSE_LVL,
     PROP_CAM_ID,
-    PROP_CAM_SN,
+    PROP_SWAP_RB,
+    //PROP_CAM_SN,
     PROP_BRIGHTNESS,
     PROP_CONTRAST,
     PROP_HUE,
@@ -91,11 +92,12 @@ typedef enum {
 /////////////////////////////////////////////////////////////////////////////
 
 // INITIALIZATION
-#define DEFAULT_PROP_CAM_RES        GST_ZEDXONESRC_1080P
+#define DEFAULT_PROP_CAM_RES        GST_ZEDXONESRC_1200P
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDXONESRC_15FPS
-#define DEFAULT_PROP_VERBOSE_LVL    4
+#define DEFAULT_PROP_VERBOSE_LVL    0
 #define DEFAULT_PROP_CAM_ID         0
 #define DEFAULT_PROP_SWAP_RB        0
+#define DEFAULT_PROP_TIMEOUT_MSEC   1000
 //#define DEFAULT_PROP_CAM_SN         0
 
 // CAMERA CONTROLS
@@ -474,6 +476,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     case PROP_CAM_ID:
         src->camera_id = g_value_get_int(value);
         break;
+    case PROP_SWAP_RB:
+        src->swap_rb = g_value_get_boolean(value);
+        break;
     // case PROP_CAM_SN:
     //     src->camera_sn = g_value_get_int64(value);
     //     break;
@@ -551,6 +556,9 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_CAM_ID:
         g_value_set_int(value, src->camera_id);
+        break;
+    case PROP_SWAP_RB:
+        g_value_set_boolean(value, src->swap_rb);
         break;
     // case PROP_CAM_SN:
     //     g_value_set_int64(value, src->camera_sn);

@@ -50,9 +50,9 @@ struct _GstZedXOneSrc {
     gint camera_resolution;   // Camera resolution [enum]
     gint camera_fps;          // Camera FPS
     gint verbose_level;
-
+    guint16 cam_timeout_msec;
     gint camera_id;
-    gint camera_sn;
+    //gint camera_sn;
     gboolean swap_rb; //swap for RGB(A) or BGR(A) output
 
     gint brightness;

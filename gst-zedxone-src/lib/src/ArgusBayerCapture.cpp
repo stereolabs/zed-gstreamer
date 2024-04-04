@@ -212,8 +212,7 @@ ARGUS_STATE ArgusBayerCapture::openCamera(const ArgusCameraConfig &config, bool 
     if (mConfig.verbose_level > 0)
         std::cout << "[ArgusCapture]  * Camera provider: " << ArgusProvider::getInstance()
                   << std::endl;
-
-    std::cerr << "..." << std::endl;
+    
     if (!iCameraProvider) {
       if (mConfig.verbose_level > 0)
         std::cerr << "[ArgusCapture] Invalid camera provider : "
@@ -240,13 +239,9 @@ ARGUS_STATE ArgusBayerCapture::openCamera(const ArgusCameraConfig &config, bool 
         return ARGUS_STATE::INVALID_CAMERA_PROVIDER;
     }
 
-    std::cerr << "..." << std::endl;
-
     /// get all camera device
     if (mConfig.verbose_level > 3)
         std::cout << "[ArgusCapture] Get all camera device" << std::endl;
-
-    std::cerr << "..." << std::endl;
 
     if (!h) {
         ArgusProvider::changeState(mPort, ARGUS_CAMERA_STATE::OFF);
