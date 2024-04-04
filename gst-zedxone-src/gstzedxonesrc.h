@@ -42,14 +42,14 @@ struct _GstZedXOneSrc {
     GstPushSrc base_zedxonesrc;
 
     // ZED X One camera object
-    oc::ArgusBayerCapture zed;
+    std::unique_ptr<oc::ArgusBayerCapture> zed;
 
     gboolean is_started;   // grab started flag
 
     // ----> Properties
     gint camera_resolution;   // Camera resolution [enum]
     gint camera_fps;          // Camera FPS
-    gint verbose_level = 0;
+    gint verbose_level;
 
     gint camera_id;
     gint camera_sn;

@@ -95,6 +95,7 @@ typedef enum {
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDXONESRC_15FPS
 #define DEFAULT_PROP_VERBOSE_LVL    4
 #define DEFAULT_PROP_CAM_ID         0
+#define DEFAULT_PROP_SWAP_RB        0
 //#define DEFAULT_PROP_CAM_SN         0
 
 // CAMERA CONTROLS
@@ -394,8 +395,8 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
 }
 
 static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
-    if (src->zed.isOpened()) {
-        src->zed.closeCamera();
+    if (src->zed->isOpened()) {
+        src->zed->closeCamera();
     }
 
     src->out_framesize = 0;
@@ -422,7 +423,8 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->camera_fps = DEFAULT_PROP_CAM_FPS;
     src->verbose_level = DEFAULT_PROP_VERBOSE_LVL;
     src->camera_id = DEFAULT_PROP_CAM_ID;
-    //src->camera_sn = DEFAULT_PROP_CAM_SN;   
+    src->swap_rb = DEFAULT_PROP_SWAP_RB;
+    // src->camera_sn = DEFAULT_PROP_CAM_SN;
 
     src->brightness = DEFAULT_PROP_BRIGHTNESS;
     src->contrast = DEFAULT_PROP_CONTRAST;
@@ -443,6 +445,10 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
 
     src->stop_requested = FALSE;
     src->caps = NULL;
+
+    if(!src->zed) {
+        src->zed = std::make_unique<oc::ArgusBayerCapture>();
+    }
 
     gst_zedxonesrc_reset(src);
 }
@@ -639,7 +645,7 @@ static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
     guint32 width, height;
     gint fps;
     GstVideoInfo vinfo;
-    GstVideoFormat format = src->swap_rb?GST_VIDEO_FORMAT_BGRA:GST_VIDEO_FORMAT_RGBA;
+    GstVideoFormat format = src->swap_rb?GST_VIDEO_FORMAT_RGBA:GST_VIDEO_FORMAT_BGRA;
 
     if(!resol_to_w_h(static_cast<GstZedXOneSrcRes>(src->camera_resolution), width, height)) {
       return FALSE;
@@ -703,9 +709,9 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Camera resolution: %d x %d", (int)width, (int)height);
     config.mFPS = src->camera_fps;
     GST_INFO(" * Camera FPS: %d", src->camera_fps);
-    //config.mChannel = 4;
+    config.mChannel = 4;
     GST_INFO(" * Camera channels: %d", config.mChannel);
-    //config.mSwapRB = src->swap_rb;
+    config.mSwapRB = src->swap_rb;
     GST_INFO(" * Swap RB: %s", (src->swap_rb?"TRUE":"FALSE"));
     config.verbose_level = src->verbose_level;
     GST_INFO(" * Verbose level: %d", src->verbose_level);
@@ -714,7 +720,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     // ----> Open camera
     GST_INFO("Camera opening: #%d", (int)config.mDeviceId);
 
-    oc::ARGUS_STATE ret = src->zed.openCamera(config);
+    oc::ARGUS_STATE ret = src->zed->openCamera(config);
 
     if (ret != oc::ARGUS_STATE::OK) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
@@ -722,8 +728,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         return FALSE;
     }
     GST_INFO("Camera ready");
-    GST_INFO(" * %dx%d@%dFPS", src->zed.getWidth(), src->zed.getHeight(),
-             src->zed.getFPS());
+    GST_INFO(" * %dx%d@%dFPS", src->zed->getWidth(), src->zed->getHeight(),
+             src->zed->getFPS());
     // <---- Open camera
 
     // ----> Camera Controls
@@ -831,9 +837,10 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
 
     // ----> Check if a new frame is available
-    // TODO(Walter) USe a while to wait for a new frame?
-    if(!src->zed.isNewFrame()) {
-      return GST_FLOW_OK;
+    // TODO(Walter) Add a timeout here!
+    int count = 0;
+    while (!src->zed->isNewFrame()) {
+      ++count;
     }
     // <---- Check if a new frame is available
 
@@ -850,8 +857,8 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
 
     // ----> Check memory size
-    gsize data_size = static_cast<gsize>(src->zed.getWidth() * src->zed.getHeight() *
-                    src->zed.getNumberOfChannels());
+    gsize data_size = static_cast<gsize>(src->zed->getWidth() * src->zed->getHeight() *
+                    src->zed->getNumberOfChannels());
     if(minfo.size!=data_size) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("ZED X One Data size mismatch!"), (NULL));
         return GST_FLOW_ERROR;
@@ -859,11 +866,11 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Check memory size
 
     // ----> Memory copy
-    memcpy(minfo.data, src->zed.getPixels(), minfo.size);
+    memcpy(minfo.data, src->zed->getPixels(), minfo.size);
     // <---- Memory copy
 
     // // ----> Info metadata
-    // sl::CameraInformation cam_info = src->zed.getCameraInformation();
+    // sl::CameraInformation cam_info = src->zed->getCameraInformation();
     // ZedInfo info;
     // info.cam_model = (gint) cam_info.camera_model;
     // info.stream_type = src->stream_type;
@@ -877,12 +884,12 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // // ----> Sensors metadata
     // ZedSensors sens;
-    // if (src->zed.getCameraInformation().camera_model != sl::MODEL::ZED) {
+    // if (src->zed->getCameraInformation().camera_model != sl::MODEL::ZED) {
     //     sens.sens_avail = TRUE;
     //     sens.imu.imu_avail = TRUE;
 
     //     sl::SensorsData sens_data;
-    //     src->zed.getSensorsData(sens_data, sl::TIME_REFERENCE::IMAGE);
+    //     src->zed->getSensorsData(sens_data, sl::TIME_REFERENCE::IMAGE);
 
     //     sens.imu.acc[0] = sens_data.imu.linear_acceleration.x;
     //     sens.imu.acc[1] = sens_data.imu.linear_acceleration.y;
@@ -891,7 +898,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     //     sens.imu.gyro[1] = sens_data.imu.angular_velocity.y;
     //     sens.imu.gyro[2] = sens_data.imu.angular_velocity.z;
 
-    //     if (src->zed.getCameraInformation().camera_model != sl::MODEL::ZED_M) {
+    //     if (src->zed->getCameraInformation().camera_model != sl::MODEL::ZED_M) {
     //         sens.mag.mag_avail = TRUE;
     //         sens.mag.mag[0] = sens_data.magnetometer.magnetic_field_calibrated.x;
     //         sens.mag.mag[1] = sens_data.magnetometer.magnetic_field_calibrated.y;

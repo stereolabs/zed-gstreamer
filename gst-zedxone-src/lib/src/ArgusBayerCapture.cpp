@@ -131,6 +131,8 @@ std::vector<oc::ArgusDevice> ArgusBayerCapture::getArgusDevices() {
 }
 
 ArgusBayerCapture::ArgusBayerCapture() : ArgusVirtualCapture() {
+    std::cerr << "[ArgusBayerCapture] Constructor" << std::endl;
+    
     consumer_newFrame = false;
     producer = nullptr;
     consumer = nullptr;
@@ -144,6 +146,13 @@ ArgusBayerCapture::ArgusBayerCapture() : ArgusVirtualCapture() {
     exit_ = true;
 
     h = new ArgusComponent();
+
+    if(h) {
+        std::cerr << "[ArgusBayerCapture] Argus Component is ready" << std::endl;
+    } else {
+        std::cerr << "[ArgusBayerCapture] Argus Component has not been created" << std::endl;
+    }
+
     mHasCaptureFrame = false;
 }
 

@@ -16,6 +16,8 @@ void ArgusVirtualCapture::getVersion(int& major, int& minor, int &patch)
 
 ArgusVirtualCapture::ArgusVirtualCapture()
 {
+  std::cerr << "[ArgusVirtualCapture] Constructor" << std::endl;
+
   ptr_buffer_sdk=nullptr;
 }
 

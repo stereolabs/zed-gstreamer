@@ -2421,8 +2421,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     if (src->object_detection) {
         sl::ObjectDetectionParameters od_params;
         od_params.instance_module_id = OD_INSTANCE_MODULE_ID;
-        od_params.image_sync = (src->od_image_sync == TRUE);
-        GST_INFO(" * Image sync: %s", (od_params.image_sync ? "TRUE" : "FALSE"));
+        //od_params.image_sync = (src->od_image_sync == TRUE);
+        //GST_INFO(" * Image sync: %s", (od_params.image_sync ? "TRUE" : "FALSE"));
         od_params.enable_tracking = (src->od_enable_tracking == TRUE);
         GST_INFO(" * Object tracking: %s", (od_params.enable_tracking ? "TRUE" : "FALSE"));
         od_params.enable_segmentation = (src->od_enable_segm_output == TRUE);
@@ -2485,8 +2485,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Body Segmentation: %s", (bt_params.enable_segmentation ? "TRUE" : "FALSE"));
         bt_params.enable_tracking = src->bt_enable_trk;
         GST_INFO(" * Tracking: %s", (bt_params.enable_tracking ? "TRUE" : "FALSE"));
-        bt_params.image_sync = src->bt_image_sync;
-        GST_INFO(" * Image sync: %s", (bt_params.image_sync ? "TRUE" : "FALSE"));
+        //bt_params.image_sync = src->bt_image_sync;
+        //GST_INFO(" * Image sync: %s", (bt_params.image_sync ? "TRUE" : "FALSE"));
         bt_params.max_range = src->bt_max_range;
         GST_INFO(" * Max Range: %g mm", bt_params.max_range);
         bt_params.prediction_timeout_s = src->bt_pred_timeout;
