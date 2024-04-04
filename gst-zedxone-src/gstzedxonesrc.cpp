@@ -284,7 +284,7 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_VERBOSE_LVL,
-        g_param_spec_int("verbose-level", "Capture Library Verbose", "Capture Library Verbose level", 0, 1000,
+        g_param_spec_int("verbose-level", "Capture Library Verbose", "Capture Library Verbose level", 0, 4,
                          DEFAULT_PROP_VERBOSE_LVL,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -293,6 +293,12 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
         g_param_spec_int("camera-id", "Camera ID", "Select camera from cameraID", 0, 255,
                          DEFAULT_PROP_CAM_ID,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                         
+    g_object_class_install_property(
+        gobject_class, PROP_SWAP_RB,
+        g_param_spec_boolean("swap-rb", "Swap RB",
+                             "Swap Red and Blue color channels", DEFAULT_PROP_SWAP_RB,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     // g_object_class_install_property(
     //     gobject_class, PROP_CAM_SN,
