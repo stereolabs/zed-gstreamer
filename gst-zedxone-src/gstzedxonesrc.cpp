@@ -131,7 +131,7 @@ static GType gst_zedxonesrc_resol_get_type(void) {
             {0, NULL, NULL},
         };
 
-        zedxonesrc_resol_type = g_enum_register_static("GstZedsrcResolution", pattern_types);
+        zedxonesrc_resol_type = g_enum_register_static("GstZedXOneSrcResol", pattern_types);
     }
 
     return zedxonesrc_resol_type;
@@ -158,69 +158,54 @@ static GType gst_zedxonesrc_fps_get_type(void) {
 
 /* pad templates */
 static GstStaticPadTemplate gst_zedxonesrc_src_template =
-    GST_STATIC_PAD_TEMPLATE(
-                            "src", GST_PAD_SRC, GST_PAD_ALWAYS,
-                            GST_STATIC_CAPS(("video/x-raw, "  // Color HD1080
-                                            "format = (string)BGRA, "
-                                            "width = (int)1920, "
-                                            "height = (int)1080, "
-                                            "framerate = (fraction) { 15, 30, 60 }"
-                                            ";"
-                                            "video/x-raw, "  // Color HD2K
-                                            "format = (string)BGRA, "
-                                            "width = (int)2208, "
-                                            "height = (int)1242, "
-                                            "framerate = (fraction) { 15, 30, 60 }"
-                                            ";"
-                                            "video/x-raw, "  // Color HD1200
-                                            "format = (string)BGRA, "
-                                            "width = (int)1920, "
-                                            "height = (int)1200, "
-                                            "framerate = (fraction) { 15, 30, 60 }"
-                                            ";"
-                                            "video/x-raw, "  // Color SVGA (GMSL2)
-                                            "format = (string)BGRA, "
-                                            "width = (int)960, "
-                                            "height = (int)600, "
-                                            "framerate = (fraction) { 15, 30, 60, 120 }"
-                                            ";"
-                                            "video/x-raw, "  // Color 4K
-                                            "format = (string)BGRA, "
-                                            "width = (int)3856, "
-                                            "height = (int)2180, "
-                                            "framerate = (fraction)15"
-                                            ";"
-                                            "video/x-raw, "  // Color HD1080
-                                            "format = (string)RGBA, "
-                                            "width = (int)1920, "
-                                            "height = (int)1080, "
-                                            "framerate = (fraction) { 15, 30, 60 }"
-                                            ";"
-                                            "video/x-raw, "  // Color HD2K
-                                            "format = (string)RGBA, "
-                                            "width = (int)2208, "
-                                            "height = (int)1242, "
-                                            "framerate = (fraction) { 15, 30, 60 }"
-                                            ";"
-                                            "video/x-raw, "  // Color HD1200
-                                            "format = (string)RGBA, "
-                                            "width = (int)1920, "
-                                            "height = (int)1200, "
-                                            "framerate = (fraction) { 15, 30, 60 }"
-                                            ";"
-                                            "video/x-raw, "  // Color SVGA (GMSL2)
-                                            "format = (string)RGBA, "
-                                            "width = (int)960, "
-                                            "height = (int)600, "
-                                            "framerate = (fraction) { 15, 30, 60, 120 }"
-                                            ";"
-                                            "video/x-raw, "  // Color 4K
-                                            "format = (string)RGBA, "
-                                            "width = (int)3856, "
-                                            "height = (int)2180, "
-                                            "framerate = (fraction)15"
-                                            ))
-                         );
+    GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
+                            GST_STATIC_CAPS(("video/x-raw, "   // Color 4K
+                                             "format = (string)BGRA, "
+                                             "width = (int)3856, "
+                                             "height = (int)2180, "
+                                             "framerate = (fraction)15"
+                                             ";"
+                                             "video/x-raw, "   // Color HD1200
+                                             "format = (string)BGRA, "
+                                             "width = (int)1920, "
+                                             "height = (int)1200, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // Color HD1080
+                                             "format = (string)BGRA, "
+                                             "width = (int)1920, "
+                                             "height = (int)1080, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // Color SVGA
+                                             "format = (string)BGRA, "
+                                             "width = (int)960, "
+                                             "height = (int)600, "
+                                             "framerate = (fraction) { 15, 30, 60, 120 }"
+                                             ";"
+                                             "video/x-raw, "   // Color 4K
+                                             "format = (string)RGBA, "
+                                             "width = (int)3856, "
+                                             "height = (int)2180, "
+                                             "framerate = (fraction)15"
+                                             ";"
+                                             "video/x-raw, "   // Color HD1200
+                                             "format = (string)RGBA, "
+                                             "width = (int)1920, "
+                                             "height = (int)1200, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // Color HD1080
+                                             "format = (string)RGBA, "
+                                             "width = (int)1920, "
+                                             "height = (int)1080, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // Color SVGA
+                                             "format = (string)RGBA, "
+                                             "width = (int)960, "
+                                             "height = (int)600, "
+                                             "framerate = (fraction) { 15, 30, 60, 120 }")));
 
 /* Tools */
 bool resol_to_w_h(const GstZedXOneSrcRes &resol, guint32 &out_w, guint32 &out_h) {
