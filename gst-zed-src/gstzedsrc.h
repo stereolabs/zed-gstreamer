@@ -143,6 +143,7 @@ struct _GstZedSrc {
     gint aec_agc_roi_w;
     gint aec_agc_roi_h;
     gint aec_agc_roi_side;
+    gboolean exposure_gain_updated;
     gint whitebalance_temperature;
     gboolean whitebalance_temperature_auto;
     gboolean led_status;

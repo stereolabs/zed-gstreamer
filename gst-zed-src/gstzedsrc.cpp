@@ -1723,27 +1723,35 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_GAIN:
         src->gain = g_value_get_int(value);
+        src->exposure_gain_updated = TRUE;
         break;
     case PROP_EXPOSURE:
         src->exposure = g_value_get_int(value);
+        src->exposure_gain_updated = TRUE;
         break;
     case PROP_AEC_AGC:
         src->aec_agc = g_value_get_boolean(value);
+        src->exposure_gain_updated = TRUE;
         break;
     case PROP_AEC_AGC_ROI_X:
         src->aec_agc_roi_x = g_value_get_int(value);
+        src->exposure_gain_updated = TRUE;
         break;
     case PROP_AEC_AGC_ROI_Y:
         src->aec_agc_roi_y = g_value_get_int(value);
+        src->exposure_gain_updated = TRUE;
         break;
     case PROP_AEC_AGC_ROI_W:
         src->aec_agc_roi_w = g_value_get_int(value);
+        src->exposure_gain_updated = TRUE;
         break;
     case PROP_AEC_AGC_ROI_H:
         src->aec_agc_roi_h = g_value_get_int(value);
+        src->exposure_gain_updated = TRUE;
         break;
     case PROP_AEC_AGC_ROI_SIDE:
         src->aec_agc_roi_side = g_value_get_enum(value);
+        src->exposure_gain_updated = TRUE;
         break;
     case PROP_WHITEBALANCE:
         src->whitebalance_temperature = g_value_get_int(value);
@@ -2298,13 +2306,16 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Fill Mode: %s", (src->fill_mode ? "TRUE" : "FALSE"));
 
     if (src->roi) {
-        if (src->roi_x != -1 && src->roi_y != -1 && src->roi_w != -1 && src->roi_h != -1) {
+        if (src->roi_x != -1 && 
+                src->roi_y != -1 && 
+                src->roi_w != -1 && 
+                src->roi_h != -1) {
             int roi_x_end = src->roi_x + src->roi_w;
             int roi_y_end = src->roi_y + src->roi_h;
             sl::Resolution resolution = sl::getResolution(init_params.camera_resolution);
-            if (src->roi_x < 0 || src->roi_x >= resolution.width || src->roi_y < 0 ||
-                src->roi_y >= resolution.height || roi_x_end >= resolution.width ||
-                roi_y_end >= resolution.height) {
+            if (src->roi_x >= 0 && src->roi_x < resolution.width &&
+                    src->roi_y >= 0 && src->roi_y < resolution.height &&
+                    roi_x_end <= resolution.width && roi_y_end <= resolution.height) {
 
                 sl::uchar1 uint0 = 0;
                 sl::uchar1 uint1 = 1;
@@ -2313,18 +2324,16 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
                 for (int row = src->roi_y; row < roi_y_end; row++)
                     for (int col = src->roi_y; col < roi_x_end; col++)
                         roi_mask.setValue(col, row, uint1);
-
-                GST_INFO(" * ROI mask: (%d,%d)-%dx%d", src->roi_x, src->roi_y, src->roi_w,
-                         src->roi_h);
+                
+                GST_INFO(" * ROI mask: (%d,%d)-%dx%d",
+                        src->roi_x, src->roi_y, src->roi_w, src->roi_h);
 
                 ret = src->zed.setRegionOfInterest(roi_mask);
-                if (ret != sl::ERROR_CODE::SUCCESS) {
-                    GST_ELEMENT_ERROR(
-                        src, RESOURCE, NOT_FOUND,
-                        ("Failed to set region of interest, '%s'", sl::toString(ret).c_str()),
-                        (NULL));
+                if (ret!=sl::ERROR_CODE::SUCCESS) {
+                    GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
+                                    ("Failed to set region of interest, '%s'", sl::toString(ret).c_str() ), (NULL));
                     return FALSE;
-                }
+                } 
             }
         }
     }
@@ -2601,6 +2610,35 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
     zedRtParams.enable_fill_mode = src->fill_mode;
     zedRtParams.remove_saturated_areas = true;
+
+    // Runtime exposure control
+    if (src->exposure_gain_updated) {
+        if (src->aec_agc == FALSE) {
+            // Manual exposure control
+            src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc);
+            src->zed.setCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE, src->exposure);
+            src->zed.setCameraSettings(sl::VIDEO_SETTINGS::GAIN, src->gain);
+            GST_INFO(" Runtime EXPOSURE %d - GAIN %d", src->exposure, src->gain);
+            src->exposure_gain_updated = FALSE;
+        } else {
+            // Auto exposure control
+            if (src->aec_agc_roi_x != -1 && src->aec_agc_roi_y &&
+                src->aec_agc_roi_w != -1 && src->aec_agc_roi_h != -1) {
+                sl::Rect roi;
+                roi.x=src->aec_agc_roi_x;
+                roi.y=src->aec_agc_roi_y;
+                roi.width=src->aec_agc_roi_w;
+                roi.height=src->aec_agc_roi_h;
+                sl::SIDE side = static_cast<sl::SIDE>(src->aec_agc_roi_side);
+                GST_INFO(" Runtime AEC_AGC_ROI: (%d,%d)-%dx%d - Side: %d",
+                        src->aec_agc_roi_x, src->aec_agc_roi_y,
+                        src->aec_agc_roi_w, src->aec_agc_roi_h, src->aec_agc_roi_side);
+                src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc);
+                src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side);
+                src->exposure_gain_updated = FALSE;
+            }       
+        }
+    }
     // <---- Set runtime parameters
 
     // ----> ZED grab
