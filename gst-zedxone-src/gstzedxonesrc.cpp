@@ -126,20 +126,20 @@ typedef enum {
 
 // CAMERA CONTROLS
 #define DEFAULT_PROP_AE_ANTI_BANDING            GST_AE_ANTI_BAND_AUTO
-#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN      0 // *
-#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX      0 // *
-#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN     0 // *
-#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX     0 // *
-#define DEFAULT_PROP_EXPOSURE_RANGE_MIN         0 // *
-#define DEFAULT_PROP_EXPOSURE_RANGE_MAX         0 // *
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN      1
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX      16
+#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN     1
+#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX     256
+#define DEFAULT_PROP_EXPOSURE_RANGE_MIN         28
+#define DEFAULT_PROP_EXPOSURE_RANGE_MAX         66000
 #define DEFAULT_PROP_AUTO_ANALOG_GAIN           TRUE
 #define DEFAULT_PROP_AUTO_DIGITAL_GAIN          TRUE
 #define DEFAULT_PROP_AUTO_EXPOSURE              TRUE
 #define DEFAULT_PROP_AUTO_WB                    TRUE
-#define DEFAULT_PROP_SATURATION                 1.0 // *
-#define DEFAULT_PROP_DENOISING                  1.0 // *
-#define DEFAULT_PROP_EXP_COMPENSATION           0.0 // *
-#define DEFAULT_PROP_SHARPENING                 1.0 // *
+#define DEFAULT_PROP_SATURATION                 1.0
+#define DEFAULT_PROP_DENOISING                  0.5
+#define DEFAULT_PROP_EXP_COMPENSATION           0.0
+#define DEFAULT_PROP_SHARPENING                 1.0
 #define DEFAULT_PROP_MAN_ANALOG_GAIN            50 // *
 #define DEFAULT_PROP_MAN_ANALOG_GAIN_DB         5 // *
 #define DEFAULT_PROP_MAN_DIGITAL_GAIN           50 // *
@@ -674,6 +674,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     GST_INFO("Default Denoising: %g", den);
     float exp = src->zed->getExposureCompensation();
     GST_INFO("Default Exposure Compensation: %g", exp);
+    float sharp = src->zed->getSharpening();
+    GST_INFO("Default Sharpening: %g", sharp);
     // <---- Camera Controls
 
     if (!gst_zedxonesrc_calculate_caps(src)) {
