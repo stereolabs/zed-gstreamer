@@ -57,22 +57,37 @@ enum {
     PROP_SWAP_RB,
     PROP_TIMEOUT_MSEC,
     //PROP_CAM_SN,
-    PROP_BRIGHTNESS,
-    PROP_CONTRAST,
-    PROP_HUE,
+
+    PROP_AE_ANTI_BANDING,
+    PROP_ANALOG_GAIN_RANGE_MIN,
+    PROP_ANALOG_GAIN_RANGE_MAX,
+    PROP_DIGITAL_GAIN_RANGE_MIN,
+    PROP_DIGITAL_GAIN_RANGE_MAX,
+    PROP_EXPOSURE_RANGE_MIN,
+    PROP_EXPOSURE_RANGE_MAX,
+    PROP_AUTO_ANALOG_GAIN,
+    PROP_AUTO_DIGITAL_GAIN,
+    PROP_AUTO_EXPOSURE,
+    PROP_AUTO_WB,
     PROP_SATURATION,
-    PROP_SHARPNESS,
-    PROP_GAMMA,
-    PROP_GAIN,
-    PROP_EXPOSURE,
-    PROP_AEC_AGC,
+    PROP_DENOISING,
+    PROP_EXP_COMPENSATION,
+    PROP_SHARPENING,
+    PROP_MAN_ANALOG_GAIN,
+    PROP_MAN_ANALOG_GAIN_DB,
+    PROP_MAN_DIGITAL_GAIN,
+    PROP_MAN_DIGITAL_GAIN_VAL,
+    PROP_MAN_EXPOSURE,
+    PROP_MAN_EXPOSURE_USEC,
+    PROP_MANUAL_WB,
+    PROP_TONE_MAP_R_GAMMA,
+    PROP_TONE_MAP_G_GAMMA,
+    PROP_TONE_MAP_B_GAMMA,
+    
     PROP_AEC_AGC_ROI_X,
     PROP_AEC_AGC_ROI_Y,
     PROP_AEC_AGC_ROI_W,
     PROP_AEC_AGC_ROI_H,
-    PROP_AEC_AGC_ROI_SIDE,
-    PROP_WHITEBALANCE,
-    PROP_WHITEBALANCE_AUTO,
     N_PROPERTIES
 };
 
@@ -90,6 +105,13 @@ typedef enum {
     GST_ZEDXONESRC_15FPS = 15
 } GstZedXOneSrcFPS;
 
+typedef enum {
+    GST_AE_ANTI_BAND_OFF = 0,
+    GST_AE_ANTI_BAND_AUTO = 0,
+    GST_AE_ANTI_BAND_50HZ = 0,
+    GST_AE_ANTI_BAND_60HZ = 0
+} GstZedXOneSrcAeAntiBand;
+
 //////////////// DEFAULT PARAMETERS
 /////////////////////////////////////////////////////////////////////////////
 
@@ -103,21 +125,36 @@ typedef enum {
 //#define DEFAULT_PROP_CAM_SN         0
 
 // CAMERA CONTROLS
-#define DEFAULT_PROP_BRIGHTNESS        4
-#define DEFAULT_PROP_CONTRAST          4
-#define DEFAULT_PROP_HUE               0
-#define DEFAULT_PROP_SATURATION        4
-#define DEFAULT_PROP_SHARPNESS         4
-#define DEFAULT_PROP_GAMMA             8
-#define DEFAULT_PROP_GAIN              60
-#define DEFAULT_PROP_EXPOSURE          80
-#define DEFAULT_PROP_AEG_AGC           1
-#define DEFAULT_PROP_AEG_AGC_ROI_X     -1
-#define DEFAULT_PROP_AEG_AGC_ROI_Y     -1
-#define DEFAULT_PROP_AEG_AGC_ROI_W     -1
-#define DEFAULT_PROP_AEG_AGC_ROI_H     -1
-#define DEFAULT_PROP_WHITEBALANCE      4600
-#define DEFAULT_PROP_WHITEBALANCE_AUTO 1
+#define DEFAULT_PROP_AE_ANTI_BANDING            GST_AE_ANTI_BAND_AUTO
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN      0 // *
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX      0 // *
+#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN     0 // *
+#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX     0 // *
+#define DEFAULT_PROP_EXPOSURE_RANGE_MIN         0 // *
+#define DEFAULT_PROP_EXPOSURE_RANGE_MAX         0 // *
+#define DEFAULT_PROP_AUTO_ANALOG_GAIN           TRUE
+#define DEFAULT_PROP_AUTO_DIGITAL_GAIN          TRUE
+#define DEFAULT_PROP_AUTO_EXPOSURE              TRUE
+#define DEFAULT_PROP_AUTO_WB                    TRUE
+#define DEFAULT_PROP_SATURATION                 1.0 // *
+#define DEFAULT_PROP_DENOISING                  1.0 // *
+#define DEFAULT_PROP_EXP_COMPENSATION           0.0 // *
+#define DEFAULT_PROP_SHARPENING                 1.0 // *
+#define DEFAULT_PROP_MAN_ANALOG_GAIN            50 // *
+#define DEFAULT_PROP_MAN_ANALOG_GAIN_DB         5 // *
+#define DEFAULT_PROP_MAN_DIGITAL_GAIN           50 // *
+#define DEFAULT_PROP_MAN_DIGITAL_GAIN_VAL       128 // *
+#define DEFAULT_PROP_MAN_EXPOSURE               50 // *
+#define DEFAULT_PROP_MAN_EXPOSURE_USEC          1000 // *
+#define DEFAULT_PROP_MANUAL_WB                  5000 // *
+#define DEFAULT_PROP_TONE_MAP_R_GAMMA           2.0 // *
+#define DEFAULT_PROP_TONE_MAP_G_GAMMA           2.0 // *
+#define DEFAULT_PROP_TONE_MAP_B_GAMMA           2.0 // *
+
+#define DEFAULT_PROP_AEG_AGC_ROI_X              -1
+#define DEFAULT_PROP_AEG_AGC_ROI_Y              -1
+#define DEFAULT_PROP_AEG_AGC_ROI_W              -1
+#define DEFAULT_PROP_AEG_AGC_ROI_H              -1
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define GST_TYPE_ZEDXONE_RESOL (gst_zedxonesrc_resol_get_type())
@@ -315,48 +352,7 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
     //                        DEFAULT_PROP_CAM_SN,
     //                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(
-        gobject_class, PROP_BRIGHTNESS,
-        g_param_spec_int("ctrl-brightness", "Camera control: brightness", "Image brightness", 0, 8,
-                         DEFAULT_PROP_BRIGHTNESS,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(
-        gobject_class, PROP_CONTRAST,
-        g_param_spec_int("ctrl-contrast", "Camera control: contrast", "Image contrast", 0, 8,
-                         DEFAULT_PROP_CONTRAST,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(
-        gobject_class, PROP_HUE,
-        g_param_spec_int("ctrl-hue", "Camera control: hue", "Image hue", 0, 11, DEFAULT_PROP_HUE,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(
-        gobject_class, PROP_SATURATION,
-        g_param_spec_int("ctrl-saturation", "Camera control: saturation", "Image saturation", 0, 8,
-                         DEFAULT_PROP_SATURATION,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(
-        gobject_class, PROP_SHARPNESS,
-        g_param_spec_int("ctrl-sharpness", "Camera control: sharpness", "Image sharpness", 0, 8,
-                         DEFAULT_PROP_SHARPNESS,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(
-        gobject_class, PROP_GAMMA,
-        g_param_spec_int("ctrl-gamma", "Camera control: gamma", "Image gamma", 1, 9, DEFAULT_PROP_GAMMA,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(
-        gobject_class, PROP_GAIN,
-        g_param_spec_int("ctrl-gain", "Camera control: gain", "Camera gain", 0, 100, DEFAULT_PROP_GAIN,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(
-        gobject_class, PROP_EXPOSURE,
-        g_param_spec_int("ctrl-exposure", "Camera control: exposure", "Camera exposure", 0, 100,
-                         DEFAULT_PROP_EXPOSURE,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(
-        gobject_class, PROP_AEC_AGC,
-        g_param_spec_boolean("ctrl-aec-agc", "Camera control: automatic gain and exposure",
-                             "Camera automatic gain and exposure", DEFAULT_PROP_AEG_AGC,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
         g_param_spec_int("ctrl-aec-agc-roi-x",
@@ -383,16 +379,7 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                          "Auto gain/exposure ROI height (-1 to not set ROI)", -1, 1242,
                          DEFAULT_PROP_AEG_AGC_ROI_H,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(
-        gobject_class, PROP_WHITEBALANCE,
-        g_param_spec_int("ctrl-whitebalance-temperature", "Camera control: white balance temperature",
-                         "Image white balance temperature", 2800, 6500, DEFAULT_PROP_WHITEBALANCE,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    g_object_class_install_property(
-        gobject_class, PROP_WHITEBALANCE_AUTO,
-        g_param_spec_boolean("ctrl-whitebalance-auto", "Camera control: automatic whitebalance",
-                             "Image automatic white balance", DEFAULT_PROP_WHITEBALANCE_AUTO,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    
 }
 
 static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
@@ -428,21 +415,11 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->cam_timeout_msec = DEFAULT_PROP_TIMEOUT_MSEC;
     // src->camera_sn = DEFAULT_PROP_CAM_SN;
 
-    src->brightness = DEFAULT_PROP_BRIGHTNESS;
-    src->contrast = DEFAULT_PROP_CONTRAST;
-    src->hue = DEFAULT_PROP_HUE;
-    src->saturation = DEFAULT_PROP_SATURATION;
-    src->sharpness = DEFAULT_PROP_SHARPNESS;
-    src->gamma = DEFAULT_PROP_GAMMA;
-    src->gain = DEFAULT_PROP_GAIN;
-    src->exposure = DEFAULT_PROP_EXPOSURE;
-    src->aec_agc = DEFAULT_PROP_AEG_AGC;
+
     src->aec_agc_roi_x = DEFAULT_PROP_AEG_AGC_ROI_X;
     src->aec_agc_roi_y = DEFAULT_PROP_AEG_AGC_ROI_Y;
     src->aec_agc_roi_w = DEFAULT_PROP_AEG_AGC_ROI_W;
     src->aec_agc_roi_h = DEFAULT_PROP_AEG_AGC_ROI_H;
-    src->whitebalance_temperature = DEFAULT_PROP_WHITEBALANCE;
-    src->whitebalance_temperature_auto = DEFAULT_PROP_WHITEBALANCE_AUTO;
     // <---- Parameters initialization
 
     src->stop_requested = FALSE;
@@ -485,34 +462,7 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     // case PROP_CAM_SN:
     //     src->camera_sn = g_value_get_int64(value);
     //     break;
-    case PROP_BRIGHTNESS:
-        src->brightness = g_value_get_int(value);
-        break;
-    case PROP_CONTRAST:
-        src->contrast = g_value_get_int(value);
-        break;
-    case PROP_HUE:
-        src->hue = g_value_get_int(value);
-        break;
-    case PROP_SATURATION:
-        src->saturation = g_value_get_int(value);
-        break;
-    case PROP_SHARPNESS:
-        src->sharpness = g_value_get_int(value);
-        break;
-    case PROP_GAMMA:
-        src->gamma = g_value_get_int(value);
-        break;
-    case PROP_GAIN:
-        src->gain = g_value_get_int(value);
-        break;
-    case PROP_EXPOSURE:
-        src->exposure = g_value_get_int(value);
-        break;
-    case PROP_AEC_AGC:
-        src->aec_agc = g_value_get_boolean(value);
-        break;
-    case PROP_AEC_AGC_ROI_X:
+        case PROP_AEC_AGC_ROI_X:
         src->aec_agc_roi_x = g_value_get_int(value);
         break;
     case PROP_AEC_AGC_ROI_Y:
@@ -523,15 +473,6 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_AEC_AGC_ROI_H:
         src->aec_agc_roi_h = g_value_get_int(value);
-        break;
-    case PROP_AEC_AGC_ROI_SIDE:
-        src->aec_agc_roi_side = g_value_get_enum(value);
-        break;
-    case PROP_WHITEBALANCE:
-        src->whitebalance_temperature = g_value_get_int(value);
-        break;
-    case PROP_WHITEBALANCE_AUTO:
-        src->whitebalance_temperature_auto = g_value_get_boolean(value);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
@@ -569,33 +510,7 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
     // case PROP_CAM_SN:
     //     g_value_set_int64(value, src->camera_sn);
     //     break;
-    case PROP_BRIGHTNESS:
-        g_value_set_int(value, src->brightness);
-        break;
-    case PROP_CONTRAST:
-        g_value_set_int(value, src->contrast);
-        break;
-    case PROP_HUE:
-        g_value_set_int(value, src->hue);
-        break;
-    case PROP_SATURATION:
-        g_value_set_int(value, src->saturation);
-        break;
-    case PROP_SHARPNESS:
-        g_value_set_int(value, src->sharpness);
-        break;
-    case PROP_GAMMA:
-        g_value_set_int(value, src->gamma);
-        break;
-    case PROP_GAIN:
-        g_value_set_int(value, src->gain);
-        break;
-    case PROP_EXPOSURE:
-        g_value_set_int(value, src->exposure);
-        break;
-    case PROP_AEC_AGC:
-        g_value_set_boolean(value, src->aec_agc);
-        break;
+    
     case PROP_AEC_AGC_ROI_X:
         g_value_set_int(value, src->aec_agc_roi_x);
         break;
@@ -607,15 +522,6 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_AEC_AGC_ROI_H:
         g_value_set_int(value, src->aec_agc_roi_h);
-        break;
-    case PROP_AEC_AGC_ROI_SIDE:
-        g_value_set_enum(value, src->aec_agc_roi_side);
-        break;
-    case PROP_WHITEBALANCE:
-        g_value_set_int(value, src->whitebalance_temperature);
-        break;
-    case PROP_WHITEBALANCE_AUTO:
-        g_value_set_boolean(value, src->whitebalance_temperature_auto);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);

@@ -209,6 +209,9 @@ inline std::string ARGUS_STATE2str(oc::ARGUS_STATE state) {
         case oc::ARGUS_STATE::UNSUPPORTED_FCT:
                     out = "UNSUPPORTED_FCT";
             break;
+        case oc::ARGUS_STATE::INVALID_ARGUS_COMPONENT:
+                    out = "INVALID_ARGUS_COMPONENT";
+            break;
         case oc::ARGUS_STATE::UNKNOWN:
                     out = "UNKNOWN";
             break;
@@ -387,7 +390,7 @@ protected :
   int nChannel = 4;
   int fps = 0;
   bool opened_ = false;
-  ArgusCameraConfig mConfig={0};
+  ArgusCameraConfig mConfig;
 
   PollEvent userNewFrameEvent;
   std::atomic<bool> consumer_newFrame;

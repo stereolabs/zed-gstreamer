@@ -51,26 +51,50 @@ struct _GstZedXOneSrc {
     gint camera_fps;          // Camera FPS
     gint verbose_level;
     gint cam_timeout_msec;
-    gint camera_id;
-    //gint camera_sn;
+    gint camera_id;    
     gboolean swap_rb; //swap for RGB(A) or BGR(A) output
+    //gint camera_sn;
 
-    gint brightness;
-    gint contrast;
-    gint hue;
-    gint saturation;
-    gint sharpness;
-    gint gamma;
-    gint gain;
-    gint exposure;
-    gboolean aec_agc;
+    gint ae_anti_banding; // OFF, AUTO, 50Hz, 60Hz
+
+    gint analog_frame_gain_range_min;
+    gint analog_frame_gain_range_max;
+
+    gint digital_frame_gain_range_min;
+    gint digital_frame_gain_range_max;
+
+    gint exposure_range_min;
+    gint exposure_range_max;
+
+    gboolean auto_analog_gain;
+    gboolean auto_digital_gain;
+    gboolean auto_exposure;
+    gboolean auto_wb;
+    
+    gfloat color_saturation; // [0.0,2.0]
+    gfloat denoising; // [0.0,1.0]
+    gfloat exposure_compensation; // [-2.0,2.0]
+    gfloat sharpening; // [0.0,1.0]
+
+    gint manual_analog_gain; // perc
+    gint manual_analog_gain_db;
+
+    gint manual_digital_gain; // perc
+    gint manual_digital_gain_value; // [1,256]
+
+    gint manual_exposure; // perc
+    gint manual_exposure_usec;
+
+    gint manual_wb; // [2800,12000]
+
     gint aec_agc_roi_x;
     gint aec_agc_roi_y;
     gint aec_agc_roi_w;
     gint aec_agc_roi_h;
-    gint aec_agc_roi_side;
-    gint whitebalance_temperature;
-    gboolean whitebalance_temperature_auto;
+
+    gint tone_mapping_r_gamma; // [1.5,3.5]
+    gint tone_mapping_g_gamma; // [1.5,3.5]
+    gint tone_mapping_b_gamma; // [1.5,3.5]
     // <---- Properties
 
     GstClockTime acq_start_time;
