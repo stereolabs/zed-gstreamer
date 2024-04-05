@@ -963,7 +963,7 @@ int ArgusV4l2Capture::setDenoisingValue(float value)
     return -1;
 }
 
-float ArgusV4l2Capture::getDenoisingValue(int side)
+float ArgusV4l2Capture::getDenoisingValue()
 {
     return 0;
 }
