@@ -656,6 +656,24 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     // ----> Camera Controls
     // TODO set camera controls from parameters
+    uint64_t min_u64;
+    uint64_t max_u64;
+    float min_f;
+    float max_f;
+
+    src->zed->getExposureLimits(min_u64, max_u64);
+    GST_INFO("Exposure Limits: [%d,%d]", (int) min_u64, (int) max_u64);
+    src->zed->getAnalogGainLimits(min_f, max_f);
+    GST_INFO("Analog Gain Limits: [%g,%g]", min_f, max_f);
+    src->zed->getDigitalGainLimits(min_f, max_f);
+    GST_INFO("Digital Gain Limits: [%g,%g]", min_f, max_f);
+
+    float sat = src->zed->getColorSaturation();
+    GST_INFO("Default Saturation: %g", sat);
+    float den = src->zed->getDenoisingValue();
+    GST_INFO("Default Denoising: %g", den);
+    float exp = src->zed->getExposureCompensation();
+    GST_INFO("Default Exposure Compensation: %g", exp);
     // <---- Camera Controls
 
     if (!gst_zedxonesrc_calculate_caps(src)) {

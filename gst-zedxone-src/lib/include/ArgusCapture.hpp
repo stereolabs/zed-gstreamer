@@ -136,11 +136,10 @@ enum class ARGUS_STATE {
     CAPTURE_UNSYNC,
     CAPTURE_CONVERT_FAILURE,
     UNSUPPORTED_FCT,
-    INVALID_ARGUS_COMPONENT,
     UNKNOWN
 };
 
-inline std::string ARGUS_STATE2str(oc::ARGUS_STATE state) {
+inline std::string ARGUS_STATE2str(oc::ARGUS_STATE state) {  
     std::string out;
     switch (state) {
         case oc::ARGUS_STATE::OK:
@@ -208,9 +207,6 @@ inline std::string ARGUS_STATE2str(oc::ARGUS_STATE state) {
             break;
         case oc::ARGUS_STATE::UNSUPPORTED_FCT:
                     out = "UNSUPPORTED_FCT";
-            break;
-        case oc::ARGUS_STATE::INVALID_ARGUS_COMPONENT:
-                    out = "INVALID_ARGUS_COMPONENT";
             break;
         case oc::ARGUS_STATE::UNKNOWN:
                     out = "UNKNOWN";
@@ -390,7 +386,7 @@ protected :
   int nChannel = 4;
   int fps = 0;
   bool opened_ = false;
-  ArgusCameraConfig mConfig;
+  ArgusCameraConfig mConfig={0};
 
   PollEvent userNewFrameEvent;
   std::atomic<bool> consumer_newFrame;
@@ -595,25 +591,25 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \note destructor calls close if necessary
     ///
     ArgusBayerCapture();
-    virtual ~ArgusBayerCapture();
+    ~ArgusBayerCapture();
 
     ///
     /// \brief open the argus stereo camera
     /// \param config :: camera configuration
     /// \return 0 if success, !=0 otherwise
     ///
-    ARGUS_STATE openCamera(const ArgusCameraConfig &config,bool recreate_daemon = true) override;
+    ARGUS_STATE openCamera(const ArgusCameraConfig &config,bool recreate_daemon = true);
 
 
     ///
     /// \brief close the camera
     ///
-    void closeCamera() override;
+    void closeCamera();
 
     ///
     /// \brief reboot the camera
     ///
-    ARGUS_STATE reboot() override;
+    ARGUS_STATE reboot();
 
 
     ////////////////////////////////////////////////////////////////////////////////////////////
@@ -626,13 +622,13 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \brief getFrameExposureTime
     /// \return the "readed" current frame exposure time in microseconds
     ///
-    uint64_t getFrameExposureTime() override;
+    uint64_t getFrameExposureTime();
 
     ///
     /// \brief getFrameExposurePercent
     /// \return the value between [0 - 100]
     ///
-    int getFrameExposurePercent() override;
+    int getFrameExposurePercent();
 
     ///
     /// \brief setFrameExposureRange: set the Frame exposure range. Use that to set a fixed exposure (low == high)
@@ -640,7 +636,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param exp_high : max exposure time (in us) the sensor will not gow higher
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int setFrameExposureRange(uint64_t exp_low, uint64_t exp_high) override;
+    int setFrameExposureRange(uint64_t exp_low, uint64_t exp_high);
 
     ///
     /// \brief getFrameExposureRange
@@ -648,7 +644,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param exp_high : max exposure time (in us) the sensor will not gow higher
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int getFrameExposureRange(uint64_t &exp_low, uint64_t &exp_high) override;
+    int getFrameExposureRange(uint64_t &exp_low, uint64_t &exp_high);
 
     ///
     /// \brief getExposureRange : get the MIN/MAX range of the exposure time
@@ -656,27 +652,27 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param [out] max_exp : the returned maximum exposure time possible from the DTS configuration. Provided in microseconds
     /// \return 0 if success, !=0 otherwise
     ///
-    int getExposureLimits(uint64_t& min_exp,uint64_t& max_exp) override;
+    int getExposureLimits(uint64_t& min_exp,uint64_t& max_exp);
 
     ///
     /// \brief setManualExposure : set Manual exposure for the specified camera (side) between 0 (lowest exp) to 100 (highest exp)
     /// \param percent : [0-100] for exp range
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int setManualExposure(int percent) override;
+    int setManualExposure(int percent);
 
     ///
     /// \brief setManualTimeExposure
     /// \param time: time in us
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int setManualTimeExposure(uint64_t time) override;
+    int setManualTimeExposure(uint64_t time);
 
     ///
     /// \brief setAutomaticExposure
     /// \return 0 if success, !=0 otherwise
     ///
-    int setAutomaticExposure() override;
+    int setAutomaticExposure();
 
     //////////////////////////////////
     //////// ANALOG GAIN  ////////////
@@ -685,13 +681,13 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \brief getFrameGain
     /// \return the "readed" current frame sensor analog gain in dB
     ///
-    float getAnalogFrameGain() override;
+    float getAnalogFrameGain();
 
     ///
     /// \brief getAnalogFrameGainPercent
     /// \return the analog gain as percentage between min/max range
     ///
-    int getAnalogFrameGainPercent() override;
+    int getAnalogFrameGainPercent();
 
     ///
     /// \brief setAnalogFrameGainRange : set the sensor gain (analog) range. Use that to set a fixed analog gain (low == high)
@@ -699,7 +695,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param gain_high : max gain the sensor will not gow higher
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int setAnalogFrameGainRange(float gain_low,float gain_high) override;
+    int setAnalogFrameGainRange(float gain_low,float gain_high);
 
 
     ///
@@ -708,7 +704,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param sgain_high
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int getAnalogFrameGainRange(float& sgain_low,float& sgain_high) override;
+    int getAnalogFrameGainRange(float& sgain_low,float& sgain_high);
 
     ///
     /// \brief getAnalogGainRange
@@ -716,14 +712,14 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param [out] max_gain : the returned maximum analog gain possible
     /// \return 0 if success, !=0 otherwise
     ///
-    int getAnalogGainLimits(float& min_gain,float& max_gain) override;
+    int getAnalogGainLimits(float& min_gain,float& max_gain);
 
 
     ///
     /// \brief setAutomaticAnalogGain
     /// \return 0 if success, !=0 otherwise
     ///
-    int setAutomaticAnalogGain() override;
+    int setAutomaticAnalogGain();
 
 
     ///
@@ -731,14 +727,14 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param percent : [0-100] for gain range
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int setManualAnalogGain(int percent) override;
+    int setManualAnalogGain(int percent);
 
     ///
     /// \brief setManualGainReal
     /// \param db : db as real db *100
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int setManualAnalogGainReal(int db) override;
+    int setManualAnalogGainReal(int db);
 
     //////////////////////////////////
     ////////// ISP GAIN /// //////////
@@ -747,7 +743,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \brief getDigitalFrameGain : get the current ISP gain
     /// \return the current ISP gain from the "side" camera
     ///
-    float getDigitalFrameGain() override;
+    float getDigitalFrameGain();
 
     ///
     /// \brief setDigitalFrameGainRange : set the ISP gain (digital) range. Use that to set a fixed digital gain (low == high)
@@ -755,7 +751,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param gain_high : max gain the ISP will not gow higher
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int setDigitalFrameGainRange(float gain_low,float gain_high) override;
+    int setDigitalFrameGainRange(float gain_low,float gain_high);
 
     ///
     /// \brief getDigitalFrameGainRange : get the ISP gain range
@@ -763,7 +759,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param dgain_high: max gain available for the ISP
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int getDigitalFrameGainRange(float& dgain_low,float& dgain_high) override;
+    int getDigitalFrameGainRange(float& dgain_low,float& dgain_high);
 
     ///
     /// \brief getAnalogGainRange : get the MIN/MAX range of the analog gain
@@ -771,28 +767,28 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param [out] max_gain : the returned maximum ISP gain possible in the ISP configuration
     /// \return 0 if success, !=0 otherwise
     ///
-    int getDigitalGainLimits(float& min_gain,float& max_gain) override;
+    int getDigitalGainLimits(float& min_gain,float& max_gain);
 
 
     ///
     /// \brief setAutomaticDigitalGain
     /// \return 0 if success, !=0 otherwise
     ///
-    int setAutomaticDigitalGain() override;
+    int setAutomaticDigitalGain();
 
     ///
     /// \brief setManualDigitalGain : set Digital Gain for the specified camera (side) between 0 (lowest gain) to 100 (highest gain)
     /// \param percent : [0-100] for gain range
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int setManualDigitalGain(int percent) override;
+    int setManualDigitalGain(int percent);
 
     ///
     /// \brief setManualDigitalGainReal
     /// \param factor : ISP factor between 1 and 256
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int setManualDigitalGainReal(int factor) override;
+    int setManualDigitalGainReal(int factor);
 
 
     //////////////////////////////////
@@ -804,27 +800,27 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param color_temperature : Temperature color in kevin (2800°K-12000°K)
     /// \return 0 if success, !=0 otherwise
     ///
-    int setManualWhiteBalance(uint32_t color_temperature) override;
+    int setManualWhiteBalance(uint32_t color_temperature);
 
 
     ///
     /// \brief getManualWhiteBalance
     /// \return the current white balance
     ///
-    uint32_t getManualWhiteBalance() override;
+    uint32_t getManualWhiteBalance();
 
     ///
     /// \brief setAutomaticWhiteBalance
     /// \param val 0 manual, 1 auto , > 1 auto mode with different settings
     /// \return 0 if success, !=0 otherwise
     ///
-    int setAutomaticWhiteBalance(int val) override;
+    int setAutomaticWhiteBalance(int val);
 
     ///
     /// \brief getAutomaticWhiteBalanceStatus
     /// \return 0 if manual, >=1 if automatic (mode)
     ///
-    int getAutomaticWhiteBalanceStatus() override;
+    int getAutomaticWhiteBalanceStatus();
 
 
 
@@ -837,13 +833,13 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param value : Sharpening Value [0 - 1.0]
     /// \return 0 if success, !=0 otherwise
     ///
-    int setSharpening(float value) override;
+    int setSharpening(float value);
 
     ///
     /// \brief getSharpening
     /// \return Sharpening Value [0 - 1.0]. <0 inidcates error
     ///
-    float getSharpening() override;
+    float getSharpening();
 
     //////////////////////////////////
     /////////// Saturation //////////
@@ -855,13 +851,13 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \default Value is 1.0
     /// \return 0 if success, !=0 otherwise
     ///
-    int setColorSaturation(float saturation) override;
+    int setColorSaturation(float saturation);
 
     ///
     /// \brief getColorSaturation
     /// \return
     ///
-    float getColorSaturation() override;
+    float getColorSaturation();
 
 
 
@@ -874,7 +870,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param channel : Red==0, Green = 1, Blue = 2
     /// \return the number of points in the LUT
     ///
-    int getToneMappingCurveSize(int channel) override;
+    int getToneMappingCurveSize(int channel);
 
     ///
     /// \brief setToneMappingFromGamma : set the tone mapping curve from a gamma value
@@ -882,13 +878,13 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param gamma :  gamma value so that LUT[i] = std::pow(i/size,1/gamma) . Range [1.5 ; 3.5]
     /// \return 0 if success, !=0 otherwise
     ///
-    int setToneMappingFromGamma(int channel,float gamma) override;
+    int setToneMappingFromGamma(int channel,float gamma);
 
     ///
     /// \brief getGamma simply get last set value
     /// \return
     ///
-    float getGamma() override;
+    float getGamma();
 
 
     //////////////////////////////////
@@ -900,7 +896,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param mode : OFF, AUTO, 50HZ or 60Hz, linked to argus API
     /// \return 0 if OK, <0 if not open, >0 if error trigger by argus
     ///
-    int setAEAntiBanding(AEANTIBANDING mode) override;
+    int setAEAntiBanding(AEANTIBANDING mode);
 
 
     //////////////////////////////////
@@ -914,14 +910,14 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \note -1.0 == use_default=true
     /// \return 0 if success, !=0 otherwise
     ///
-    int setDenoisingValue(float value) override;
+    int setDenoisingValue(float value);
 
 
     ///
     /// \brief getDenoisingValue
     /// \return [0 - 1.0] value. <0 means error
     ///
-    float getDenoisingValue(int side) override;
+    float getDenoisingValue(int side);
 
 
     //////////////////////////////////
@@ -934,14 +930,14 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \note : default value is 0.0
     /// \return -1 if not opened, 0 if success, argus status if >0
     ///
-    int setExposureCompensation(float ev) override;
+    int setExposureCompensation(float ev);
 
     ///
     /// \brief getExposureCompensationTarget
     /// \return [-2.0 2.0] value
     /// \return < -2.0 indicates error
     ///
-    float getExposureCompensation() override;
+    float getExposureCompensation();
 
 
 
@@ -954,17 +950,17 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param roi Rectangle where AEC will be made.
     /// \return 0 if success, !=0 otherwise
     ///
-    int setROIforAECAGC(oc::Rect roi) override;
+    int setROIforAECAGC(oc::Rect roi);
 
     ///
     /// \brief resetROIforAECAGC
     /// \return 0 if success, !=0 otherwise
     ///
-    int resetROIforAECAGC() override;
+    int resetROIforAECAGC();
 
     /// \brief getROIforAECAGC
     /// \return 0 if success, !=0 otherwise
-    int getROIforAECAGC(oc::Rect &roi) override;
+    int getROIforAECAGC(oc::Rect &roi);
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////// DETECTION ///////////////////////////////////////////
@@ -996,6 +992,7 @@ private:
 
     std::mutex mut_internal;
     std::mutex mut_irequest;
+    std::mutex mut_access;
 
     int fd = -1;
 
