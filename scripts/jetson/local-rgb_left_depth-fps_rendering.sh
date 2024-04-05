@@ -8,7 +8,7 @@
 # 4) Render depth stream with FPS info
 
 gst-launch-1.0 \
-zedsrc stream-type=4 ! queue ! \
+zedsrc stream-type=4 depth-mode=3 ! queue ! \
 zeddemux name=demux \
 demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink \
 demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink

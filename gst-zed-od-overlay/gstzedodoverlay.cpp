@@ -731,7 +731,7 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                     // <---- Joints
                     break;
                 default:
-                    GST_ELEMENT_ERROR(filter, RESOURCE, FAILED, ("Wrong skeleton model format"), (NULL));
+                    GST_ELEMENT_ERROR(filter, RESOURCE, FAILED, ("Wrong skeleton model format: %d",objs[i].skel_format), (NULL));
                 }
             }
             // <---- Skeletons

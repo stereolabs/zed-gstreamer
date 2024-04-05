@@ -94,7 +94,6 @@ enum {
     PROP_POS_INIT_YAW,
     PROP_COORD_SYS,
     PROP_OD_ENABLE,
-    PROP_OD_IMAGE_SYNC,
     PROP_OD_TRACKING,
     PROP_OD_SEGM,
     PROP_OD_DET_MODEL,
@@ -578,6 +577,8 @@ static GType gst_zedsrc_depth_mode_get_type(void) {
 
     if (!zedsrc_depth_mode_type) {
         static GEnumValue pattern_types[] = {
+            {static_cast<gint>(sl::DEPTH_MODE::NEURAL_PLUS),
+             "More accurate Neural disparity estimation, Requires AI module.", "NEURAL_PLUS"},
             {static_cast<gint>(sl::DEPTH_MODE::NEURAL),
              "End to End Neural disparity estimation, requires AI module", "NEURAL"},
             {static_cast<gint>(sl::DEPTH_MODE::ULTRA),
@@ -1057,13 +1058,6 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_OD_IMAGE_SYNC,
-        g_param_spec_boolean("od-image-sync", "Object detection frame sync",
-                             "Set to TRUE to enable Object Detection frame synchronization ",
-                             DEFAULT_PROP_OD_SYNC,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
         gobject_class, PROP_OD_TRACKING,
         g_param_spec_boolean("od-enable-tracking", "Object detection tracking",
                              "Set to TRUE to enable tracking for the detected objects",
@@ -1431,7 +1425,6 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->init_orient_yaw = DEFAULT_PROP_POS_INIT_YAW;
 
     src->object_detection = DEFAULT_PROP_OD_ENABLE;
-    src->od_image_sync = DEFAULT_PROP_OD_SYNC;
     src->od_enable_tracking = DEFAULT_PROP_OD_TRACKING;
     src->od_enable_segm_output = DEFAULT_PROP_OD_SEGM;
     src->od_detection_model = DEFAULT_PROP_OD_MODEL;
@@ -1450,7 +1443,6 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 
     src->body_tracking = DEFAULT_PROP_BT_ENABLE;
     src->bt_enable_segm_output = DEFAULT_PROP_BT_SEGM;
-    src->bt_image_sync = DEFAULT_PROP_BT_SYNC;
     src->bt_model = DEFAULT_PROP_BT_MODEL;
     src->bt_format = DEFAULT_PROP_BT_FORMAT;
     src->bt_reduce_precision = DEFAULT_PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE;
@@ -1627,9 +1619,6 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
     case PROP_OD_ENABLE:
         src->object_detection = g_value_get_boolean(value);
         break;
-    case PROP_OD_IMAGE_SYNC:
-        src->od_image_sync = g_value_get_boolean(value);
-        break;
     case PROP_OD_TRACKING:
         src->od_enable_tracking = g_value_get_boolean(value);
         break;
@@ -1680,9 +1669,6 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_BT_SEGM:
         src->bt_enable_segm_output = g_value_get_boolean(value);
-        break;
-    case PROP_BT_SYNC:
-        src->bt_image_sync = g_value_get_boolean(value);
         break;
     case PROP_BT_MODEL:
         src->bt_model = g_value_get_enum(value);
@@ -1909,9 +1895,6 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     case PROP_OD_ENABLE:
         g_value_set_boolean(value, src->object_detection);
         break;
-    case PROP_OD_IMAGE_SYNC:
-        g_value_set_boolean(value, src->od_image_sync);
-        break;
     case PROP_OD_TRACKING:
         g_value_set_boolean(value, src->od_enable_tracking);
         break;
@@ -1963,9 +1946,6 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     /*case PROP_BT_SEGM:
     g_value_set_float(value, src->bt_enable_segm_output);
     break;*/
-    case PROP_BT_SYNC:
-        g_value_set_boolean(value, src->bt_image_sync);
-        break;
     case PROP_BT_MODEL:
         g_value_set_enum(value, src->bt_model);
         break;
@@ -2421,8 +2401,6 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     if (src->object_detection) {
         sl::ObjectDetectionParameters od_params;
         od_params.instance_module_id = OD_INSTANCE_MODULE_ID;
-        od_params.image_sync = (src->od_image_sync == TRUE);
-        GST_INFO(" * Image sync: %s", (od_params.image_sync ? "TRUE" : "FALSE"));
         od_params.enable_tracking = (src->od_enable_tracking == TRUE);
         GST_INFO(" * Object tracking: %s", (od_params.enable_tracking ? "TRUE" : "FALSE"));
         od_params.enable_segmentation = (src->od_enable_segm_output == TRUE);
@@ -2485,8 +2463,6 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Body Segmentation: %s", (bt_params.enable_segmentation ? "TRUE" : "FALSE"));
         bt_params.enable_tracking = src->bt_enable_trk;
         GST_INFO(" * Tracking: %s", (bt_params.enable_tracking ? "TRUE" : "FALSE"));
-        bt_params.image_sync = src->bt_image_sync;
-        GST_INFO(" * Image sync: %s", (bt_params.image_sync ? "TRUE" : "FALSE"));
         bt_params.max_range = src->bt_max_range;
         GST_INFO(" * Max Range: %g mm", bt_params.max_range);
         bt_params.prediction_timeout_s = src->bt_pred_timeout;

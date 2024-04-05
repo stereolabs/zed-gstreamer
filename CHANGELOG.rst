@@ -1,10 +1,14 @@
 LATEST CHANGES
 ==============
 
+05-04-2024
+----------
+- Add support to `NEURAL_PLUS` depth mode
+
 ZED SDK v4.0.8
 --------------
 
-* Compatible with ZED SDK v4.x.y
+* Compatible with ZED SDK v4.0.y
 * Add support for ZED X and ZED X Mini cameras
 * Update `camera-resolution` and `camera-fps` parameters to match the new options
 * Add new `jetson` script folder
@@ -32,23 +36,23 @@ ZED SDK v4.0.8
 * Add new property `bt-min-keypoints`
 * Add new property `bt-prediction-timeout-s`
 * Add new property `bt-smoothing`
-* Change `ctrl-aec-agc` to `ctrl-aec-agc`
-* Change `ctrl-aec-agc-roi-h` to `ctrl-aec-agc-roi-h`
-* Change `ctrl-aec-agc-roi-side` to `ctrl-aec-agc-roi-side`
-* Change `ctrl-aec-agc-roi-w` to `ctrl-aec-agc-roi-w`
-* Change `ctrl-aec-agc-roi-x` to `ctrl-aec-agc-roi-x`
-* Change `ctrl-aec-agc-roi-y` to `ctrl-aec-agc-roi-y`
-* Change `ctrl-brightness` to `ctrl-brightness`
-* Change `ctrl-contrast` to `ctrl-contrast`
-* Change `ctrl-exposure` to `ctrl-exposure`
-* Change `ctrl-gain` to `ctrl-gain`
-* Change `ctrl-gamma` to `ctrl-gamma`
-* Change `ctrl-hue` to `ctrl-hue`
-* Change `ctrl-led-status` to `ctrl-led-status`
-* Change `ctrl-saturation` to `ctrl-saturation`
-* Change `ctrl-sharpness` to `ctrl-sharpness`
-* Change `ctrl-whitebalance-auto` to `ctrl-whitebalance-auto`
-* Change `ctrl-whitebalance-temperature` to `ctrl-whitebalance-temperature`
+* Change `aec-agc` to `ctrl-aec-agc`
+* Change `aec-agc-roi-h` to `ctrl-aec-agc-roi-h`
+* Change `aec-agc-roi-side` to `ctrl-aec-agc-roi-side`
+* Change `aec-agc-roi-w` to `ctrl-aec-agc-roi-w`
+* Change `aec-agc-roi-x` to `ctrl-aec-agc-roi-x`
+* Change `aec-agc-roi-y` to `ctrl-aec-agc-roi-y`
+* Change `brightness` to `ctrl-brightness`
+* Change `contrast` to `ctrl-contrast`
+* Change `exposure` to `ctrl-exposure`
+* Change `gain` to `ctrl-gain`
+* Change `gamma` to `ctrl-gamma`
+* Change `hue` to `ctrl-hue`
+* Change `led-status` to `ctrl-led-status`
+* Change `saturation` to `ctrl-saturation`
+* Change `sharpness` to `ctrl-sharpness`
+* Change `whitebalance-auto` to `ctrl-whitebalance-auto`
+* Change `whitebalance-temperature` to `ctrl-whitebalance-temperature`
 
 ZED SDK v3.8
 -------------
