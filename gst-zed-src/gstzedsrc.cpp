@@ -92,6 +92,7 @@ enum {
     PROP_POS_INIT_ROLL,
     PROP_POS_INIT_PITCH,
     PROP_POS_INIT_YAW,
+    PROP_POS_MODE,
     PROP_COORD_SYS,
     PROP_OD_ENABLE,
     PROP_OD_TRACKING,
@@ -209,6 +210,11 @@ typedef enum {
     GST_ZEDSRC_SIDE_BOTH = 2
 } GstZedSrcSide;
 
+typedef enum {
+    GST_ZEDSRC_PT_GEN_1 = 0,
+    GST_ZEDSRC_PT_GEN_2 = 1
+} GstZedSrcPtMode;
+
 //////////////// DEFAULT PARAMETERS
 /////////////////////////////////////////////////////////////////////////////
 
@@ -244,6 +250,7 @@ typedef enum {
 
 // POSITIONAL TRACKING
 #define DEFAULT_PROP_POS_TRACKING              FALSE
+#define DEFAULT_PROP_PT_MODE                   GST_ZEDSRC_PT_GEN_2
 #define DEFAULT_PROP_CAMERA_STATIC             FALSE
 #define DEFAULT_PROP_POS_AREA_FILE_PATH        ""
 #define DEFAULT_PROP_POS_ENABLE_AREA_MEMORY    TRUE
@@ -330,6 +337,23 @@ static GType gst_zedsrc_side_get_type(void) {
     }
 
     return zedsrc_side_type;
+}
+
+#define GST_TYPE_ZED_PT_MODE (gst_zedsrc_pt_mode_get_type())
+static GType gst_zedsrc_pt_mode_get_type(void) {
+    static GType zedsrc_pt_mode_type = 0;
+
+    if (!zedsrc_pt_mode_type) {
+        static GEnumValue pattern_types[] = {
+            {static_cast<gint>(sl::POSITIONAL_TRACKING_MODE::GEN_1), "Generation 1", "GEN_1"},
+            {static_cast<gint>(sl::POSITIONAL_TRACKING_MODE::GEN_2), "Generation 2", "GEN_2"},
+            {0, NULL, NULL},
+        };
+
+        zedsrc_pt_mode_type = g_enum_register_static("GstZedsrcPtMode", pattern_types);
+    }
+
+    return zedsrc_pt_mode_type;
 }
 
 #define GST_TYPE_ZED_RESOL (gst_zedsrc_resol_get_type())
@@ -943,6 +967,13 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_POS_MODE,
+        g_param_spec_enum("positional-tracking-mode", "Positional tracking mode",
+                          "Positional tracking mode", GST_TYPE_ZED_PT_MODE,
+                          DEFAULT_PROP_PT_MODE,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
         gobject_class, PROP_CAMERA_STATIC,
         g_param_spec_boolean("set-as-static", "Camera static",
                              "Set to TRUE if the camera is static", DEFAULT_PROP_CAMERA_STATIC,
@@ -1192,13 +1223,6 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     //         DEFAULT_PROP_BT_SEGM, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_BT_SYNC,
-        g_param_spec_boolean("bt-image-sync", "Body Tracking frame sync",
-                             "Set to TRUE to enable Body Tracking frame synchronization ",
-                             DEFAULT_PROP_BT_SYNC,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
         gobject_class, PROP_BT_MODEL,
         g_param_spec_enum("bt-detection-model", "Body Tracking model", "Body Tracking Model",
                           GST_TYPE_ZED_BT_MODEL_TYPE, DEFAULT_PROP_BT_MODEL,
@@ -1423,6 +1447,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->init_orient_roll = DEFAULT_PROP_POS_INIT_ROLL;
     src->init_orient_pitch = DEFAULT_PROP_POS_INIT_PITCH;
     src->init_orient_yaw = DEFAULT_PROP_POS_INIT_YAW;
+    src->pos_trk_mode = DEFAULT_PROP_PT_MODE;
 
     src->object_detection = DEFAULT_PROP_OD_ENABLE;
     src->od_enable_tracking = DEFAULT_PROP_OD_TRACKING;
@@ -1572,6 +1597,9 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_POS_TRACKING:
         src->pos_tracking = g_value_get_boolean(value);
+        break;
+    case PROP_POS_MODE:
+        src->pos_trk_mode = g_value_get_enum(value);
         break;
     case PROP_CAMERA_STATIC:
         src->camera_static = g_value_get_boolean(value);
@@ -1857,6 +1885,9 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         break;
     case PROP_POS_TRACKING:
         g_value_set_boolean(value, src->pos_tracking);
+        break;
+    case PROP_POS_MODE:
+        g_value_set_enum(value, src->pos_trk_mode);
         break;
     case PROP_CAMERA_STATIC:
         g_value_set_boolean(value, src->camera_static);
@@ -2344,6 +2375,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Positional tracking status: %s", (src->pos_tracking ? "ON" : "OFF"));
     if (src->pos_tracking) {
         sl::PositionalTrackingParameters pos_trk_params;
+        pos_trk_params.mode = static_cast<sl::POSITIONAL_TRACKING_MODE>(src->pos_trk_mode);
+        GST_INFO(" * Pos. Tracking mode: %s", sl::toString(pos_trk_params.mode).c_str());
         pos_trk_params.set_as_static = (src->camera_static == TRUE);
         GST_INFO(" * Camera static: %s", (pos_trk_params.set_as_static ? "TRUE" : "FALSE"));
         sl::String area_file_path(static_cast<char *>(src->area_file_path.str));

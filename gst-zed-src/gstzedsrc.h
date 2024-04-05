@@ -90,6 +90,7 @@ struct _GstZedSrc {
     gfloat init_orient_roll;
     gfloat init_orient_pitch;
     gfloat init_orient_yaw;
+    gint pos_trk_mode;
 
     gboolean object_detection;
     gboolean od_enable_tracking;                     // bool enable_tracking

@@ -3,7 +3,10 @@ LATEST CHANGES
 
 05-04-2024
 ----------
+- Add ZED SDK v4.1 compatibility
 - Add support to `NEURAL_PLUS` depth mode
+- Add runtime update of Gain and Exposure. Thx @ryanppeters
+- Add new property `positional-tracking-mode` to select `GEN_1` and `GEN_2`
 
 ZED SDK v4.0.8
 --------------
