@@ -32,7 +32,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 ### Prerequisites
 
- * [ZED SDK v4.0.x](https://www.stereolabs.com/developers/release/)
+ * [ZED SDK v4.1](https://www.stereolabs.com/developers/release/)
  * CMake (v3.6+)
  * GStreamer 1.0
 
@@ -152,9 +152,6 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (0): Body 18 Key Points - 18 keypoints format. Basic Body format
                            (1): Body 34 Key Points - 34 keypoints format. Body format, requires body fitting enabled
                            (2): Body 38 Key Points - 38 keypoints format. Body format, including feet simplified face and hands
-  bt-image-sync       : Set to TRUE to enable Body Tracking frame synchronization 
-                        flags: readable, writable
-                        Boolean. Default: true
   bt-max-range        : Maximum Detection Range
                         flags: readable, writable
                         Float. Range:              -1 -           20000 Default:           20000 
@@ -275,6 +272,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   depth-mode          : Depth Mode
                         flags: readable, writable
                         Enum "GstZedsrcDepthMode" Default: 0, "NONE"
+                           (5): NEURAL_PLUS      - More accurate Neural disparity estimation, Requires AI module.
                            (4): NEURAL           - End to End Neural disparity estimation, requires AI module
                            (3): ULTRA            - Computation mode favorising edges and sharpness. Requires more GPU memory and computation power.
                            (2): QUALITY          - Computation mode designed for challenging areas with untextured surfaces.
@@ -383,9 +381,6 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   od-enabled          : Set to TRUE to enable Object Detection
                         flags: readable, writable
                         Boolean. Default: false
-  od-image-sync       : Set to TRUE to enable Object Detection frame synchronization 
-                        flags: readable, writable
-                        Boolean. Default: true
   od-max-range        : Maximum Detection Range
                         flags: readable, writable
                         Float. Range:              -1 -           20000 Default:           20000 
@@ -398,6 +393,11 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   pos-depth-min-range : This setting allows you to change the minmum depth used by the SDK for Positional Tracking.
                         flags: readable, writable
                         Float. Range:              -1 -           65535 Default:              -1 
+  positional-tracking-mode: Positional tracking mode
+                        flags: readable, writable
+                        Enum "GstZedsrcPtMode" Default: 1, "GEN_2"
+                           (0): GEN_1            - Generation 1
+                           (1): GEN_2            - Generation 2
   roi                 : Enable region of interest filtering
                         flags: readable, writable
                         Boolean. Default: false
