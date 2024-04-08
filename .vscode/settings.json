@@ -93,5 +93,6 @@
     "stack": "cpp",
     "locale": "cpp"
   },
-  "C_Cpp.errorSquiggles": "disabled"
+  "C_Cpp.errorSquiggles": "disabled",
+  "editor.tabSize": 4
 }

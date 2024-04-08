@@ -33,9 +33,9 @@ GST_DEBUG_CATEGORY_STATIC(gst_zedxonesrc_debug);
 
 /* prototypes */
 static void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValue *value,
-                                    GParamSpec *pspec);
+                                        GParamSpec *pspec);
 static void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *value,
-                                    GParamSpec *pspec);
+                                        GParamSpec *pspec);
 static void gst_zedxonesrc_dispose(GObject *object);
 static void gst_zedxonesrc_finalize(GObject *object);
 
@@ -56,7 +56,6 @@ enum {
     PROP_CAM_ID,
     PROP_SWAP_RB,
     PROP_TIMEOUT_MSEC,
-    //PROP_CAM_SN,
 
     PROP_AE_ANTI_BANDING,
     PROP_ANALOG_GAIN_RANGE_MIN,
@@ -73,17 +72,14 @@ enum {
     PROP_DENOISING,
     PROP_EXP_COMPENSATION,
     PROP_SHARPENING,
-    PROP_MAN_ANALOG_GAIN,
     PROP_MAN_ANALOG_GAIN_DB,
-    PROP_MAN_DIGITAL_GAIN,
-    PROP_MAN_DIGITAL_GAIN_VAL,
-    PROP_MAN_EXPOSURE,
+    PROP_MAN_DIGITAL_GAIN_,
     PROP_MAN_EXPOSURE_USEC,
     PROP_MANUAL_WB,
     PROP_TONE_MAP_R_GAMMA,
     PROP_TONE_MAP_G_GAMMA,
     PROP_TONE_MAP_B_GAMMA,
-    
+
     PROP_AEC_AGC_ROI_X,
     PROP_AEC_AGC_ROI_Y,
     PROP_AEC_AGC_ROI_W,
@@ -116,45 +112,41 @@ typedef enum {
 /////////////////////////////////////////////////////////////////////////////
 
 // INITIALIZATION
-#define DEFAULT_PROP_CAM_RES        GST_ZEDXONESRC_1200P
-#define DEFAULT_PROP_CAM_FPS        GST_ZEDXONESRC_15FPS
-#define DEFAULT_PROP_VERBOSE_LVL    0
-#define DEFAULT_PROP_CAM_ID         0
-#define DEFAULT_PROP_SWAP_RB        0
-#define DEFAULT_PROP_TIMEOUT_MSEC   1000
-//#define DEFAULT_PROP_CAM_SN         0
+#define DEFAULT_PROP_CAM_RES GST_ZEDXONESRC_1200P
+#define DEFAULT_PROP_CAM_FPS GST_ZEDXONESRC_15FPS
+#define DEFAULT_PROP_VERBOSE_LVL 0
+#define DEFAULT_PROP_CAM_ID 0
+#define DEFAULT_PROP_SWAP_RB 0
+#define DEFAULT_PROP_TIMEOUT_MSEC 1000
 
 // CAMERA CONTROLS
-#define DEFAULT_PROP_AE_ANTI_BANDING            GST_AE_ANTI_BAND_AUTO
-#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN      1
-#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX      16
-#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN     1
-#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX     256
-#define DEFAULT_PROP_EXPOSURE_RANGE_MIN         28
-#define DEFAULT_PROP_EXPOSURE_RANGE_MAX         66000
-#define DEFAULT_PROP_AUTO_ANALOG_GAIN           TRUE
-#define DEFAULT_PROP_AUTO_DIGITAL_GAIN          TRUE
-#define DEFAULT_PROP_AUTO_EXPOSURE              TRUE
-#define DEFAULT_PROP_AUTO_WB                    TRUE
-#define DEFAULT_PROP_SATURATION                 1.0
-#define DEFAULT_PROP_DENOISING                  0.5
-#define DEFAULT_PROP_EXP_COMPENSATION           0.0
-#define DEFAULT_PROP_SHARPENING                 1.0
-#define DEFAULT_PROP_MAN_ANALOG_GAIN            50 // *
-#define DEFAULT_PROP_MAN_ANALOG_GAIN_DB         5 // *
-#define DEFAULT_PROP_MAN_DIGITAL_GAIN           50 // *
-#define DEFAULT_PROP_MAN_DIGITAL_GAIN_VAL       128 // *
-#define DEFAULT_PROP_MAN_EXPOSURE               50 // *
-#define DEFAULT_PROP_MAN_EXPOSURE_USEC          1000 // *
-#define DEFAULT_PROP_MANUAL_WB                  5000 // *
-#define DEFAULT_PROP_TONE_MAP_R_GAMMA           2.0 // *
-#define DEFAULT_PROP_TONE_MAP_G_GAMMA           2.0 // *
-#define DEFAULT_PROP_TONE_MAP_B_GAMMA           2.0 // *
+#define DEFAULT_PROP_AE_ANTI_BANDING GST_AE_ANTI_BAND_AUTO
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN 1
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX 16
+#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN 1
+#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX 256
+#define DEFAULT_PROP_EXPOSURE_RANGE_MIN 28
+#define DEFAULT_PROP_EXPOSURE_RANGE_MAX 66000
+#define DEFAULT_PROP_AUTO_ANALOG_GAIN TRUE
+#define DEFAULT_PROP_AUTO_DIGITAL_GAIN TRUE
+#define DEFAULT_PROP_AUTO_EXPOSURE TRUE
+#define DEFAULT_PROP_AUTO_WB TRUE
+#define DEFAULT_PROP_SATURATION 1.0
+#define DEFAULT_PROP_DENOISING 0.5
+#define DEFAULT_PROP_EXP_COMPENSATION 0.0
+#define DEFAULT_PROP_SHARPENING 1.0
+#define DEFAULT_PROP_MAN_ANALOG_GAIN_DB 5       // *
+#define DEFAULT_PROP_MAN_DIGITAL_GAIN_VAL 128   // *
+#define DEFAULT_PROP_MAN_EXPOSURE_USEC 2000     // *
+#define DEFAULT_PROP_MANUAL_WB 5000             // *
+#define DEFAULT_PROP_TONE_MAP_R_GAMMA 2.0       // *
+#define DEFAULT_PROP_TONE_MAP_G_GAMMA 2.0       // *
+#define DEFAULT_PROP_TONE_MAP_B_GAMMA 2.0       // *
 
-#define DEFAULT_PROP_AEG_AGC_ROI_X              -1
-#define DEFAULT_PROP_AEG_AGC_ROI_Y              -1
-#define DEFAULT_PROP_AEG_AGC_ROI_W              -1
-#define DEFAULT_PROP_AEG_AGC_ROI_H              -1
+#define DEFAULT_PROP_AEG_AGC_ROI_X -1
+#define DEFAULT_PROP_AEG_AGC_ROI_Y -1
+#define DEFAULT_PROP_AEG_AGC_ROI_W -1
+#define DEFAULT_PROP_AEG_AGC_ROI_H -1
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define GST_TYPE_ZEDXONE_RESOL (gst_zedxonesrc_resol_get_type())
@@ -248,28 +240,28 @@ static GstStaticPadTemplate gst_zedxonesrc_src_template =
 
 /* Tools */
 bool resol_to_w_h(const GstZedXOneSrcRes &resol, guint32 &out_w, guint32 &out_h) {
-    switch(resol) {
-        case GST_ZEDXONESRC_SVGA:
-          out_w = 960;
-          out_h = 600;
-          break;
+    switch (resol) {
+    case GST_ZEDXONESRC_SVGA:
+        out_w = 960;
+        out_h = 600;
+        break;
 
-        case GST_ZEDXONESRC_1080P:
-          out_w = 1920;
-          out_h = 1080;
-          break;
+    case GST_ZEDXONESRC_1080P:
+        out_w = 1920;
+        out_h = 1080;
+        break;
 
-        case GST_ZEDXONESRC_1200P:
-          out_w = 1920;
-          out_h = 1200;
-          break;
+    case GST_ZEDXONESRC_1200P:
+        out_w = 1920;
+        out_h = 1200;
+        break;
 
-        case GST_ZEDXONESRC_4K:
-          out_w = 3856;
-          out_h = 2180;
-          break;
+    case GST_ZEDXONESRC_4K:
+        out_w = 3856;
+        out_h = 2180;
+        break;
 
-        default:
+    default:
         out_w = -1;
         out_h = -1;
         return false;
@@ -295,8 +287,8 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
     gst_element_class_add_pad_template(gstelement_class,
                                        gst_static_pad_template_get(&gst_zedxonesrc_src_template));
 
-    gst_element_class_set_static_metadata(gstelement_class, "ZED X One Camera Source", "Source/Video",
-                                          "Stereolabs ZED X One Camera source",
+    gst_element_class_set_static_metadata(gstelement_class, "ZED X One Camera Source",
+                                          "Source/Video", "Stereolabs ZED X One Camera source",
                                           "Stereolabs <support@stereolabs.com>");
 
     gstbasesrc_class->start = GST_DEBUG_FUNCPTR(gst_zedxonesrc_start);
@@ -313,73 +305,74 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
         gobject_class, PROP_CAM_RES,
         g_param_spec_enum("camera-resolution", "Camera Resolution", "Camera Resolution",
                           GST_TYPE_ZEDXONE_RESOL, DEFAULT_PROP_CAM_RES,
-                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_CAM_FPS,
         g_param_spec_enum("camera-fps", "Camera frame rate", "Camera frame rate", GST_TYPE_ZED_FPS,
                           DEFAULT_PROP_CAM_FPS,
-                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_VERBOSE_LVL,
-        g_param_spec_int("verbose-level", "Capture Library Verbose", "Capture Library Verbose level", 0, 4,
-                         DEFAULT_PROP_VERBOSE_LVL,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("verbose-level", "Capture Library Verbose",
+                         "Capture Library Verbose level", 0, 4, DEFAULT_PROP_VERBOSE_LVL,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_CAM_ID,
         g_param_spec_int("camera-id", "Camera ID", "Select camera from cameraID", 0, 255,
                          DEFAULT_PROP_CAM_ID,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_SWAP_RB,
-        g_param_spec_boolean("swap-rb", "Swap RB",
-                             "Swap Red and Blue color channels", DEFAULT_PROP_SWAP_RB,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_boolean("swap-rb", "Swap RB", "Swap Red and Blue color channels",
+                             DEFAULT_PROP_SWAP_RB,
+                             (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_TIMEOUT_MSEC,
-        g_param_spec_int("camera-timeout", "Timeout [msec]", "Connection timeout in milliseconds", 100, 100000000,
-                         DEFAULT_PROP_TIMEOUT_MSEC,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("camera-timeout", "Timeout [msec]", "Connection timeout in milliseconds",
+                         100, 100000000, DEFAULT_PROP_TIMEOUT_MSEC,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    // g_object_class_install_property(
-    //     gobject_class, PROP_CAM_SN,
-    //     g_param_spec_int64("camera-sn", "Camera Serial Number",
-    //                        "Select camera from camera serial number", 0, G_MAXINT64,
-    //                        DEFAULT_PROP_CAM_SN,
-    //                        (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_AUTO_EXPOSURE,
+        g_param_spec_boolean("auto-exposure", "Automatic exposure", "Enable Automatic exposure",
+                             DEFAULT_PROP_AUTO_EXPOSURE,
+                             (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    
+    g_object_class_install_property(
+        gobject_class, PROP_MAN_EXPOSURE_USEC,
+        g_param_spec_int("exposure-time", "Exposure time [µsec]", "Exposure time in microseconds",
+                         0, 66666, DEFAULT_PROP_MAN_EXPOSURE_USEC,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
-        g_param_spec_int("ctrl-aec-agc-roi-x",
-                         "Camera control: auto gain/exposure ROI top left 'X' coordinate",
-                         "Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)", -1,
-                         2208, DEFAULT_PROP_AEG_AGC_ROI_X,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int(
+            "ctrl-aec-agc-roi-x", "Camera control: auto gain/exposure ROI top left 'X' coordinate",
+            "Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)", -1, 2208,
+            DEFAULT_PROP_AEG_AGC_ROI_X, (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_Y,
-        g_param_spec_int("ctrl-aec-agc-roi-y",
-                         "Camera control: auto gain/exposure ROI top left 'Y' coordinate",
-                         "Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)", -1,
-                         1242, DEFAULT_PROP_AEG_AGC_ROI_Y,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int(
+            "ctrl-aec-agc-roi-y", "Camera control: auto gain/exposure ROI top left 'Y' coordinate",
+            "Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)", -1, 1242,
+            DEFAULT_PROP_AEG_AGC_ROI_Y, (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_W,
         g_param_spec_int("ctrl-aec-agc-roi-w", "Camera control: auto gain/exposure ROI width",
                          "Auto gain/exposure ROI width (-1 to not set ROI)", -1, 2208,
                          DEFAULT_PROP_AEG_AGC_ROI_W,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_H,
         g_param_spec_int("ctrl-aec-agc-roi-h", "Camera control: auto gain/exposure ROI height",
                          "Auto gain/exposure ROI height (-1 to not set ROI)", -1, 1242,
                          DEFAULT_PROP_AEG_AGC_ROI_H,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
@@ -413,8 +406,11 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->camera_id = DEFAULT_PROP_CAM_ID;
     src->swap_rb = DEFAULT_PROP_SWAP_RB;
     src->cam_timeout_msec = DEFAULT_PROP_TIMEOUT_MSEC;
-    // src->camera_sn = DEFAULT_PROP_CAM_SN;
 
+    src->auto_exposure = DEFAULT_PROP_AUTO_EXPOSURE;
+    src->exposure_range_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
+    src->exposure_range_max = DEFAULT_PROP_EXPOSURE_RANGE_MAX;
+    src->manual_exposure_usec = DEFAULT_PROP_MAN_EXPOSURE_USEC;
 
     src->aec_agc_roi_x = DEFAULT_PROP_AEG_AGC_ROI_X;
     src->aec_agc_roi_y = DEFAULT_PROP_AEG_AGC_ROI_Y;
@@ -425,7 +421,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->stop_requested = FALSE;
     src->caps = NULL;
 
-    if(!src->zed) {
+    if (!src->zed) {
         src->zed = std::make_unique<oc::ArgusBayerCapture>();
     }
 
@@ -433,7 +429,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
 }
 
 void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValue *value,
-                             GParamSpec *pspec) {
+                                 GParamSpec *pspec) {
     GstZedXOneSrc *src;
 
     src = GST_ZED_X_ONE_SRC(object);
@@ -459,10 +455,13 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     case PROP_TIMEOUT_MSEC:
         src->cam_timeout_msec = g_value_get_int(value);
         break;
-    // case PROP_CAM_SN:
-    //     src->camera_sn = g_value_get_int64(value);
-    //     break;
-        case PROP_AEC_AGC_ROI_X:
+    case PROP_AUTO_EXPOSURE:
+        src->auto_exposure = g_value_get_boolean(value);
+        break;
+    case PROP_MAN_EXPOSURE_USEC:
+        src->manual_exposure_usec = g_value_get_int(value);
+        break;
+    case PROP_AEC_AGC_ROI_X:
         src->aec_agc_roi_x = g_value_get_int(value);
         break;
     case PROP_AEC_AGC_ROI_Y:
@@ -480,7 +479,8 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     }
 }
 
-void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec) {
+void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *value,
+                                 GParamSpec *pspec) {
     GstZedXOneSrc *src;
 
     g_return_if_fail(GST_IS_ZED_X_ONE_SRC(object));
@@ -507,10 +507,12 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
     case PROP_TIMEOUT_MSEC:
         g_value_set_int(value, src->cam_timeout_msec);
         break;
-    // case PROP_CAM_SN:
-    //     g_value_set_int64(value, src->camera_sn);
-    //     break;
-    
+    case PROP_AUTO_EXPOSURE:
+        g_value_set_boolean(value, src->auto_exposure);
+        break;
+    case PROP_MAN_EXPOSURE_USEC:
+        g_value_set_int(value, src->manual_exposure_usec);
+        break;
     case PROP_AEC_AGC_ROI_X:
         g_value_set_int(value, src->aec_agc_roi_x);
         break;
@@ -565,10 +567,10 @@ static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
     guint32 width, height;
     gint fps;
     GstVideoInfo vinfo;
-    GstVideoFormat format = src->swap_rb?GST_VIDEO_FORMAT_RGBA:GST_VIDEO_FORMAT_BGRA;
+    GstVideoFormat format = src->swap_rb ? GST_VIDEO_FORMAT_RGBA : GST_VIDEO_FORMAT_BGRA;
 
-    if(!resol_to_w_h(static_cast<GstZedXOneSrcRes>(src->camera_resolution), width, height)) {
-      return FALSE;
+    if (!resol_to_w_h(static_cast<GstZedXOneSrcRes>(src->camera_resolution), width, height)) {
+        return FALSE;
     }
 
     fps = src->camera_fps;
@@ -600,24 +602,23 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     // ----> Set config parameters
     guint32 width, height;
-    if(!resol_to_w_h(static_cast<GstZedXOneSrcRes>(src->camera_resolution), width, height)) {
-      return FALSE;
+    if (!resol_to_w_h(static_cast<GstZedXOneSrcRes>(src->camera_resolution), width, height)) {
+        return FALSE;
     }
 
     int major, minor, patch;
     oc::ArgusVirtualCapture::getVersion(major, minor, patch);
-    GST_INFO("ZED Argus Capture Version: %d.%d.%d",major,minor,patch);
+    GST_INFO("ZED Argus Capture Version: %d.%d.%d", major, minor, patch);
 
     std::vector<oc::ArgusDevice> devs = oc::ArgusBayerCapture::getArgusDevices();
     for (int i = 0; i < devs.size(); i++) {
         GST_INFO("##################");
-        GST_INFO(" Device: %d",devs.at(i).id);
-        GST_INFO(" Name: %s",devs.at(i).name.c_str());
-        GST_INFO(" Badge: %s",devs.at(i).badge.c_str());
-        GST_INFO(" Available: %s",(devs.at(i).available?"TRUE":"FALSE"));
+        GST_INFO(" Device: %d", devs.at(i).id);
+        GST_INFO(" Name: %s", devs.at(i).name.c_str());
+        GST_INFO(" Badge: %s", devs.at(i).badge.c_str());
+        GST_INFO(" Available: %s", (devs.at(i).available ? "TRUE" : "FALSE"));
     }
     GST_INFO("***********************");
-
 
     GST_INFO("CAMERA INITIALIZATION PARAMETERS");
 
@@ -626,13 +627,13 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Camera ID: %d", src->camera_id);
     config.mWidth = width;
     config.mHeight = height;
-    GST_INFO(" * Camera resolution: %d x %d", (int)width, (int)height);
+    GST_INFO(" * Camera resolution: %d x %d", (int) width, (int) height);
     config.mFPS = src->camera_fps;
     GST_INFO(" * Camera FPS: %d", src->camera_fps);
     config.mChannel = 4;
     GST_INFO(" * Camera channels: %d", config.mChannel);
     config.mSwapRB = src->swap_rb;
-    GST_INFO(" * Swap RB: %s", (src->swap_rb?"TRUE":"FALSE"));
+    GST_INFO(" * Swap RB: %s", (src->swap_rb ? "TRUE" : "FALSE"));
     config.verbose_level = src->verbose_level;
     GST_INFO(" * Verbose level: %d", src->verbose_level);
 
@@ -640,42 +641,79 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     // <---- Set config parameters
 
     // ----> Open camera
-    GST_INFO("Camera opening: #%d", (int)config.mDeviceId);
+    GST_INFO("Camera opening: #%d", (int) config.mDeviceId);
 
     oc::ARGUS_STATE ret = src->zed->openCamera(config);
 
     if (ret != oc::ARGUS_STATE::OK) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                          ("Failed to open camera, '%s'", oc::ARGUS_STATE2str(ret).c_str()), (NULL));
+                          ("Failed to open camera, '%s'", oc::ARGUS_STATE2str(ret).c_str()),
+                          (NULL));
         return FALSE;
     }
     GST_INFO("Camera ready");
-    GST_INFO(" * %dx%d@%dFPS", src->zed->getWidth(), src->zed->getHeight(),
-             src->zed->getFPS());
+    GST_INFO(" * %dx%d@%dFPS", src->zed->getWidth(), src->zed->getHeight(), src->zed->getFPS());
     // <---- Open camera
 
     // ----> Camera Controls
-    // TODO set camera controls from parameters
+    GST_INFO("CAMERA CONTROL DEFAULT PARAMETERS");
     uint64_t min_u64;
     uint64_t max_u64;
     float min_f;
     float max_f;
 
     src->zed->getExposureLimits(min_u64, max_u64);
-    GST_INFO("Exposure Limits: [%d,%d]", (int) min_u64, (int) max_u64);
+    GST_INFO(" * Exposure Limits: [%d,%d]", (int) min_u64, (int) max_u64);
     src->zed->getAnalogGainLimits(min_f, max_f);
-    GST_INFO("Analog Gain Limits: [%g,%g]", min_f, max_f);
+    GST_INFO(" * Analog Gain Limits: [%g,%g]", min_f, max_f);
     src->zed->getDigitalGainLimits(min_f, max_f);
-    GST_INFO("Digital Gain Limits: [%g,%g]", min_f, max_f);
+    GST_INFO(" * Digital Gain Limits: [%g,%g]", min_f, max_f);
 
     float sat = src->zed->getColorSaturation();
-    GST_INFO("Default Saturation: %g", sat);
+    GST_INFO(" * Default Saturation: %g", sat);
     float den = src->zed->getDenoisingValue();
-    GST_INFO("Default Denoising: %g", den);
+    GST_INFO(" * Default Denoising: %g", den);
     float exp = src->zed->getExposureCompensation();
-    GST_INFO("Default Exposure Compensation: %g", exp);
+    GST_INFO(" * Default Exposure Compensation: %g", exp);
     float sharp = src->zed->getSharpening();
-    GST_INFO("Default Sharpening: %g", sharp);
+    GST_INFO(" * Default Sharpening: %g", sharp);
+
+    GST_INFO("CAMERA CONTROL PARAMETERS");
+    int res;
+    // EXPOSURE
+    if (src->auto_exposure == TRUE) {
+        res = src->zed->setAutomaticExposure();
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic exposure"),
+                              (NULL));
+            return FALSE;
+        }
+        GST_INFO(" * Automatic Exposure: TRUE");
+        res = src->zed->setFrameExposureRange(src->exposure_range_min, src->exposure_range_max);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic exposure range"),
+                              (NULL));
+            return FALSE;
+        }
+        GST_INFO(" * Automatic Exposure range: [%d,%d] µsec", src->exposure_range_min,
+                 src->exposure_range_max);
+    } else {
+        int frame_usec = static_cast<int>(1e9 / src->camera_fps);
+        if(src->manual_exposure_usec>frame_usec) {
+          GST_WARNING(
+              "Manual exposure time (%d) setting is higher than the frame period (%d). "
+              "Value truncated to %d µsec",
+              src->manual_exposure_usec, frame_usec, frame_usec);
+          src->manual_exposure_usec = frame_usec;
+        }
+        res = src->zed->setManualTimeExposure((uint64_t) src->manual_exposure_usec);
+
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual exposure"), (NULL));
+            return FALSE;
+        }
+        GST_INFO(" * Manual Exposure: %d µsec", src->manual_exposure_usec);
+    }
     // <---- Camera Controls
 
     if (!gst_zedxonesrc_calculate_caps(src)) {
@@ -783,7 +821,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     while (!src->zed->isNewFrame()) {
         auto end = std::chrono::system_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        if(elapsed.count()>src->cam_timeout_msec) {
+        if (elapsed.count() > src->cam_timeout_msec) {
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Camera timeout. Disconnected?"), (NULL));
             return GST_FLOW_ERROR;
         }
@@ -804,8 +842,8 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // ----> Check memory size
     gsize data_size = static_cast<gsize>(src->zed->getWidth() * src->zed->getHeight() *
-                    src->zed->getNumberOfChannels());
-    if(minfo.size!=data_size) {
+                                         src->zed->getNumberOfChannels());
+    if (minfo.size != data_size) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("ZED X One Data size mismatch!"), (NULL));
         return GST_FLOW_ERROR;
     }
@@ -903,11 +941,13 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 }
 
 static gboolean plugin_init(GstPlugin *plugin) {
-    GST_DEBUG_CATEGORY_INIT(gst_zedxonesrc_debug, "zedxonesrc", 0, "debug category for zedxonesrc element");
+    GST_DEBUG_CATEGORY_INIT(gst_zedxonesrc_debug, "zedxonesrc", 0,
+                            "debug category for zedxonesrc element");
     gst_element_register(plugin, "zedxonesrc", GST_RANK_NONE, gst_zedxonesrc_get_type());
 
     return TRUE;
 }
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, zedxonesrc, "Zed X One camera source", plugin_init,
-                  GST_PACKAGE_VERSION, GST_PACKAGE_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, zedxonesrc, "Zed X One camera source",
+                  plugin_init, GST_PACKAGE_VERSION, GST_PACKAGE_LICENSE, GST_PACKAGE_NAME,
+                  GST_PACKAGE_ORIGIN)
