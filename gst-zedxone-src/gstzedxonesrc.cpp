@@ -339,7 +339,7 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_AUTO_EXPOSURE,
-        g_param_spec_boolean("auto-exposure", "Automatic exposure", "Enable Automatic exposure",
+        g_param_spec_boolean("auto-exposure", "Automatic Exposure", "Enable Automatic Exposure",
                              DEFAULT_PROP_AUTO_EXPOSURE,
                              (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -362,6 +362,18 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                          "Maximum exposure time in microseconds for the automatic exposure setting",
                          28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MAX,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_AUTO_WB,
+        g_param_spec_boolean("auto-wb", "Automatic White Balance", "Enable Automatic White Balance",
+                             DEFAULT_PROP_AUTO_WB,
+                             (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_MANUAL_WB,
+        g_param_spec_int("white-balance-temp", "White Balance Temperature [°]", "White Balance Temperature [°]",
+                         2800, 12000, DEFAULT_PROP_MANUAL_WB,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));    
 
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
@@ -484,6 +496,12 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     case PROP_EXPOSURE_RANGE_MAX:
         src->exposure_range_max = g_value_get_int(value);
         break;
+    case PROP_AUTO_WB:
+        src->auto_wb = g_value_get_boolean(value);
+        break;
+    case PROP_MANUAL_WB:
+        src->manual_wb = g_value_get_int(value);
+        break;
     case PROP_AEC_AGC_ROI_X:
         src->aec_agc_roi_x = g_value_get_int(value);
         break;
@@ -541,6 +559,12 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_EXPOSURE_RANGE_MAX:
         g_value_set_int(value, src->exposure_range_max);
+        break;
+    case PROP_AUTO_WB:
+        g_value_set_boolean(value, src->auto_wb);
+        break;
+    case PROP_MANUAL_WB:
+        g_value_set_int(value, src->manual_wb);
         break;
     case PROP_AEC_AGC_ROI_X:
         g_value_set_int(value, src->aec_agc_roi_x);
@@ -685,27 +709,27 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     // <---- Open camera
 
     // ----> Camera Controls
-    GST_INFO("CAMERA CONTROL DEFAULT PARAMETERS");
-    uint64_t min_u64;
-    uint64_t max_u64;
-    float min_f;
-    float max_f;
+    // GST_INFO("CAMERA CONTROL DEFAULT PARAMETERS");
+    // uint64_t min_u64;
+    // uint64_t max_u64;
+    // float min_f;
+    // float max_f;
 
-    src->zed->getExposureLimits(min_u64, max_u64);
-    GST_INFO(" * Exposure Limits: [%d,%d]", (int) min_u64, (int) max_u64);
-    src->zed->getAnalogGainLimits(min_f, max_f);
-    GST_INFO(" * Analog Gain Limits: [%g,%g]", min_f, max_f);
-    src->zed->getDigitalGainLimits(min_f, max_f);
-    GST_INFO(" * Digital Gain Limits: [%g,%g]", min_f, max_f);
+    // src->zed->getExposureLimits(min_u64, max_u64);
+    // GST_INFO(" * Exposure Limits: [%d,%d]", (int) min_u64, (int) max_u64);
+    // src->zed->getAnalogGainLimits(min_f, max_f);
+    // GST_INFO(" * Analog Gain Limits: [%g,%g]", min_f, max_f);
+    // src->zed->getDigitalGainLimits(min_f, max_f);
+    // GST_INFO(" * Digital Gain Limits: [%g,%g]", min_f, max_f);
 
-    float sat = src->zed->getColorSaturation();
-    GST_INFO(" * Default Saturation: %g", sat);
-    float den = src->zed->getDenoisingValue(0);
-    GST_INFO(" * Default Denoising: %g", den);
-    float exp = src->zed->getExposureCompensation();
-    GST_INFO(" * Default Exposure Compensation: %g", exp);
-    float sharp = src->zed->getSharpening();
-    GST_INFO(" * Default Sharpening: %g", sharp);
+    // float sat = src->zed->getColorSaturation();
+    // GST_INFO(" * Default Saturation: %g", sat);
+    // float den = src->zed->getDenoisingValue(0);
+    // GST_INFO(" * Default Denoising: %g", den);
+    // float exp = src->zed->getExposureCompensation();
+    // GST_INFO(" * Default Exposure Compensation: %g", exp);
+    // float sharp = src->zed->getSharpening();
+    // GST_INFO(" * Default Sharpening: %g", sharp);
 
     GST_INFO("CAMERA CONTROL PARAMETERS");
     int res;
@@ -727,13 +751,12 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Automatic Exposure range: [%d,%d] µsec", src->exposure_range_min,
                  src->exposure_range_max);
     } else {
-        int frame_usec = static_cast<int>(1e9 / src->camera_fps);
-        if(src->manual_exposure_usec>frame_usec) {
-          GST_WARNING(
-              "Manual exposure time (%d) setting is higher than the frame period (%d). "
-              "Value truncated to %d µsec",
-              src->manual_exposure_usec, frame_usec, frame_usec);
-          src->manual_exposure_usec = frame_usec;
+        int frame_usec = static_cast<int>(1e6 / src->camera_fps);
+        if (src->manual_exposure_usec > frame_usec) {
+            GST_WARNING("Manual exposure time (%d) setting is higher than the frame period (%d). "
+                        "Value truncated to %d µsec",
+                        src->manual_exposure_usec, frame_usec, frame_usec);
+            src->manual_exposure_usec = frame_usec;
         }
         res = src->zed->setManualTimeExposure((uint64_t) src->manual_exposure_usec);
 
@@ -742,6 +765,31 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
             return FALSE;
         }
         GST_INFO(" * Manual Exposure: %d µsec", src->manual_exposure_usec);
+    }
+
+    // WHITE BALANCE
+    if (src->auto_wb == TRUE) {
+        res = src->zed->setAutomaticWhiteBalance(TRUE);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic White Balance"),
+                              (NULL));
+            return FALSE;
+        }
+        GST_INFO(" * Automatic White Balance: TRUE");
+    } else {
+        res = src->zed->setAutomaticWhiteBalance(FALSE);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic White Balance"),
+                              (NULL));
+            return FALSE;
+        }
+        res = src->zed->setManualWhiteBalance(src->manual_wb);
+        if (res != 0) {
+          GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                            ("Failed to set White Balance value"), (NULL));
+          return FALSE;
+        }
+        GST_INFO(" * Manual White Balance: %d°", src->manual_wb);
     }
     // <---- Camera Controls
 
