@@ -91,7 +91,7 @@ typedef enum {
     GST_ZEDXONESRC_SVGA,    // 960 x 600
     GST_ZEDXONESRC_1080P,   // 1920 x 1080
     GST_ZEDXONESRC_1200P,   // 1920 x 1200
-    GST_ZEDXONESRC_4K       // 3856 x 2180
+    GST_ZEDXONESRC_4K       // 3840 x 2160
 } GstZedXOneSrcRes;
 
 typedef enum {
@@ -155,7 +155,7 @@ static GType gst_zedxonesrc_resol_get_type(void) {
 
     if (!zedxonesrc_resol_type) {
         static GEnumValue pattern_types[] = {
-            {static_cast<gint>(GST_ZEDXONESRC_4K), "3856x2180", "4K"},
+            {static_cast<gint>(GST_ZEDXONESRC_4K), "3840x2160", "4K"},
             {static_cast<gint>(GST_ZEDXONESRC_1200P), "1920x1200", "HD1200"},
             {static_cast<gint>(GST_ZEDXONESRC_1080P), "1920x1080", "HD1080"},
             {static_cast<gint>(GST_ZEDXONESRC_SVGA), "960x600", "SVGA"},
@@ -187,13 +187,32 @@ static GType gst_zedxonesrc_fps_get_type(void) {
     return zedxonesrc_fps_type;
 }
 
+#define GST_TYPE_ANTI_BANDING (gst_zedxonesrc_anti_banding_get_type())
+static GType gst_zedxonesrc_anti_banding_get_type(void) {
+    static GType zedxonesrc_anti_banding_type = 0;
+
+    if (!zedxonesrc_anti_banding_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_AE_ANTI_BAND_OFF, "Anti Banding disabled", "Disabled"},
+            {GST_AE_ANTI_BAND_AUTO, "Automatic Anti Banding", "Automatic"},
+            {GST_AE_ANTI_BAND_50HZ, "50 Hz Anti Banding", "50 Hz"},
+            {GST_AE_ANTI_BAND_60HZ, "60 Hz Anti Banding", "60 Hz"},
+            {0, NULL, NULL},
+        };
+
+        zedxonesrc_anti_banding_type = g_enum_register_static("GstZedXOneSrcAntiBanding", pattern_types);
+    }
+
+    return zedxonesrc_anti_banding_type;
+}
+
 /* pad templates */
 static GstStaticPadTemplate gst_zedxonesrc_src_template =
     GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
                             GST_STATIC_CAPS(("video/x-raw, "   // Color 4K
                                              "format = (string)BGRA, "
-                                             "width = (int)3856, "
-                                             "height = (int)2180, "
+                                             "width = (int)3840, "
+                                             "height = (int)2160, "
                                              "framerate = (fraction)15"
                                              ";"
                                              "video/x-raw, "   // Color HD1200
@@ -216,8 +235,8 @@ static GstStaticPadTemplate gst_zedxonesrc_src_template =
                                              ";"
                                              "video/x-raw, "   // Color 4K
                                              "format = (string)RGBA, "
-                                             "width = (int)3856, "
-                                             "height = (int)2180, "
+                                             "width = (int)3840, "
+                                             "height = (int)2160, "
                                              "framerate = (fraction)15"
                                              ";"
                                              "video/x-raw, "   // Color HD1200
@@ -257,8 +276,8 @@ bool resol_to_w_h(const GstZedXOneSrcRes &resol, guint32 &out_w, guint32 &out_h)
         break;
 
     case GST_ZEDXONESRC_4K:
-        out_w = 3856;
-        out_h = 2180;
+        out_w = 3840;
+        out_h = 2160;
         break;
 
     default:
@@ -373,7 +392,13 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
         gobject_class, PROP_MANUAL_WB,
         g_param_spec_int("white-balance-temp", "White Balance Temperature [°]", "White Balance Temperature [°]",
                          2800, 12000, DEFAULT_PROP_MANUAL_WB,
-                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));    
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_AE_ANTI_BANDING,
+        g_param_spec_enum("at-anti-banding", "Anti Banding", "Automatic Exposure Anti Banding", GST_TYPE_ANTI_BANDING,
+                          DEFAULT_PROP_AE_ANTI_BANDING,
+                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));    
 
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
@@ -694,7 +719,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     // <---- Set config parameters
 
     // ----> Open camera
-    GST_INFO("Camera opening: #%d", (int) config.mDeviceId);
+    GST_INFO("Opening camera #%d ...", (int) config.mDeviceId);
 
     oc::ARGUS_STATE ret = src->zed->openCamera(config);
 
@@ -704,7 +729,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
                           (NULL));
         return FALSE;
     }
-    GST_INFO("Camera ready");
+    GST_INFO("... camera ready");
     GST_INFO(" * %dx%d@%dFPS", src->zed->getWidth(), src->zed->getHeight(), src->zed->getFPS());
     // <---- Open camera
 
