@@ -346,7 +346,21 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_MAN_EXPOSURE_USEC,
         g_param_spec_int("exposure-time", "Exposure time [µsec]", "Exposure time in microseconds",
-                         0, 66666, DEFAULT_PROP_MAN_EXPOSURE_USEC,
+                         28, 66000, DEFAULT_PROP_MAN_EXPOSURE_USEC,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_EXPOSURE_RANGE_MIN,
+        g_param_spec_int("auto-exposure-range-min", "Minimum Exposure time [µsec]",
+                         "Minimum exposure time in microseconds for the automatic exposure setting",
+                         28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MIN,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_EXPOSURE_RANGE_MAX,
+        g_param_spec_int("auto-exposure-range-max", "Maximum Exposure time [µsec]",
+                         "Maximum exposure time in microseconds for the automatic exposure setting",
+                         28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MAX,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -412,6 +426,9 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->exposure_range_max = DEFAULT_PROP_EXPOSURE_RANGE_MAX;
     src->manual_exposure_usec = DEFAULT_PROP_MAN_EXPOSURE_USEC;
 
+    src->auto_wb = DEFAULT_PROP_AUTO_WB;
+    src->manual_wb = DEFAULT_PROP_MANUAL_WB;
+
     src->aec_agc_roi_x = DEFAULT_PROP_AEG_AGC_ROI_X;
     src->aec_agc_roi_y = DEFAULT_PROP_AEG_AGC_ROI_Y;
     src->aec_agc_roi_w = DEFAULT_PROP_AEG_AGC_ROI_W;
@@ -460,6 +477,12 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_MAN_EXPOSURE_USEC:
         src->manual_exposure_usec = g_value_get_int(value);
+        break;
+    case PROP_EXPOSURE_RANGE_MIN:
+        src->exposure_range_min = g_value_get_int(value);
+        break;
+    case PROP_EXPOSURE_RANGE_MAX:
+        src->exposure_range_max = g_value_get_int(value);
         break;
     case PROP_AEC_AGC_ROI_X:
         src->aec_agc_roi_x = g_value_get_int(value);
@@ -512,6 +535,12 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_MAN_EXPOSURE_USEC:
         g_value_set_int(value, src->manual_exposure_usec);
+        break;
+    case PROP_EXPOSURE_RANGE_MIN:
+        g_value_set_int(value, src->exposure_range_min);
+        break;
+    case PROP_EXPOSURE_RANGE_MAX:
+        g_value_set_int(value, src->exposure_range_max);
         break;
     case PROP_AEC_AGC_ROI_X:
         g_value_set_int(value, src->aec_agc_roi_x);
@@ -671,7 +700,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     float sat = src->zed->getColorSaturation();
     GST_INFO(" * Default Saturation: %g", sat);
-    float den = src->zed->getDenoisingValue();
+    float den = src->zed->getDenoisingValue(0);
     GST_INFO(" * Default Denoising: %g", den);
     float exp = src->zed->getExposureCompensation();
     GST_INFO(" * Default Exposure Compensation: %g", exp);
