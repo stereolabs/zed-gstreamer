@@ -1423,7 +1423,7 @@ int ArgusBayerCapture::setExposureCompensation(float ev)
 
   clamp<float>(ev,-2.0,2.0);
   if (ac)
-    ac->setExposureCompensation(ev);
+    status = ac->setExposureCompensation(ev);
 
   dispatchRequest();
   return (int)status;

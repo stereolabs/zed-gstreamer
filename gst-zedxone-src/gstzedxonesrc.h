@@ -75,9 +75,9 @@ struct _GstZedXOneSrc {
     gint manual_wb;     // * Manual White Balance [2800,12000]
 
     gint ae_anti_banding;           // * Exposure anti banding - OFF, AUTO, 50Hz, 60Hz
-    gfloat color_saturation;        // Color Saturation [0.0,2.0]
-    gfloat denoising;               // Image Denoising [0.0,1.0]
-    gfloat exposure_compensation;   // Exposure Compensation [-2.0,2.0]
+    gfloat color_saturation;        // * Color Saturation [0.0,2.0]
+    gfloat denoising;               // * Image Denoising [0.0,1.0]
+    gfloat exposure_compensation;   // * Exposure Compensation [-2.0,2.0]
     gfloat sharpening;              // Image Sharpening [0.0,1.0]
 
     gint aec_agc_roi_x;

@@ -467,6 +467,13 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                            (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_EXP_COMPENSATION,
+        g_param_spec_float("exposure-compensation", "Exposure Compensation", "Exposure Compensation", -2.0, 2.0,
+                           DEFAULT_PROP_EXP_COMPENSATION,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+
+    g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
         g_param_spec_int(
             "ctrl-aec-agc-roi-x", "Camera control: auto gain/exposure ROI top left 'X' coordinate",
@@ -524,6 +531,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->ae_anti_banding = DEFAULT_PROP_AE_ANTI_BANDING;
     src->color_saturation = DEFAULT_PROP_SATURATION;
     src->denoising = DEFAULT_PROP_DENOISING;
+    src->exposure_compensation = DEFAULT_PROP_EXP_COMPENSATION;
 
     src->auto_exposure = DEFAULT_PROP_AUTO_EXPOSURE;
     src->exposure_range_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
@@ -594,6 +602,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_DENOISING:
         src->denoising = g_value_get_float(value);
+        break;
+    case PROP_EXP_COMPENSATION:
+        src->exposure_compensation = g_value_get_float(value);
         break;
     case PROP_AUTO_EXPOSURE:
         src->auto_exposure = g_value_get_boolean(value);
@@ -691,6 +702,9 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_DENOISING:
         g_value_set_float(value, src->denoising);
+        break;
+    case PROP_EXP_COMPENSATION:
+        g_value_set_float(value, src->exposure_compensation);
         break;
     case PROP_AUTO_EXPOSURE:
         g_value_set_boolean(value, src->auto_exposure);
@@ -948,6 +962,14 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         return FALSE;
     }
     GST_INFO(" * Denoising: %g", src->denoising);
+
+    // EXPOSURE COMPENSATION
+    res = src->zed->setExposureCompensation(src->exposure_compensation);
+    if (res != 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set exposure compensation value: %d", res), (NULL));
+        return FALSE;
+    }
+    GST_INFO(" * Exposure Compensation: %g", src->exposure_compensation);
 
     // EXPOSURE
     if (src->auto_exposure == TRUE) {
@@ -1282,6 +1304,16 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         res = src->zed->setDenoisingValue(src->denoising);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Denoising: %d", res),
+                              (NULL));
+        }
+    }
+
+    // EXPOSURE COMPENSATION
+    float exp_comp = src->zed->getExposureCompensation();
+    if (fabs(exp_comp - src->exposure_compensation) > 0.1f) {
+        res = src->zed->setExposureCompensation(src->exposure_compensation);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Exposure Compensation: %d", res),
                               (NULL));
         }
     }
