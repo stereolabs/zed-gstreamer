@@ -461,6 +461,12 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                            (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_DENOISING,
+        g_param_spec_float("denoising", "Denoising", "Denoising factor", 0.0, 1.0,
+                           DEFAULT_PROP_DENOISING,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
         g_param_spec_int(
             "ctrl-aec-agc-roi-x", "Camera control: auto gain/exposure ROI top left 'X' coordinate",
@@ -517,6 +523,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
 
     src->ae_anti_banding = DEFAULT_PROP_AE_ANTI_BANDING;
     src->color_saturation = DEFAULT_PROP_SATURATION;
+    src->denoising = DEFAULT_PROP_DENOISING;
 
     src->auto_exposure = DEFAULT_PROP_AUTO_EXPOSURE;
     src->exposure_range_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
@@ -584,6 +591,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_SATURATION:
         src->color_saturation = g_value_get_float(value);
+        break;
+    case PROP_DENOISING:
+        src->denoising = g_value_get_float(value);
         break;
     case PROP_AUTO_EXPOSURE:
         src->auto_exposure = g_value_get_boolean(value);
@@ -678,6 +688,9 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_SATURATION:
         g_value_set_float(value, src->color_saturation);
+        break;
+    case PROP_DENOISING:
+        g_value_set_float(value, src->denoising);
         break;
     case PROP_AUTO_EXPOSURE:
         g_value_set_boolean(value, src->auto_exposure);
@@ -881,7 +894,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     // float sat = src->zed->getColorSaturation();
     // GST_INFO(" * Default Saturation: %g", sat);
-    // float den = src->zed->getDenoisingValue(0);
+    // float den = src->zed->getDenoisingValue();
     // GST_INFO(" * Default Denoising: %g", den);
     // float exp = src->zed->getExposureCompensation();
     // GST_INFO(" * Default Exposure Compensation: %g", exp);
@@ -927,6 +940,14 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         return FALSE;
     }
     GST_INFO(" * Color Saturation: %g", src->color_saturation);
+
+    // DENOISING
+    res = src->zed->setDenoisingValue(src->denoising);
+    if (res != 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set denoising: %d", res), (NULL));
+        return FALSE;
+    }
+    GST_INFO(" * Denoising: %g", src->denoising);
 
     // EXPOSURE
     if (src->auto_exposure == TRUE) {
@@ -1247,10 +1268,20 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // COLOR SATURATION
     float sat = src->zed->getColorSaturation();
-    if (fabs(sat - src->color_saturation) > 5.0f) {
+    if (fabs(sat - src->color_saturation) > 0.5f) {
         res = src->zed->setColorSaturation(src->color_saturation);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Color saturation: %d", res),
+                              (NULL));
+        }
+    }
+
+    // DENOISING
+    float den = src->zed->getDenoisingValue();
+    if (fabs(den - src->denoising) > 0.1f) {
+        res = src->zed->setDenoisingValue(src->denoising);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Denoising: %d", res),
                               (NULL));
         }
     }

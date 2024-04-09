@@ -283,7 +283,7 @@ public :
   virtual int setAEAntiBanding(AEANTIBANDING mode)=0;
 
   virtual int setDenoisingValue(float value)=0;
-  virtual float getDenoisingValue(int side)=0;
+  virtual float getDenoisingValue()=0;
 
   virtual int setExposureCompensation(float ev)=0;
   virtual float getExposureCompensation()=0;
@@ -521,7 +521,7 @@ class __attribute__((visibility("default"))) ArgusV4l2Capture : public ArgusVirt
     float getGamma();
     int setAEAntiBanding(AEANTIBANDING mode);
     int setDenoisingValue(float value);
-    float getDenoisingValue(int side);
+    float getDenoisingValue();
     int setExposureCompensation(float ev);
     float getExposureCompensation();
     int setROIforAECAGC(oc::Rect roi);
@@ -917,7 +917,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \brief getDenoisingValue
     /// \return [0 - 1.0] value. <0 means error
     ///
-    float getDenoisingValue(int side);
+    float getDenoisingValue();
 
 
     //////////////////////////////////
