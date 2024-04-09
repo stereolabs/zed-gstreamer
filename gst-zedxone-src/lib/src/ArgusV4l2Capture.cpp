@@ -830,7 +830,7 @@ int ArgusV4l2Capture::setManualAnalogGain(int percent)
     return -1;
 }
 
-int ArgusV4l2Capture::setManualAnalogGainReal(int db)
+int ArgusV4l2Capture::setManualAnalogGainReal(float db)
 {
     return -1;
 }

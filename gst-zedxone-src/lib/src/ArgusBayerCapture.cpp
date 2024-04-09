@@ -1152,12 +1152,12 @@ int ArgusBayerCapture::setManualAnalogGain(int percent)
   return setAnalogFrameGainRange(real_gain_,real_gain_);
 }
 
-int ArgusBayerCapture::setManualAnalogGainReal(int db)
+int ArgusBayerCapture::setManualAnalogGainReal(float db)
 {
   if (!opened_)
     return -1;
 
-  return setAnalogFrameGainRange((float)db/1000.f,(float)db/1000.f);
+  return setAnalogFrameGainRange(db,db);
 }
 
 

@@ -255,7 +255,7 @@ public :
   virtual int getAnalogGainLimits(float& min_gain,float& max_gain)=0;
   virtual int setAutomaticAnalogGain()=0;
   virtual int setManualAnalogGain(int percent)=0;
-  virtual int setManualAnalogGainReal(int db)=0;
+  virtual int setManualAnalogGainReal(float db)=0;
   virtual float getDigitalFrameGain()=0;
   virtual int setDigitalFrameGainRange(float gain_low,float gain_high)=0;
   virtual int getDigitalFrameGainRange(float& dgain_low,float& dgain_high)=0;
@@ -500,7 +500,7 @@ class __attribute__((visibility("default"))) ArgusV4l2Capture : public ArgusVirt
     int getAnalogGainLimits(float& min_gain,float& max_gain);
     int setAutomaticAnalogGain();
     int setManualAnalogGain(int percent);
-    int setManualAnalogGainReal(int db);
+    int setManualAnalogGainReal(float db);
     float getDigitalFrameGain();
     int setDigitalFrameGainRange(float gain_low,float gain_high);
     int getDigitalFrameGainRange(float& dgain_low,float& dgain_high);
@@ -734,7 +734,7 @@ class __attribute__((visibility("default"))) ArgusBayerCapture : public ArgusVir
     /// \param db : db as real db *100
     /// \return 0 if success, <0 if camera unavailable, >0 if error from argus side
     ///
-    int setManualAnalogGainReal(int db);
+    int setManualAnalogGainReal(float db);
 
     //////////////////////////////////
     ////////// ISP GAIN /// //////////

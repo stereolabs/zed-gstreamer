@@ -22,6 +22,7 @@
 #include <gst/base/gstpushsrc.h>
 #include <gst/gst.h>
 #include <gst/video/video.h>
+#include <math.h>
 #include <unistd.h>
 
 #include "gst-zed-meta/gstzedmeta.h"
@@ -122,8 +123,8 @@ typedef enum {
 
 // CAMERA CONTROLS
 #define DEFAULT_PROP_AE_ANTI_BANDING GST_AE_ANTI_BAND_AUTO
-#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN 1
-#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX 16
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN 0.1
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX 30.0
 #define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN 1
 #define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX 256
 #define DEFAULT_PROP_EXPOSURE_RANGE_MIN 28
@@ -136,7 +137,7 @@ typedef enum {
 #define DEFAULT_PROP_DENOISING 0.5
 #define DEFAULT_PROP_EXP_COMPENSATION 0.0
 #define DEFAULT_PROP_SHARPENING 1.0
-#define DEFAULT_PROP_MAN_ANALOG_GAIN_DB 5       // *
+#define DEFAULT_PROP_MAN_ANALOG_GAIN_DB 1.0     // *
 #define DEFAULT_PROP_MAN_DIGITAL_GAIN_VAL 128   // *
 #define DEFAULT_PROP_MAN_EXPOSURE_USEC 2000     // *
 #define DEFAULT_PROP_MANUAL_WB 5000             // *
@@ -384,6 +385,32 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_AUTO_ANALOG_GAIN,
+        g_param_spec_boolean("auto-analog-gain", "Automatic Analog Gain",
+                             "Enable Automatic Analog Gain", DEFAULT_PROP_AUTO_ANALOG_GAIN,
+                             (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_MAN_ANALOG_GAIN_DB,
+        g_param_spec_float("analog-gain", "Analog Gain [dB]", "Analog Gain value in dB", 0.1, 30.0,
+                           DEFAULT_PROP_MAN_ANALOG_GAIN_DB,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_ANALOG_GAIN_RANGE_MIN,
+        g_param_spec_float("auto-analog-gain-range-min", "Minimum Automatic Analog Gain [dB]",
+                           "Minimum Analog Gain in dB for the automatic analog gain setting", 0.1,
+                           30.0, DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_ANALOG_GAIN_RANGE_MAX,
+        g_param_spec_float("auto-analog-gain-range-max", "Maximum Automatic Analog Gain [dB]",
+                           "Maximum Analog Gain in dB for the automatic analog gain setting", 0.1,
+                           30.0, DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
         gobject_class, PROP_AUTO_WB,
         g_param_spec_boolean("auto-wb", "Automatic White Balance", "Enable Automatic White Balance",
                              DEFAULT_PROP_AUTO_WB,
@@ -460,10 +487,16 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->cam_timeout_msec = DEFAULT_PROP_TIMEOUT_MSEC;
 
     src->ae_anti_banding = DEFAULT_PROP_AE_ANTI_BANDING;
+
     src->auto_exposure = DEFAULT_PROP_AUTO_EXPOSURE;
     src->exposure_range_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
     src->exposure_range_max = DEFAULT_PROP_EXPOSURE_RANGE_MAX;
     src->manual_exposure_usec = DEFAULT_PROP_MAN_EXPOSURE_USEC;
+
+    src->auto_analog_gain = DEFAULT_PROP_AUTO_ANALOG_GAIN;
+    src->analog_frame_gain_range_min = DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN;
+    src->analog_frame_gain_range_max = DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX;
+    src->manual_analog_gain_db = DEFAULT_PROP_MAN_ANALOG_GAIN_DB;
 
     src->auto_wb = DEFAULT_PROP_AUTO_WB;
     src->manual_wb = DEFAULT_PROP_MANUAL_WB;
@@ -525,6 +558,18 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_EXPOSURE_RANGE_MAX:
         src->exposure_range_max = g_value_get_int(value);
+        break;
+    case PROP_AUTO_ANALOG_GAIN:
+        src->auto_analog_gain = g_value_get_boolean(value);
+        break;
+    case PROP_MAN_ANALOG_GAIN_DB:
+        src->manual_analog_gain_db = g_value_get_float(value);
+        break;
+    case PROP_ANALOG_GAIN_RANGE_MIN:
+        src->analog_frame_gain_range_min = g_value_get_float(value);
+        break;
+    case PROP_ANALOG_GAIN_RANGE_MAX:
+        src->analog_frame_gain_range_max = g_value_get_float(value);
         break;
     case PROP_AUTO_WB:
         src->auto_wb = g_value_get_boolean(value);
@@ -592,6 +637,18 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_EXPOSURE_RANGE_MAX:
         g_value_set_int(value, src->exposure_range_max);
+        break;
+    case PROP_AUTO_ANALOG_GAIN:
+        g_value_set_boolean(value, src->auto_analog_gain);
+        break;
+    case PROP_MAN_ANALOG_GAIN_DB:
+        g_value_set_float(value, src->manual_analog_gain_db);
+        break;
+    case PROP_ANALOG_GAIN_RANGE_MIN:
+        g_value_set_float(value, src->analog_frame_gain_range_min);
+        break;
+    case PROP_ANALOG_GAIN_RANGE_MAX:
+        g_value_set_float(value, src->analog_frame_gain_range_max);
         break;
     case PROP_AUTO_WB:
         g_value_set_boolean(value, src->auto_wb);
@@ -847,6 +904,57 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Manual Exposure: %d µsec", src->manual_exposure_usec);
     }
 
+    // ANALOG GAIN
+    if (src->auto_analog_gain == TRUE) {
+        res = src->zed->setAutomaticAnalogGain();
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic Analog Gain"),
+                              (NULL));
+            return FALSE;
+        }
+        GST_INFO(" * Automatic Analog Gain: TRUE");
+        res = src->zed->setAnalogFrameGainRange(src->analog_frame_gain_range_min,
+                                                src->analog_frame_gain_range_max);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Automatic Analog Gain range"), (NULL));
+            return FALSE;
+        }
+        GST_INFO(" * Automatic Analog Gain range: [%d,%d] dB", src->analog_frame_gain_range_min,
+                 src->analog_frame_gain_range_max);
+    } else {
+        float min, max;
+        res = src->zed->getAnalogGainLimits(min, max);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to retrieve analog gain limits"),
+                              (NULL));
+            return FALSE;
+        }
+
+        if (src->manual_analog_gain_db > max) {
+            GST_WARNING("Manual analog gain (%f) setting is higher than the maximum limit "
+                        "(%f). "
+                        "Value truncated to %f dB",
+                        src->manual_analog_gain_db, max, max);
+            src->manual_analog_gain_db = max;
+        }
+        if (src->manual_analog_gain_db < min) {
+            GST_WARNING("Manual analog gain time (%f) setting is lower than the minimum limit "
+                        "(%f). "
+                        "Value truncated to %f dB",
+                        src->manual_analog_gain_db, min, min);
+            src->manual_analog_gain_db = min;
+        }
+        res = src->zed->setManualAnalogGainReal(src->manual_analog_gain_db);
+
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Analog Gain"),
+                              (NULL));
+            return FALSE;
+        }
+        GST_INFO(" * Manual Analog Gain: %f dB", src->manual_analog_gain_db);
+    }
+
     // WHITE BALANCE
     if (src->auto_wb == TRUE) {
         res = src->zed->setAutomaticWhiteBalance(TRUE);
@@ -1014,13 +1122,29 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     int res;
 
     // EXPOSURE
-    gint exp = static_cast<gint>(src->zed->getFrameExposureTime());
-    if (abs(exp - src->manual_exposure_usec) > 10) {
-        if (src->zed->setManualTimeExposure((uint64_t) src->manual_exposure_usec) != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual exposure"), (NULL));
+    if (src->auto_exposure == FALSE) {
+        gint exp = static_cast<gint>(src->zed->getFrameExposureTime());
+        if (abs(exp - src->manual_exposure_usec) > 10) {
+            if (src->zed->setManualTimeExposure((uint64_t) src->manual_exposure_usec) != 0) {
+                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Exposure"),
+                                  (NULL));
+            }
+            GST_INFO("Forced manual exposure value. Expected %d, was %d", src->manual_exposure_usec,
+                     exp);
         }
-        GST_INFO("Forced manual exposure value. Expected %d, was %d", src->manual_exposure_usec,
-                 exp);
+    }
+
+    // ANALOG GAIN
+    if (src->auto_analog_gain == FALSE) {
+        float an_gain = src->zed->getAnalogFrameGain();
+        if (fabs(an_gain - src->manual_analog_gain_db) > 5.0) {
+            if (src->zed->setManualAnalogGainReal(src->manual_analog_gain_db) != 0) {
+                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Analog Gain"),
+                                  (NULL));
+            }
+            GST_INFO("Forced manual analog gain value. Expected %f, was %f",
+                     src->manual_analog_gain_db, an_gain);
+        }
     }
     // <---- Camera controls
 

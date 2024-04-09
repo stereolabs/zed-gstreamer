@@ -77,7 +77,7 @@ struct _GstZedXOneSrc {
   gfloat exposure_compensation;   // [-2.0,2.0]
   gfloat sharpening;              // [0.0,1.0]
 
-  gint manual_analog_gain_db;
+  gfloat manual_analog_gain_db;
 
   gint manual_digital_gain_value;   // [1,256]
 
