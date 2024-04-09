@@ -468,8 +468,8 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_EXP_COMPENSATION,
-        g_param_spec_float("exposure-compensation", "Exposure Compensation", "Exposure Compensation", -2.0, 2.0,
-                           DEFAULT_PROP_EXP_COMPENSATION,
+        g_param_spec_float("exposure-compensation", "Exposure Compensation",
+                           "Exposure Compensation", -2.0, 2.0, DEFAULT_PROP_EXP_COMPENSATION,
                            (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -482,24 +482,27 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
         gobject_class, PROP_AEC_AGC_ROI_X,
         g_param_spec_int(
             "ctrl-aec-agc-roi-x", "Camera control: auto gain/exposure ROI top left 'X' coordinate",
-            "Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)", -1, 2208,
+            "Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)", -1, 3810,
             DEFAULT_PROP_AEG_AGC_ROI_X, (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_Y,
         g_param_spec_int(
             "ctrl-aec-agc-roi-y", "Camera control: auto gain/exposure ROI top left 'Y' coordinate",
-            "Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)", -1, 1242,
+            "Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)", -1, 2160,
             DEFAULT_PROP_AEG_AGC_ROI_Y, (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_W,
         g_param_spec_int("ctrl-aec-agc-roi-w", "Camera control: auto gain/exposure ROI width",
-                         "Auto gain/exposure ROI width (-1 to not set ROI)", -1, 2208,
+                         "Auto gain/exposure ROI width (-1 to not set ROI)", -1, 3810,
                          DEFAULT_PROP_AEG_AGC_ROI_W,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_H,
         g_param_spec_int("ctrl-aec-agc-roi-h", "Camera control: auto gain/exposure ROI height",
-                         "Auto gain/exposure ROI height (-1 to not set ROI)", -1, 1242,
+                         "Auto gain/exposure ROI height (-1 to not set ROI)", -1, 2160,
                          DEFAULT_PROP_AEG_AGC_ROI_H,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
@@ -978,7 +981,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     // EXPOSURE COMPENSATION
     res = src->zed->setExposureCompensation(src->exposure_compensation);
     if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set exposure compensation value: %d", res), (NULL));
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                          ("Failed to set exposure compensation value: %d", res), (NULL));
         return FALSE;
     }
     GST_INFO(" * Exposure Compensation: %g", src->exposure_compensation);
@@ -986,7 +990,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     // SHARPENING
     res = src->zed->setSharpening(src->sharpening);
     if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set image sharpening value: %d", res), (NULL));
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                          ("Failed to set image sharpening value: %d", res), (NULL));
         return FALSE;
     }
     GST_INFO(" * Image Sharpeninng: %g", src->sharpening);
@@ -995,15 +1000,15 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     if (src->auto_exposure == TRUE) {
         res = src->zed->setAutomaticExposure();
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic exposure"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Automatic exposure: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Automatic Exposure: TRUE");
         res = src->zed->setFrameExposureRange(src->exposure_range_min, src->exposure_range_max);
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic exposure range"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Automatic exposure range: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Automatic Exposure range: [%d,%d] µsec", src->exposure_range_min,
@@ -1012,8 +1017,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         uint64_t min, max;
         res = src->zed->getFrameExposureRange(min, max);
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to retrieve exposure limits"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to retrieve exposure limits: %d", res), (NULL));
             return FALSE;
         }
 
@@ -1034,7 +1039,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         res = src->zed->setManualTimeExposure((uint64_t) src->manual_exposure_usec);
 
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual exposure"), (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual exposure: %d", res),
+                              (NULL));
             return FALSE;
         }
         GST_INFO(" * Manual Exposure: %d µsec", src->manual_exposure_usec);
@@ -1044,8 +1050,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     if (src->auto_analog_gain == TRUE) {
         res = src->zed->setAutomaticAnalogGain();
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic Analog Gain"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Automatic Analog Gain: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Automatic Analog Gain: TRUE");
@@ -1053,7 +1059,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
                                                 src->analog_frame_gain_range_max);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Automatic Analog Gain range"), (NULL));
+                              ("Failed to set Automatic Analog Gain range: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Automatic Analog Gain range: [%d,%d] dB", src->analog_frame_gain_range_min,
@@ -1062,8 +1068,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         float min, max;
         res = src->zed->getAnalogGainLimits(min, max);
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to retrieve analog gain limits"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to retrieve analog gain limits: %d", res), (NULL));
             return FALSE;
         }
 
@@ -1084,8 +1090,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         res = src->zed->setManualAnalogGainReal(src->manual_analog_gain_db);
 
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Analog Gain"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Manual Analog Gain: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Manual Analog Gain: %g dB", src->manual_analog_gain_db);
@@ -1095,8 +1101,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     if (src->auto_digital_gain == TRUE) {
         res = src->zed->setAutomaticDigitalGain();
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic Digital Gain"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Automatic Digital Gain: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Automatic Digital Gain: TRUE");
@@ -1104,7 +1110,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
                                                  src->digital_frame_gain_range_max);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Automatic Digital Gain range"), (NULL));
+                              ("Failed to set Automatic Digital Gain range: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Automatic Digital Gain range: [%g,%g]", src->digital_frame_gain_range_min,
@@ -1113,8 +1119,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         float min, max;
         res = src->zed->getDigitalGainLimits(min, max);
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to retrieve digital gain limits"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to retrieve digital gain limits: %d", res), (NULL));
             return FALSE;
         }
 
@@ -1135,8 +1141,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         res = src->zed->setManualDigitalGainReal(src->manual_digital_gain_value);
 
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Digital Gain"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Manual Digital Gain: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Manual Digital Gain: %d", src->manual_digital_gain_value);
@@ -1146,25 +1152,51 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     if (src->auto_wb == TRUE) {
         res = src->zed->setAutomaticWhiteBalance(TRUE);
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic White Balance"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Automatic White Balance: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Automatic White Balance: TRUE");
     } else {
         res = src->zed->setAutomaticWhiteBalance(FALSE);
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic White Balance"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Automatic White Balance: %d", res), (NULL));
             return FALSE;
         }
         res = src->zed->setManualWhiteBalance(src->manual_wb);
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set White Balance value"),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set White Balance value: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Manual White Balance: %d°", src->manual_wb);
+    }
+
+    // REGION OF INTEREST FOR AEC AND AGC    
+    if (src->aec_agc_roi_x != -1 && src->aec_agc_roi_x != -1 && src->aec_agc_roi_w != -1 &&
+        src->aec_agc_roi_h != -1) {
+        oc::Rect roi;
+        roi.x = src->aec_agc_roi_x;
+        roi.y = src->aec_agc_roi_y;
+        roi.width = src->aec_agc_roi_w;
+        roi.height = src->aec_agc_roi_h;
+        res = src->zed->setROIforAECAGC(roi);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set ROI for AEC and AGC: %d", res), (NULL));
+
+            if(res==7) {
+                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("ROI size is too small"), (NULL));
+            }
+
+            return FALSE;
+        }
+        GST_INFO(" * AEC/AGC ROI: Origin (%d,%d) - Size %d x %d", src->aec_agc_roi_x,
+                 src->aec_agc_roi_y, src->aec_agc_roi_w, src->aec_agc_roi_h);
+    } else {
+        GST_INFO(" * AEC/AGC ROI: DISABLED");
     }
     // <---- Camera Controls
 
@@ -1333,8 +1365,8 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     if (fabs(exp_comp - src->exposure_compensation) > 0.1f) {
         res = src->zed->setExposureCompensation(src->exposure_compensation);
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Exposure Compensation: %d", res),
-                              (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Exposure Compensation: %d", res), (NULL));
         }
     }
 
