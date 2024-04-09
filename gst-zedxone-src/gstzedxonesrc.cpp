@@ -104,9 +104,9 @@ typedef enum {
 
 typedef enum {
     GST_AE_ANTI_BAND_OFF = 0,
-    GST_AE_ANTI_BAND_AUTO = 0,
-    GST_AE_ANTI_BAND_50HZ = 0,
-    GST_AE_ANTI_BAND_60HZ = 0
+    GST_AE_ANTI_BAND_AUTO = 1,
+    GST_AE_ANTI_BAND_50HZ = 2,
+    GST_AE_ANTI_BAND_60HZ = 3
 } GstZedXOneSrcAeAntiBand;
 
 //////////////// DEFAULT PARAMETERS
@@ -397,7 +397,7 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_AE_ANTI_BANDING,
-        g_param_spec_enum("at-anti-banding", "Anti Banding", "Automatic Exposure Anti Banding", GST_TYPE_ANTI_BANDING,
+        g_param_spec_enum("anti-banding", "Anti Banding", "AE Anti Banding", GST_TYPE_ANTI_BANDING,
                           DEFAULT_PROP_AE_ANTI_BANDING,
                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));    
 
@@ -459,6 +459,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->swap_rb = DEFAULT_PROP_SWAP_RB;
     src->cam_timeout_msec = DEFAULT_PROP_TIMEOUT_MSEC;
 
+    src->ae_anti_banding = DEFAULT_PROP_AE_ANTI_BANDING;
     src->auto_exposure = DEFAULT_PROP_AUTO_EXPOSURE;
     src->exposure_range_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
     src->exposure_range_max = DEFAULT_PROP_EXPOSURE_RANGE_MAX;
@@ -509,6 +510,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_TIMEOUT_MSEC:
         src->cam_timeout_msec = g_value_get_int(value);
+        break;
+    case PROP_AE_ANTI_BANDING:
+        src->ae_anti_banding = g_value_get_enum(value);
         break;
     case PROP_AUTO_EXPOSURE:
         src->auto_exposure = g_value_get_boolean(value);
@@ -573,6 +577,9 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_TIMEOUT_MSEC:
         g_value_set_int(value, src->cam_timeout_msec);
+        break;        
+    case PROP_AE_ANTI_BANDING:
+        g_value_set_enum(value, src->ae_anti_banding);
         break;
     case PROP_AUTO_EXPOSURE:
         g_value_set_boolean(value, src->auto_exposure);
@@ -732,6 +739,8 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     }
     GST_INFO("... camera ready");
     GST_INFO(" * %dx%d@%dFPS", src->zed->getWidth(), src->zed->getHeight(), src->zed->getFPS());
+
+    usleep(5000);
     // <---- Open camera
 
     // ----> Camera Controls
@@ -759,6 +768,36 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     GST_INFO("CAMERA CONTROL PARAMETERS");
     int res;
+
+    // AE ANTI BANDING
+    res = src->zed->setAEAntiBanding(static_cast<oc::AEANTIBANDING>(src->ae_anti_banding));
+    if (res != 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set AE Anti Banding: %d",res),
+                            (NULL));
+        return FALSE;
+    }
+    std::string ae;
+    switch (static_cast<GstZedXOneSrcAeAntiBand>(src->ae_anti_banding))
+    {
+    case GST_AE_ANTI_BAND_AUTO:
+      ae = "AUTO";
+      break;
+
+    case GST_AE_ANTI_BAND_50HZ:
+      ae = "50 Hz";
+      break;
+
+    case GST_AE_ANTI_BAND_60HZ:
+      ae = "60 Hz";
+      break;
+    
+    case GST_AE_ANTI_BAND_OFF:
+    default:
+      ae = "OFF";
+      break;
+    }
+    GST_INFO(" * AE Anti Banding: %s", ae.c_str() );
+
     // EXPOSURE
     if (src->auto_exposure == TRUE) {
         res = src->zed->setAutomaticExposure();
@@ -777,12 +816,27 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Automatic Exposure range: [%d,%d] µsec", src->exposure_range_min,
                  src->exposure_range_max);
     } else {
-        int frame_usec = static_cast<int>(1e6 / src->camera_fps);
-        if (src->manual_exposure_usec > frame_usec) {
-            GST_WARNING("Manual exposure time (%d) setting is higher than the frame period (%d). "
+        uint64_t min, max;
+        res = src->zed->getFrameExposureRange(min, max);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to retrieve exposure limits"),
+                              (NULL));
+            return FALSE;
+        }
+
+        if (src->manual_exposure_usec > max) {
+            GST_WARNING("Manual exposure time (%d) setting is higher than the maximum limit "
+                        "(%d). "
                         "Value truncated to %d µsec",
-                        src->manual_exposure_usec, frame_usec, frame_usec);
-            src->manual_exposure_usec = frame_usec;
+                        src->manual_exposure_usec, (int) max, (int) max);
+            src->manual_exposure_usec = max;
+        }
+        if (src->manual_exposure_usec < min) {
+            GST_WARNING("Manual exposure time (%d) setting is lower than the minimum limit "
+                        "(%d). "
+                        "Value truncated to %d µsec",
+                        src->manual_exposure_usec, (int) min, (int) min);
+            src->manual_exposure_usec = min;
         }
         res = src->zed->setManualTimeExposure((uint64_t) src->manual_exposure_usec);
 
@@ -961,7 +1015,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // EXPOSURE
     gint exp = static_cast<gint>(src->zed->getFrameExposureTime());
-    if (exp != src->manual_exposure_usec) {
+    if (abs(exp - src->manual_exposure_usec) > 10) {
         if (src->zed->setManualTimeExposure((uint64_t) src->manual_exposure_usec) != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual exposure"), (NULL));
         }

@@ -1456,19 +1456,19 @@ int ArgusBayerCapture::setAEAntiBanding(AEANTIBANDING mode)
       switch (mode)
         {
         case AEANTIBANDING::OFF :
-          ac->setAeAntibandingMode(AE_ANTIBANDING_MODE_OFF);
+          status = ac->setAeAntibandingMode(AE_ANTIBANDING_MODE_OFF);
           break;
 
         case AEANTIBANDING::AUTO :
-          ac->setAeAntibandingMode(AE_ANTIBANDING_MODE_AUTO);
+          status = ac->setAeAntibandingMode(AE_ANTIBANDING_MODE_AUTO);
           break;
 
         case AEANTIBANDING::HZ50 :
-          ac->setAeAntibandingMode(AE_ANTIBANDING_MODE_50HZ);
+          status = ac->setAeAntibandingMode(AE_ANTIBANDING_MODE_50HZ);
           break;
 
         case AEANTIBANDING::HZ60 :
-          ac->setAeAntibandingMode(AE_ANTIBANDING_MODE_60HZ);
+          status = ac->setAeAntibandingMode(AE_ANTIBANDING_MODE_60HZ);
           break;
 
         }
