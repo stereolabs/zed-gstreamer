@@ -1358,8 +1358,8 @@ int ArgusBayerCapture::setSharpening(float value)
   if (iEdgeEnhanceSettings)
     {
       clamp<float>(value,0,1.0);
-      iEdgeEnhanceSettings->setEdgeEnhanceMode(Argus::EDGE_ENHANCE_MODE_HIGH_QUALITY);
-      iEdgeEnhanceSettings->setEdgeEnhanceStrength(value);
+      status = iEdgeEnhanceSettings->setEdgeEnhanceMode(Argus::EDGE_ENHANCE_MODE_HIGH_QUALITY);
+      status = iEdgeEnhanceSettings->setEdgeEnhanceStrength(value);
       dispatchRequest();
     }
   return (int)status;

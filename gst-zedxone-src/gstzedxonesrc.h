@@ -78,7 +78,7 @@ struct _GstZedXOneSrc {
     gfloat color_saturation;        // * Color Saturation [0.0,2.0]
     gfloat denoising;               // * Image Denoising [0.0,1.0]
     gfloat exposure_compensation;   // * Exposure Compensation [-2.0,2.0]
-    gfloat sharpening;              // Image Sharpening [0.0,1.0]
+    gfloat sharpening;              // * Image Sharpening [0.0,1.0]
 
     gint aec_agc_roi_x;
     gint aec_agc_roi_y;

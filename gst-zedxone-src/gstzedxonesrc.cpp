@@ -472,6 +472,11 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                            DEFAULT_PROP_EXP_COMPENSATION,
                            (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property(
+        gobject_class, PROP_SHARPENING,
+        g_param_spec_float("sharpening", "Image Sharpening", "Image Sharpening", 0.0, 1.0,
+                           DEFAULT_PROP_SHARPENING,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
@@ -532,6 +537,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->color_saturation = DEFAULT_PROP_SATURATION;
     src->denoising = DEFAULT_PROP_DENOISING;
     src->exposure_compensation = DEFAULT_PROP_EXP_COMPENSATION;
+    src->sharpening = DEFAULT_PROP_SHARPENING;
 
     src->auto_exposure = DEFAULT_PROP_AUTO_EXPOSURE;
     src->exposure_range_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
@@ -605,6 +611,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_EXP_COMPENSATION:
         src->exposure_compensation = g_value_get_float(value);
+        break;
+    case PROP_SHARPENING:
+        src->sharpening = g_value_get_float(value);
         break;
     case PROP_AUTO_EXPOSURE:
         src->auto_exposure = g_value_get_boolean(value);
@@ -705,6 +714,9 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_EXP_COMPENSATION:
         g_value_set_float(value, src->exposure_compensation);
+        break;
+    case PROP_SHARPENING:
+        g_value_set_float(value, src->sharpening);
         break;
     case PROP_AUTO_EXPOSURE:
         g_value_set_boolean(value, src->auto_exposure);
@@ -970,6 +982,14 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         return FALSE;
     }
     GST_INFO(" * Exposure Compensation: %g", src->exposure_compensation);
+
+    // SHARPENING
+    res = src->zed->setSharpening(src->sharpening);
+    if (res != 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set image sharpening value: %d", res), (NULL));
+        return FALSE;
+    }
+    GST_INFO(" * Image Sharpeninng: %g", src->sharpening);
 
     // EXPOSURE
     if (src->auto_exposure == TRUE) {
@@ -1314,6 +1334,16 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         res = src->zed->setExposureCompensation(src->exposure_compensation);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Exposure Compensation: %d", res),
+                              (NULL));
+        }
+    }
+
+    // SHARPENING
+    float sharp = src->zed->getSharpening();
+    if (fabs(sharp - src->sharpening) > 0.1f) {
+        res = src->zed->setSharpening(src->sharpening);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Image Sharpening: %d", res),
                               (NULL));
         }
     }
