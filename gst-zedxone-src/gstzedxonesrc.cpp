@@ -22,6 +22,7 @@
 #include <gst/base/gstpushsrc.h>
 #include <gst/gst.h>
 #include <gst/video/video.h>
+#include <unistd.h>
 
 #include "gst-zed-meta/gstzedmeta.h"
 #include "gstzedxonesrc.h"
@@ -954,6 +955,20 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // ----> Memory copy
     memcpy(minfo.data, src->zed->getPixels(), minfo.size);
     // <---- Memory copy
+
+    // ----> Camera controls
+    int res;
+
+    // EXPOSURE
+    gint exp = static_cast<gint>(src->zed->getFrameExposureTime());
+    if (exp != src->manual_exposure_usec) {
+        if (src->zed->setManualTimeExposure((uint64_t) src->manual_exposure_usec) != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual exposure"), (NULL));
+        }
+        GST_INFO("Forced manual exposure value. Expected %d, was %d", src->manual_exposure_usec,
+                 exp);
+    }
+    // <---- Camera controls
 
     // // ----> Info metadata
     // sl::CameraInformation cam_info = src->zed->getCameraInformation();
