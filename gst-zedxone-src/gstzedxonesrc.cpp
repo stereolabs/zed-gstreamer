@@ -58,7 +58,6 @@ enum {
     PROP_CAM_ID,
     PROP_SWAP_RB,
     PROP_TIMEOUT_MSEC,
-
     PROP_AE_ANTI_BANDING,
     PROP_ANALOG_GAIN_RANGE_MIN,
     PROP_ANALOG_GAIN_RANGE_MAX,
@@ -75,7 +74,7 @@ enum {
     PROP_EXP_COMPENSATION,
     PROP_SHARPENING,
     PROP_MAN_ANALOG_GAIN_DB,
-    PROP_MAN_DIGITAL_GAIN_,
+    PROP_MAN_DIGITAL_GAIN,
     PROP_MAN_EXPOSURE_USEC,
     PROP_MANUAL_WB,
     PROP_TONE_MAP_R_GAMMA,
@@ -125,8 +124,8 @@ typedef enum {
 #define DEFAULT_PROP_AE_ANTI_BANDING GST_AE_ANTI_BAND_AUTO
 #define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN 0.1
 #define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX 30.0
-#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN 1
-#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX 256
+#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN 1.0
+#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX 256.0
 #define DEFAULT_PROP_EXPOSURE_RANGE_MIN 28
 #define DEFAULT_PROP_EXPOSURE_RANGE_MAX 66000
 #define DEFAULT_PROP_AUTO_ANALOG_GAIN TRUE
@@ -137,13 +136,13 @@ typedef enum {
 #define DEFAULT_PROP_DENOISING 0.5
 #define DEFAULT_PROP_EXP_COMPENSATION 0.0
 #define DEFAULT_PROP_SHARPENING 1.0
-#define DEFAULT_PROP_MAN_ANALOG_GAIN_DB 1.0     // *
-#define DEFAULT_PROP_MAN_DIGITAL_GAIN_VAL 128   // *
-#define DEFAULT_PROP_MAN_EXPOSURE_USEC 2000     // *
-#define DEFAULT_PROP_MANUAL_WB 5000             // *
-#define DEFAULT_PROP_TONE_MAP_R_GAMMA 2.0       // *
-#define DEFAULT_PROP_TONE_MAP_G_GAMMA 2.0       // *
-#define DEFAULT_PROP_TONE_MAP_B_GAMMA 2.0       // *
+#define DEFAULT_PROP_MAN_ANALOG_GAIN_DB 1.0   // *
+#define DEFAULT_PROP_MAN_DIGITAL_GAIN 128     // *
+#define DEFAULT_PROP_MAN_EXPOSURE_USEC 2000   // *
+#define DEFAULT_PROP_MANUAL_WB 5000           // *
+#define DEFAULT_PROP_TONE_MAP_R_GAMMA 2.0     // *
+#define DEFAULT_PROP_TONE_MAP_G_GAMMA 2.0     // *
+#define DEFAULT_PROP_TONE_MAP_B_GAMMA 2.0     // *
 
 #define DEFAULT_PROP_AEG_AGC_ROI_X -1
 #define DEFAULT_PROP_AEG_AGC_ROI_Y -1
@@ -202,7 +201,8 @@ static GType gst_zedxonesrc_anti_banding_get_type(void) {
             {0, NULL, NULL},
         };
 
-        zedxonesrc_anti_banding_type = g_enum_register_static("GstZedXOneSrcAntiBanding", pattern_types);
+        zedxonesrc_anti_banding_type =
+            g_enum_register_static("GstZedXOneSrcAntiBanding", pattern_types);
     }
 
     return zedxonesrc_anti_banding_type;
@@ -411,6 +411,32 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                            (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_AUTO_DIGITAL_GAIN,
+        g_param_spec_boolean("auto-digital-gain", "Automatic Digital Gain",
+                             "Enable Automatic Digital Gain", DEFAULT_PROP_AUTO_DIGITAL_GAIN,
+                             (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_MAN_DIGITAL_GAIN,
+        g_param_spec_int("digital-gain", "Digital Gain", "Digital Gain value", 1, 256,
+                         DEFAULT_PROP_MAN_DIGITAL_GAIN,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_DIGITAL_GAIN_RANGE_MIN,
+        g_param_spec_float("auto-digital-gain-range-min", "Minimum Automatic Digital Gain",
+                           "Minimum Digital Gain for the automatic digital gain setting", 1.0,
+                           256.0, DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_DIGITAL_GAIN_RANGE_MAX,
+        g_param_spec_float("auto-digital-gain-range-max", "Maximum Automatic Digital Gain",
+                           "Maximum Digital Gain for the automatic digital gain setting", 1.0,
+                           256.0, DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
         gobject_class, PROP_AUTO_WB,
         g_param_spec_boolean("auto-wb", "Automatic White Balance", "Enable Automatic White Balance",
                              DEFAULT_PROP_AUTO_WB,
@@ -418,15 +444,21 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_MANUAL_WB,
-        g_param_spec_int("white-balance-temp", "White Balance Temperature [°]", "White Balance Temperature [°]",
-                         2800, 12000, DEFAULT_PROP_MANUAL_WB,
+        g_param_spec_int("white-balance-temp", "White Balance Temperature [°]",
+                         "White Balance Temperature [°]", 2800, 12000, DEFAULT_PROP_MANUAL_WB,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_AE_ANTI_BANDING,
         g_param_spec_enum("anti-banding", "Anti Banding", "AE Anti Banding", GST_TYPE_ANTI_BANDING,
                           DEFAULT_PROP_AE_ANTI_BANDING,
-                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));    
+                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_SATURATION,
+        g_param_spec_float("saturation", "Color Saturation", "Color Saturation", 0.0, 2.0,
+                           DEFAULT_PROP_SATURATION,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
@@ -462,9 +494,6 @@ static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
     src->out_framesize = 0;
     src->is_started = FALSE;
 
-    src->last_frame_count = 0;
-    src->total_dropped_frames = 0;
-
     if (src->caps) {
         gst_caps_unref(src->caps);
         src->caps = NULL;
@@ -487,6 +516,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->cam_timeout_msec = DEFAULT_PROP_TIMEOUT_MSEC;
 
     src->ae_anti_banding = DEFAULT_PROP_AE_ANTI_BANDING;
+    src->color_saturation = DEFAULT_PROP_SATURATION;
 
     src->auto_exposure = DEFAULT_PROP_AUTO_EXPOSURE;
     src->exposure_range_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
@@ -497,6 +527,11 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->analog_frame_gain_range_min = DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN;
     src->analog_frame_gain_range_max = DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX;
     src->manual_analog_gain_db = DEFAULT_PROP_MAN_ANALOG_GAIN_DB;
+
+    src->auto_digital_gain = DEFAULT_PROP_AUTO_DIGITAL_GAIN;
+    src->digital_frame_gain_range_min = DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN;
+    src->digital_frame_gain_range_max = DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX;
+    src->manual_digital_gain_value = DEFAULT_PROP_MAN_DIGITAL_GAIN;
 
     src->auto_wb = DEFAULT_PROP_AUTO_WB;
     src->manual_wb = DEFAULT_PROP_MANUAL_WB;
@@ -547,6 +582,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     case PROP_AE_ANTI_BANDING:
         src->ae_anti_banding = g_value_get_enum(value);
         break;
+    case PROP_SATURATION:
+        src->color_saturation = g_value_get_float(value);
+        break;
     case PROP_AUTO_EXPOSURE:
         src->auto_exposure = g_value_get_boolean(value);
         break;
@@ -570,6 +608,18 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_ANALOG_GAIN_RANGE_MAX:
         src->analog_frame_gain_range_max = g_value_get_float(value);
+        break;
+    case PROP_AUTO_DIGITAL_GAIN:
+        src->auto_digital_gain = g_value_get_boolean(value);
+        break;
+    case PROP_MAN_DIGITAL_GAIN:
+        src->manual_digital_gain_value = g_value_get_int(value);
+        break;
+    case PROP_DIGITAL_GAIN_RANGE_MIN:
+        src->digital_frame_gain_range_min = g_value_get_float(value);
+        break;
+    case PROP_DIGITAL_GAIN_RANGE_MAX:
+        src->digital_frame_gain_range_max = g_value_get_float(value);
         break;
     case PROP_AUTO_WB:
         src->auto_wb = g_value_get_boolean(value);
@@ -622,9 +672,12 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_TIMEOUT_MSEC:
         g_value_set_int(value, src->cam_timeout_msec);
-        break;        
+        break;
     case PROP_AE_ANTI_BANDING:
         g_value_set_enum(value, src->ae_anti_banding);
+        break;
+    case PROP_SATURATION:
+        g_value_set_float(value, src->color_saturation);
         break;
     case PROP_AUTO_EXPOSURE:
         g_value_set_boolean(value, src->auto_exposure);
@@ -649,6 +702,18 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_ANALOG_GAIN_RANGE_MAX:
         g_value_set_float(value, src->analog_frame_gain_range_max);
+        break;
+    case PROP_AUTO_DIGITAL_GAIN:
+        g_value_set_boolean(value, src->auto_digital_gain);
+        break;
+    case PROP_MAN_DIGITAL_GAIN:
+        g_value_set_int(value, src->manual_digital_gain_value);
+        break;
+    case PROP_DIGITAL_GAIN_RANGE_MIN:
+        g_value_set_float(value, src->digital_frame_gain_range_min);
+        break;
+    case PROP_DIGITAL_GAIN_RANGE_MAX:
+        g_value_set_float(value, src->digital_frame_gain_range_max);
         break;
     case PROP_AUTO_WB:
         g_value_set_boolean(value, src->auto_wb);
@@ -829,31 +894,39 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     // AE ANTI BANDING
     res = src->zed->setAEAntiBanding(static_cast<oc::AEANTIBANDING>(src->ae_anti_banding));
     if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set AE Anti Banding: %d",res),
-                            (NULL));
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set AE Anti Banding: %d", res),
+                          (NULL));
         return FALSE;
     }
     std::string ae;
-    switch (static_cast<GstZedXOneSrcAeAntiBand>(src->ae_anti_banding))
-    {
+    switch (static_cast<GstZedXOneSrcAeAntiBand>(src->ae_anti_banding)) {
     case GST_AE_ANTI_BAND_AUTO:
-      ae = "AUTO";
-      break;
+        ae = "AUTO";
+        break;
 
     case GST_AE_ANTI_BAND_50HZ:
-      ae = "50 Hz";
-      break;
+        ae = "50 Hz";
+        break;
 
     case GST_AE_ANTI_BAND_60HZ:
-      ae = "60 Hz";
-      break;
-    
+        ae = "60 Hz";
+        break;
+
     case GST_AE_ANTI_BAND_OFF:
     default:
-      ae = "OFF";
-      break;
+        ae = "OFF";
+        break;
     }
-    GST_INFO(" * AE Anti Banding: %s", ae.c_str() );
+    GST_INFO(" * AE Anti Banding: %s", ae.c_str());
+
+    // COLOR SATURATION
+    res = src->zed->setColorSaturation(src->color_saturation);
+    if (res != 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Color saturation: %d", res),
+                          (NULL));
+        return FALSE;
+    }
+    GST_INFO(" * Color Saturation: %g", src->color_saturation);
 
     // EXPOSURE
     if (src->auto_exposure == TRUE) {
@@ -932,16 +1005,16 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         }
 
         if (src->manual_analog_gain_db > max) {
-            GST_WARNING("Manual analog gain (%f) setting is higher than the maximum limit "
-                        "(%f). "
-                        "Value truncated to %f dB",
+            GST_WARNING("Manual analog gain (%g) setting is higher than the maximum limit "
+                        "(%g). "
+                        "Value truncated to %g dB",
                         src->manual_analog_gain_db, max, max);
             src->manual_analog_gain_db = max;
         }
         if (src->manual_analog_gain_db < min) {
-            GST_WARNING("Manual analog gain time (%f) setting is lower than the minimum limit "
-                        "(%f). "
-                        "Value truncated to %f dB",
+            GST_WARNING("Manual analog gain time (%g) setting is lower than the minimum limit "
+                        "(%g). "
+                        "Value truncated to %g dB",
                         src->manual_analog_gain_db, min, min);
             src->manual_analog_gain_db = min;
         }
@@ -952,7 +1025,58 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
                               (NULL));
             return FALSE;
         }
-        GST_INFO(" * Manual Analog Gain: %f dB", src->manual_analog_gain_db);
+        GST_INFO(" * Manual Analog Gain: %g dB", src->manual_analog_gain_db);
+    }
+
+    // DIGITAL GAIN
+    if (src->auto_digital_gain == TRUE) {
+        res = src->zed->setAutomaticDigitalGain();
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Automatic Digital Gain"),
+                              (NULL));
+            return FALSE;
+        }
+        GST_INFO(" * Automatic Digital Gain: TRUE");
+        res = src->zed->setDigitalFrameGainRange(src->digital_frame_gain_range_min,
+                                                 src->digital_frame_gain_range_max);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set Automatic Digital Gain range"), (NULL));
+            return FALSE;
+        }
+        GST_INFO(" * Automatic Digital Gain range: [%g,%g]", src->digital_frame_gain_range_min,
+                 src->digital_frame_gain_range_max);
+    } else {
+        float min, max;
+        res = src->zed->getDigitalGainLimits(min, max);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to retrieve digital gain limits"),
+                              (NULL));
+            return FALSE;
+        }
+
+        if (src->manual_digital_gain_value > max) {
+            GST_WARNING("Manual digital gain (%d) setting is higher than the maximum limit "
+                        "(%g). "
+                        "Value truncated to %g",
+                        src->manual_digital_gain_value, max, max);
+            src->manual_digital_gain_value = max;
+        }
+        if (src->manual_digital_gain_value < min) {
+            GST_WARNING("Manual digital gain time (%d) setting is lower than the minimum limit "
+                        "(%g). "
+                        "Value truncated to %g",
+                        src->manual_digital_gain_value, min, min);
+            src->manual_digital_gain_value = min;
+        }
+        res = src->zed->setManualDigitalGainReal(src->manual_digital_gain_value);
+
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Digital Gain"),
+                              (NULL));
+            return FALSE;
+        }
+        GST_INFO(" * Manual Digital Gain: %d", src->manual_digital_gain_value);
     }
 
     // WHITE BALANCE
@@ -973,9 +1097,9 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         }
         res = src->zed->setManualWhiteBalance(src->manual_wb);
         if (res != 0) {
-          GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                            ("Failed to set White Balance value"), (NULL));
-          return FALSE;
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set White Balance value"),
+                              (NULL));
+            return FALSE;
         }
         GST_INFO(" * Manual White Balance: %d°", src->manual_wb);
     }
@@ -1121,6 +1245,16 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // ----> Camera controls
     int res;
 
+    // COLOR SATURATION
+    float sat = src->zed->getColorSaturation();
+    if (fabs(sat - src->color_saturation) > 5.0f) {
+        res = src->zed->setColorSaturation(src->color_saturation);
+        if (res != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Color saturation: %d", res),
+                              (NULL));
+        }
+    }
+
     // EXPOSURE
     if (src->auto_exposure == FALSE) {
         gint exp = static_cast<gint>(src->zed->getFrameExposureTime());
@@ -1134,16 +1268,28 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         }
     }
 
-    // ANALOG GAIN
-    if (src->auto_analog_gain == FALSE) {
-        float an_gain = src->zed->getAnalogFrameGain();
-        if (fabs(an_gain - src->manual_analog_gain_db) > 5.0) {
-            if (src->zed->setManualAnalogGainReal(src->manual_analog_gain_db) != 0) {
-                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Analog Gain"),
+    // DIGITAL GAIN
+    if (src->auto_digital_gain == FALSE) {
+        float dig_gain = src->zed->getDigitalFrameGain();
+        if (fabs(dig_gain - src->manual_digital_gain_value) > 5.0) {
+            if (src->zed->setManualDigitalGainReal(src->manual_digital_gain_value) != 0) {
+                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Digital Gain"),
                                   (NULL));
             }
-            GST_INFO("Forced manual analog gain value. Expected %f, was %f",
-                     src->manual_analog_gain_db, an_gain);
+            GST_INFO("Forced manual digital gain value. Expected %d, was %g",
+                     src->manual_digital_gain_value, dig_gain);
+        }
+    }
+
+    // WHITE BALANCE
+    if (src->auto_wb == FALSE) {
+        gint wb = static_cast<int>(src->zed->getManualWhiteBalance());
+        if (abs(wb - src->manual_wb) > 5.0) {
+            if (src->zed->setManualWhiteBalance(src->manual_wb) != 0) {
+                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual White Balance"),
+                                  (NULL));
+            }
+            GST_INFO("Forced manual white balance value. Expected %d, was %d", src->manual_wb, wb);
         }
     }
     // <---- Camera controls

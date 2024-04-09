@@ -30,9 +30,9 @@ G_BEGIN_DECLS
 
 #define GST_TYPE_ZED_X_ONE_SRC (gst_zedxonesrc_get_type())
 #define GST_ZED_X_ONE_SRC(obj)                                                                     \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_ZED_X_ONE_SRC, GstZedXOneSrc))
+    (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_ZED_X_ONE_SRC, GstZedXOneSrc))
 #define GST_ZED_X_ONE_SRC_CLASS(klass)                                                             \
-  (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_ZED_X_ONE_SRC, GstZedXOneSrcClass))
+    (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_ZED_X_ONE_SRC, GstZedXOneSrcClass))
 #define GST_IS_ZED_X_ONE_SRC(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_ZED_X_ONE_SRC))
 #define GST_IS_ZED_X_ONE_SRC_CLASS(obj) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_ZED_X_ONE_SRC))
 
@@ -40,73 +40,64 @@ typedef struct _GstZedXOneSrc GstZedXOneSrc;
 typedef struct _GstZedXOneSrcClass GstZedXOneSrcClass;
 
 struct _GstZedXOneSrc {
-  GstPushSrc base_zedxonesrc;
+    GstPushSrc base_zedxonesrc;
 
-  // ZED X One camera object
-  std::unique_ptr<oc::ArgusBayerCapture> zed;
+    // ZED X One camera object
+    std::unique_ptr<oc::ArgusBayerCapture> zed;   // ZED X One object
 
-  gboolean is_started;   // grab started flag
+    gboolean is_started;       // grab started flag
+    gboolean stop_requested;   // stop request flagout_framesize
 
-  // ----> Properties
-  gint camera_resolution;   // Camera resolution [enum]
-  gint camera_fps;          // Camera FPS
-  gint verbose_level;
-  gint cam_timeout_msec;
-  gint camera_id;
-  gboolean swap_rb;   // swap for RGB(A) or BGR(A) output
-  // gint camera_sn;
+    // ----> Properties
+    gint camera_resolution;   // * Camera resolution [enum]
+    gint camera_fps;          // * Camera FPS
+    gint verbose_level;       // * Capture library verbose level
+    gint cam_timeout_msec;    // * Camera communication timeout
+    gint camera_id;           // * Camera ID
+    gboolean swap_rb;         // * Swap for RGB(A) or BGR(A) output
 
-  gint ae_anti_banding;   // OFF, AUTO, 50Hz, 60Hz
+    gboolean auto_exposure;      // * Enable Automatic Exposure
+    gint exposure_range_min;     // * Minimum value for Automatic Exposure
+    gint exposure_range_max;     // * Maximum value for Automatic Exposure
+    gint manual_exposure_usec;   // * Manual Exposure time
 
-  gint analog_frame_gain_range_min;
-  gint analog_frame_gain_range_max;
+    gboolean auto_analog_gain;          // * Enable Automatic Analog Gain
+    gint analog_frame_gain_range_min;   // * Minimum value for Automatic Analog Gain
+    gint analog_frame_gain_range_max;   // * Maximum value for Automatic Analog Gain
+    gfloat manual_analog_gain_db;       // * Manual Analog Gain
 
-  gint digital_frame_gain_range_min;
-  gint digital_frame_gain_range_max;
+    gboolean auto_digital_gain;            // * Enable Automatic Digital Gain
+    gfloat digital_frame_gain_range_min;   // * Minimum value for Automatic Digital Gain
+    gfloat digital_frame_gain_range_max;   // * Maximum value for Automatic Digital Gain
+    gint manual_digital_gain_value;        // * Manual Digital Gain [1,256]
 
-  gint exposure_range_min;
-  gint exposure_range_max;
+    gboolean auto_wb;   // * Enable Automatic White Balance
+    gint manual_wb;     // * Manual White Balance [2800,12000]
 
-  gboolean auto_analog_gain;
-  gboolean auto_digital_gain;
-  gboolean auto_exposure;
-  gboolean auto_wb;
+    gint ae_anti_banding;           // * Exposure anti banding - OFF, AUTO, 50Hz, 60Hz
+    gfloat color_saturation;        // Color Saturation [0.0,2.0]
+    gfloat denoising;               // Image Denoising [0.0,1.0]
+    gfloat exposure_compensation;   // Exposure Compensation [-2.0,2.0]
+    gfloat sharpening;              // Image Sharpening [0.0,1.0]
 
-  gfloat color_saturation;        // [0.0,2.0]
-  gfloat denoising;               // [0.0,1.0]
-  gfloat exposure_compensation;   // [-2.0,2.0]
-  gfloat sharpening;              // [0.0,1.0]
+    gint aec_agc_roi_x;
+    gint aec_agc_roi_y;
+    gint aec_agc_roi_w;
+    gint aec_agc_roi_h;
 
-  gfloat manual_analog_gain_db;
+    gint tone_mapping_r_gamma;   // [1.5,3.5]
+    gint tone_mapping_g_gamma;   // [1.5,3.5]
+    gint tone_mapping_b_gamma;   // [1.5,3.5]
+    // <---- Properties
 
-  gint manual_digital_gain_value;   // [1,256]
+    GstClockTime acq_start_time;   // Acquisition start time
 
-  gint manual_exposure_usec;
-
-  gint manual_wb;   // [2800,12000]
-
-  gint aec_agc_roi_x;
-  gint aec_agc_roi_y;
-  gint aec_agc_roi_w;
-  gint aec_agc_roi_h;
-
-  gint tone_mapping_r_gamma;   // [1.5,3.5]
-  gint tone_mapping_g_gamma;   // [1.5,3.5]
-  gint tone_mapping_b_gamma;   // [1.5,3.5]
-  // <---- Properties
-
-  GstClockTime acq_start_time;
-  guint32 last_frame_count;
-  guint32 total_dropped_frames;
-
-  GstCaps *caps;
-  guint out_framesize;
-
-  gboolean stop_requested;
+    GstCaps *caps;         // Stream caps
+    guint out_framesize;   // Output frame size in byte
 };
 
 struct _GstZedXOneSrcClass {
-  GstPushSrcClass base_zedxonesrc_class;
+    GstPushSrcClass base_zedxonesrc_class;
 };
 
 G_GNUC_INTERNAL GType gst_zedxonesrc_get_type(void);

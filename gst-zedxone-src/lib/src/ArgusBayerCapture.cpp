@@ -1390,9 +1390,9 @@ int ArgusBayerCapture::setColorSaturation(float saturation)
 
   if (ac)
     {
-      ac->setColorSaturationEnable(true);
+      status = ac->setColorSaturationEnable(true);
       clamp<float>(saturation,0.f,2.f);
-      ac->setColorSaturation(saturation);
+      status = ac->setColorSaturation(saturation);
       dispatchRequest();
     }
   return (int)status;
