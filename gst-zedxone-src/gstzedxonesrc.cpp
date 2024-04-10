@@ -80,7 +80,6 @@ enum {
     PROP_TONE_MAP_R_GAMMA,
     PROP_TONE_MAP_G_GAMMA,
     PROP_TONE_MAP_B_GAMMA,
-
     PROP_AEC_AGC_ROI_X,
     PROP_AEC_AGC_ROI_Y,
     PROP_AEC_AGC_ROI_W,
@@ -136,14 +135,13 @@ typedef enum {
 #define DEFAULT_PROP_DENOISING 0.5
 #define DEFAULT_PROP_EXP_COMPENSATION 0.0
 #define DEFAULT_PROP_SHARPENING 1.0
-#define DEFAULT_PROP_MAN_ANALOG_GAIN_DB 1.0   // *
-#define DEFAULT_PROP_MAN_DIGITAL_GAIN 128     // *
-#define DEFAULT_PROP_MAN_EXPOSURE_USEC 2000   // *
-#define DEFAULT_PROP_MANUAL_WB 5000           // *
-#define DEFAULT_PROP_TONE_MAP_R_GAMMA 2.0     // *
-#define DEFAULT_PROP_TONE_MAP_G_GAMMA 2.0     // *
-#define DEFAULT_PROP_TONE_MAP_B_GAMMA 2.0     // *
-
+#define DEFAULT_PROP_MAN_ANALOG_GAIN_DB 1.0
+#define DEFAULT_PROP_MAN_DIGITAL_GAIN 128
+#define DEFAULT_PROP_MAN_EXPOSURE_USEC 2000
+#define DEFAULT_PROP_MANUAL_WB 5000
+#define DEFAULT_PROP_TONE_MAP_R_GAMMA 2.0
+#define DEFAULT_PROP_TONE_MAP_G_GAMMA 2.0
+#define DEFAULT_PROP_TONE_MAP_B_GAMMA 2.0
 #define DEFAULT_PROP_AEG_AGC_ROI_X -1
 #define DEFAULT_PROP_AEG_AGC_ROI_Y -1
 #define DEFAULT_PROP_AEG_AGC_ROI_W -1
@@ -479,6 +477,27 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                            (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_TONE_MAP_R_GAMMA,
+        g_param_spec_float("tone-map-gamma-r", "Tone Map from Gamma (Ch. R)",
+                           "Set the tone mapping curve from a gamma value (Channel R)", 1.5, 3.5,
+                           DEFAULT_PROP_TONE_MAP_R_GAMMA,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_TONE_MAP_G_GAMMA,
+        g_param_spec_float("tone-map-gamma-g", "Tone Map from Gamma (Ch. G)",
+                           "Set the tone mapping curve from a gamma value (Channel G)", 1.5, 3.5,
+                           DEFAULT_PROP_TONE_MAP_G_GAMMA,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_TONE_MAP_B_GAMMA,
+        g_param_spec_float("tone-map-gamma-b", "Tone Map from Gamma (Ch. B)",
+                           "Set the tone mapping curve from a gamma value (Channel B)", 1.5, 3.5,
+                           DEFAULT_PROP_TONE_MAP_B_GAMMA,
+                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
         g_param_spec_int(
             "ctrl-aec-agc-roi-x", "Camera control: auto gain/exposure ROI top left 'X' coordinate",
@@ -541,6 +560,9 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->denoising = DEFAULT_PROP_DENOISING;
     src->exposure_compensation = DEFAULT_PROP_EXP_COMPENSATION;
     src->sharpening = DEFAULT_PROP_SHARPENING;
+    src->tone_mapping_r_gamma = DEFAULT_PROP_TONE_MAP_R_GAMMA;
+    src->tone_mapping_g_gamma = DEFAULT_PROP_TONE_MAP_G_GAMMA;
+    src->tone_mapping_b_gamma = DEFAULT_PROP_TONE_MAP_B_GAMMA;
 
     src->auto_exposure = DEFAULT_PROP_AUTO_EXPOSURE;
     src->exposure_range_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
@@ -617,6 +639,15 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_SHARPENING:
         src->sharpening = g_value_get_float(value);
+        break;
+    case PROP_TONE_MAP_R_GAMMA:
+        src->tone_mapping_r_gamma = g_value_get_float(value);
+        break;
+    case PROP_TONE_MAP_G_GAMMA:
+        src->tone_mapping_g_gamma = g_value_get_float(value);
+        break;
+    case PROP_TONE_MAP_B_GAMMA:
+        src->tone_mapping_b_gamma = g_value_get_float(value);
         break;
     case PROP_AUTO_EXPOSURE:
         src->auto_exposure = g_value_get_boolean(value);
@@ -720,6 +751,15 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_SHARPENING:
         g_value_set_float(value, src->sharpening);
+        break;
+    case PROP_TONE_MAP_R_GAMMA:
+        g_value_set_float(value, src->tone_mapping_r_gamma);
+        break;
+    case PROP_TONE_MAP_G_GAMMA:
+        g_value_set_float(value, src->tone_mapping_g_gamma);
+        break;
+    case PROP_TONE_MAP_B_GAMMA:
+        g_value_set_float(value, src->tone_mapping_b_gamma);
         break;
     case PROP_AUTO_EXPOSURE:
         g_value_set_boolean(value, src->auto_exposure);
@@ -994,7 +1034,28 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
                           ("Failed to set image sharpening value: %d", res), (NULL));
         return FALSE;
     }
-    GST_INFO(" * Image Sharpeninng: %g", src->sharpening);
+    GST_INFO(" * Image Sharpening: %g", src->sharpening);
+
+    // TONE MAPPING FROM GAMMA
+    res = src->zed->setToneMappingFromGamma(0, src->tone_mapping_r_gamma);
+    if (res != 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                          ("Failed to set Tone Mapping for channel red: %d", res), (NULL));
+        return FALSE;
+    }
+    res = src->zed->setToneMappingFromGamma(1, src->tone_mapping_g_gamma);
+    if (res != 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                          ("Failed to set Tone Mapping for channel green: %d", res), (NULL));
+        return FALSE;
+    }
+    res = src->zed->setToneMappingFromGamma(2, src->tone_mapping_b_gamma);
+    if (res != 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                          ("Failed to set Tone Mapping for channel blue: %d", res), (NULL));
+        return FALSE;
+    }
+    GST_INFO(" * Tone Mapping from gamma: [%g,%g,%g]", src->tone_mapping_r_gamma, src->tone_mapping_g_gamma, src->tone_mapping_b_gamma);
 
     // EXPOSURE
     if (src->auto_exposure == TRUE) {

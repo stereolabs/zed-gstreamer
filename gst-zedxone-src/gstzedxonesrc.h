@@ -80,14 +80,14 @@ struct _GstZedXOneSrc {
     gfloat exposure_compensation;   // * Exposure Compensation [-2.0,2.0]
     gfloat sharpening;              // * Image Sharpening [0.0,1.0]
 
-    gint aec_agc_roi_x;
-    gint aec_agc_roi_y;
-    gint aec_agc_roi_w;
-    gint aec_agc_roi_h;
+    gint aec_agc_roi_x; // * AEC-AGC ROI top left x coordinate
+    gint aec_agc_roi_y; // * AEC-AGC ROI top left y coordinate
+    gint aec_agc_roi_w; // * AEC-AGC ROI width
+    gint aec_agc_roi_h; // * AEC-AGC ROI height
 
-    gint tone_mapping_r_gamma;   // [1.5,3.5]
-    gint tone_mapping_g_gamma;   // [1.5,3.5]
-    gint tone_mapping_b_gamma;   // [1.5,3.5]
+    gfloat tone_mapping_r_gamma;   // [1.5,3.5]
+    gfloat tone_mapping_g_gamma;   // [1.5,3.5]
+    gfloat tone_mapping_b_gamma;   // [1.5,3.5]
     // <---- Properties
 
     GstClockTime acq_start_time;   // Acquisition start time
