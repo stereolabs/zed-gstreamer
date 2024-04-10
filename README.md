@@ -802,6 +802,16 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
     gst-launch-1.0 zedxonesrc camera-resolution=3 camera-fps=15 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
+### Local ZED X One GS 1200p RGB stream at 60 FPS + RGB rendering with FPS information
+
+* Jetson: [`zedxone-simple-60-fps_rendering.sh`](./scripts/jetson/zedxone-simple-60-fps_rendering.sh)
+
+```
+    gst-launch-1.0 zedxonesrc camera-resolution=2 camera-fps=60 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
+```
+
+
+
 ## RTSP Server
 
 *Available only for Linux*
