@@ -46,6 +46,8 @@ else()
     add_definitions(-O2)
 endif()
 
+add_dependencies (${libname} gstzedmeta)
+
 if(WIN32)
     target_link_libraries (${libname} LINK_PUBLIC
         ${GLIB2_LIBRARIES}

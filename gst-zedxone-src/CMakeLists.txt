@@ -47,6 +47,8 @@ else()
   add_definitions(-O2)
 endif()
 
+add_dependencies (${libname} zedarguscapture)
+
 target_link_libraries (
   ${libname} LINK_PUBLIC
   ${GLIB2_LIBRARIES}
