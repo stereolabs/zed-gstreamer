@@ -236,7 +236,7 @@ typedef enum {
 #define DEFAULT_PROP_ROI_Y -1
 #define DEFAULT_PROP_ROI_W -1
 #define DEFAULT_PROP_ROI_H -1
-#define DEFAULT_OPENCV_CALIBRATION_FILE "/home/warp/Downloads/zedxm_warplab_tank_3_28_2024_cams-camchain-opencv.yaml"
+#define DEFAULT_OPENCV_CALIBRATION_FILE "/home/warp/Downloads/zedxm_warplab_tank_3_28_2024_cams-camchain-opencv_mod.yaml"
 
 // RUNTIME
 #define DEFAULT_PROP_CONFIDENCE_THRESH   50
@@ -2213,8 +2213,9 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Disable self calibration: %s",
              (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
 		
-		init_params.optional_opencv_calibration_file = DEFAULT_OPENCV_CALIBRATION_FILE.c_str() //src->optional_opencv_calibration_file;
-  	GST_INFO(" * Calibration File\t\t-> " << init_params.optional_opencv_calibration_file);
+    sl::String optional_opencv_calibration_file(DEFAULT_OPENCV_CALIBRATION_FILE); //src->optional_opencv_calibration_file;
+		init_params.optional_opencv_calibration_file = optional_opencv_calibration_file;
+  	GST_INFO(" * Calibration File: %s ", init_params.optional_opencv_calibration_file.c_str());
 
 
     std::cout << "Setting depth_mode to " << init_params.depth_mode << std::endl;
