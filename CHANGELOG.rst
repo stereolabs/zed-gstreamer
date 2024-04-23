@@ -1,7 +1,11 @@
 LATEST CHANGES
 ==============
 
-05-04-2024
+2024-04-23
+----------
+- Add new `zedxonesrc` element to get ZED X One color stream and control the camera
+
+2024-04-05
 ----------
 - Add ZED SDK v4.1 compatibility
 - Add support to `NEURAL_PLUS` depth mode
