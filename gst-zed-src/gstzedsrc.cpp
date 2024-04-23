@@ -60,7 +60,7 @@ enum {
     PROP_CAM_ID,
     PROP_CAM_SN,
     PROP_SVO_FILE,
-    PROP_CAM_OPENCV_CALIB_FILE,
+    PROP_OPENCV_CALIB_FILE,
     PROP_STREAM_IP,
     PROP_STREAM_PORT,
     PROP_DEPTH_MIN,
@@ -822,9 +822,9 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     
     g_object_class_install_property(
         gobject_class, PROP_OPENCV_CALIB_FILE,
-        g_param_spec_enum("optional-opencv-calibration-file", "Optional Opencv Calibration File", "Optional Opencv Calibration File", 
-                          DEFAULT_PROP_OPENCV_CALIB_FILE,
-                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_string("optional-opencv-calibration-file", "Optional Opencv Calibration File", "Optional Opencv Calibration File", 
+                            DEFAULT_PROP_OPENCV_CALIB_FILE,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_STREAM_IP,
@@ -2228,7 +2228,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Disable self calibration: %s",
              (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
 		
-    sl::String optional_opencv_calibration_file(DEFAULT_PROP_OPENCV_CALIB_FILE); //src->optional_opencv_calibration_file;
+    sl::String optional_opencv_calibration_file(src->optional_opencv_calibration_file.str);
     init_params.optional_opencv_calibration_file = optional_opencv_calibration_file;
     GST_INFO(" * Calibration File: %s ", init_params.optional_opencv_calibration_file.c_str());
 
