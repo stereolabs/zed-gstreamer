@@ -1,3 +1,19 @@
+################################################
+## Generate symbols for IDE indexer (VSCode)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
+endif()
+
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+
+add_definitions(-Werror=return-type)
+
 option(LINK_SHARED_ZED "Link with the ZED SDK shared executable" ON)
 
 if(NOT LINK_SHARED_ZED AND MSVC)
@@ -47,7 +63,9 @@ SET(ZED_LIBS
     ${CUDA_CUDA_LIBRARY}
     ${CUDA_CUDART_LIBRARY}
     ${CUDA_NPP_LIBRARIES_ZED}
-    )
+)
+
+add_dependencies (${libname} gstzedmeta)
 
 if (WIN32)
     target_link_libraries (${libname} LINK_PUBLIC
