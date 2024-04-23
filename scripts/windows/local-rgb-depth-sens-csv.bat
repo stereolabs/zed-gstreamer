@@ -7,7 +7,7 @@
 :: 5) Save the sensor data in the home folder to CSV file named `test_csv.csv` replacing eventual existing data
 
 gst-launch-1.0 ^
-zedsrc stream-type=4 ! ^
+zedsrc stream-type=4 depth-mode=5 ! ^
 zeddemux stream-data=TRUE name=demux ^
 demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink ^
 demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink ^

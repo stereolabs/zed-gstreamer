@@ -1,3 +1,19 @@
+################################################
+## Generate symbols for IDE indexer (VSCode)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
+endif()
+
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+
+add_definitions(-Werror=return-type)
+
 set(SOURCES
     gstzedmeta.cpp
     )
@@ -48,6 +64,7 @@ set_target_properties(${libname} PROPERTIES
 if (WIN32)
     install (FILES $<TARGET_PDB_FILE:${libname}> DESTINATION ${PDB_INSTALL_DIR} COMPONENT pdb OPTIONAL)
 endif ()
+
 install( TARGETS ${libname}
     LIBRARY DESTINATION ${LIBRARY_INSTALL_DIR}
     PUBLIC_HEADER DESTINATION ${INCLUDE_INSTALL_DIR}

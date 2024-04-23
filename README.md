@@ -17,9 +17,11 @@
 <br>
 
 # Key Features
+
 GStreamer package for ZED Cameras. The package is composed of several elements:
 
 * [`zedsrc`](./gst-zed-src): acquires camera color image and depth map and pushes them in a GStreamer pipeline.
+* [`zedxonesrc`](./gst-zedxone-src): acquires camera color image from a ZED X One GS or ZED X One 4K camera and pushes them in a GStreamer pipeline. Note: this element does not use the ZED SDK, but a porting of the [zedx-one-capture](https://github.com/stereolabs/zedx-one-capture) library.
 * [`zedmeta`](./gst-zed-meta): GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data).
 * [`zeddemux`](./gst-zed-demux): receives a composite `zedsrc` stream (`color left + color right` data or `color left + depth map` + metadata),
   processes the eventual depth data and pushes them in two separated new streams named `src_left` and `src_aux`. A third source pad is created for metadata to be externally processed.
@@ -32,7 +34,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 ### Prerequisites
 
- * [ZED SDK v4.0.x](https://www.stereolabs.com/developers/release/)
+ * [ZED SDK v4.1](https://www.stereolabs.com/developers/release/)
  * CMake (v3.6+)
  * GStreamer 1.0
 
@@ -100,6 +102,10 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
       `gst-inspect-1.0 zedsrc`
 
+ * Check `ZED X One Video Source Element` installation inspecting its properties:
+
+      `gst-inspect-1.0 zedxonesrc`
+
  * Check `ZED Video Demuxer` installation inspecting its properties:
 
       `gst-inspect-1.0 zeddemux`
@@ -119,6 +125,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 ## Elements properties
 
 ### `ZED Video Source Element` properties
+
 Most of the properties follow the same name as the C++ API. Except that `_` is replaced by `-` to follow gstreamer common formatting.
 
 ```
@@ -152,9 +159,6 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (0): Body 18 Key Points - 18 keypoints format. Basic Body format
                            (1): Body 34 Key Points - 34 keypoints format. Body format, requires body fitting enabled
                            (2): Body 38 Key Points - 38 keypoints format. Body format, including feet simplified face and hands
-  bt-image-sync       : Set to TRUE to enable Body Tracking frame synchronization 
-                        flags: readable, writable
-                        Boolean. Default: true
   bt-max-range        : Maximum Detection Range
                         flags: readable, writable
                         Float. Range:              -1 -           20000 Default:           20000 
@@ -275,6 +279,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   depth-mode          : Depth Mode
                         flags: readable, writable
                         Enum "GstZedsrcDepthMode" Default: 0, "NONE"
+                           (5): NEURAL_PLUS      - More accurate Neural disparity estimation, Requires AI module.
                            (4): NEURAL           - End to End Neural disparity estimation, requires AI module
                            (3): ULTRA            - Computation mode favorising edges and sharpness. Requires more GPU memory and computation power.
                            (2): QUALITY          - Computation mode designed for challenging areas with untextured surfaces.
@@ -383,9 +388,6 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   od-enabled          : Set to TRUE to enable Object Detection
                         flags: readable, writable
                         Boolean. Default: false
-  od-image-sync       : Set to TRUE to enable Object Detection frame synchronization 
-                        flags: readable, writable
-                        Boolean. Default: true
   od-max-range        : Maximum Detection Range
                         flags: readable, writable
                         Float. Range:              -1 -           20000 Default:           20000 
@@ -398,6 +400,11 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   pos-depth-min-range : This setting allows you to change the minmum depth used by the SDK for Positional Tracking.
                         flags: readable, writable
                         Float. Range:              -1 -           65535 Default:              -1 
+  positional-tracking-mode: Positional tracking mode
+                        flags: readable, writable
+                        Enum "GstZedsrcPtMode" Default: 1, "GEN_2"
+                           (0): GEN_1            - Generation 1
+                           (1): GEN_2            - Generation 2
   roi                 : Enable region of interest filtering
                         flags: readable, writable
                         Boolean. Default: false
@@ -439,6 +446,137 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   texture-confidence-threshold: Specify the Texture Confidence Threshold
                         flags: readable, writable
                         Integer. Range: 0 - 100 Default: 100
+```
+
+### `ZED X One Video Source Element` properties
+
+```
+  analog-gain         : Analog Gain value in dB
+                        flags: readable, writable
+                        Float. Range:             0.1 -              30 Default:               1 
+  anti-banding        : AE Anti Banding
+                        flags: readable, writable
+                        Enum "GstZedXOneSrcAntiBanding" Default: 1, "Automatic"
+                           (0): Disabled         - Anti Banding disabled
+                           (1): Automatic        - Automatic Anti Banding
+                           (2): 50 Hz            - 50 Hz Anti Banding
+                           (3): 60 Hz            - 60 Hz Anti Banding
+  auto-analog-gain    : Enable Automatic Analog Gain
+                        flags: readable, writable
+                        Boolean. Default: true
+  auto-analog-gain-range-max: Maximum Analog Gain in dB for the automatic analog gain setting
+                        flags: readable, writable
+                        Float. Range:             0.1 -              30 Default:              30 
+  auto-analog-gain-range-min: Minimum Analog Gain in dB for the automatic analog gain setting
+                        flags: readable, writable
+                        Float. Range:             0.1 -              30 Default:               0 
+  auto-digital-gain   : Enable Automatic Digital Gain
+                        flags: readable, writable
+                        Boolean. Default: true
+  auto-digital-gain-range-max: Maximum Digital Gain for the automatic digital gain setting
+                        flags: readable, writable
+                        Float. Range:               1 -             256 Default:             256 
+  auto-digital-gain-range-min: Minimum Digital Gain for the automatic digital gain setting
+                        flags: readable, writable
+                        Float. Range:               1 -             256 Default:               1 
+  auto-exposure       : Enable Automatic Exposure
+                        flags: readable, writable
+                        Boolean. Default: true
+  auto-exposure-range-max: Maximum exposure time in microseconds for the automatic exposure setting
+                        flags: readable, writable
+                        Integer. Range: 28 - 66000 Default: 66000 
+  auto-exposure-range-min: Minimum exposure time in microseconds for the automatic exposure setting
+                        flags: readable, writable
+                        Integer. Range: 28 - 66000 Default: 28 
+  auto-wb             : Enable Automatic White Balance
+                        flags: readable, writable
+                        Boolean. Default: true
+  blocksize           : Size in bytes to read per buffer (-1 = default)
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 4096 
+  camera-fps          : Camera frame rate
+                        flags: readable, writable
+                        Enum "GstZedXOneSrcFPS" Default: 15, "15  FPS"
+                           (120): 120 FPS          - Only with SVGA. Not available with 4K mode
+                           (60): 60  FPS          - Not available with 4K mode
+                           (30): 30  FPS          - Not available with 4K mode
+                           (15): 15  FPS          - all resolutions (NO GMSL2)
+  camera-id           : Select camera from cameraID
+                        flags: readable, writable
+                        Integer. Range: 0 - 255 Default: 0 
+  camera-resolution   : Camera Resolution
+                        flags: readable, writable
+                        Enum "GstZedXOneSrcResol" Default: 2, "HD1200"
+                           (3): 4K               - 3840x2160
+                           (2): HD1200           - 1920x1200
+                           (1): HD1080           - 1920x1080
+                           (0): SVGA             - 960x600
+  camera-timeout      : Connection timeout in milliseconds
+                        flags: readable, writable
+                        Integer. Range: 100 - 100000000 Default: 1000 
+  ctrl-aec-agc-roi-h  : Auto gain/exposure ROI height (-1 to not set ROI)
+                        flags: readable, writable
+                        Integer. Range: -1 - 2160 Default: -1 
+  ctrl-aec-agc-roi-w  : Auto gain/exposure ROI width (-1 to not set ROI)
+                        flags: readable, writable
+                        Integer. Range: -1 - 3810 Default: -1 
+  ctrl-aec-agc-roi-x  : Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)
+                        flags: readable, writable
+                        Integer. Range: -1 - 3810 Default: -1 
+  ctrl-aec-agc-roi-y  : Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)
+                        flags: readable, writable
+                        Integer. Range: -1 - 2160 Default: -1 
+  denoising           : Denoising factor
+                        flags: readable, writable
+                        Float. Range:               0 -               1 Default:             0.5 
+  digital-gain        : Digital Gain value
+                        flags: readable, writable
+                        Integer. Range: 1 - 256 Default: 128 
+  do-timestamp        : Apply current stream time to buffers
+                        flags: readable, writable
+                        Boolean. Default: false
+  exposure-compensation: Exposure Compensation
+                        flags: readable, writable
+                        Float. Range:              -2 -               2 Default:               0 
+  exposure-time       : Exposure time in microseconds
+                        flags: readable, writable
+                        Integer. Range: 28 - 66000 Default: 2000 
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "zedxonesrc0"
+  num-buffers         : Number of buffers to output before sending EOS (-1 = unlimited)
+                        flags: readable, writable
+                        Integer. Range: -1 - 2147483647 Default: -1 
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  saturation          : Color Saturation
+                        flags: readable, writable
+                        Float. Range:               0 -               2 Default:               1 
+  sharpening          : Image Sharpening
+                        flags: readable, writable
+                        Float. Range:               0 -               1 Default:               1 
+  swap-rb             : Swap Red and Blue color channels
+                        flags: readable, writable
+                        Boolean. Default: false
+  tone-map-gamma-b    : Set the tone mapping curve from a gamma value (Channel B)
+                        flags: readable, writable
+                        Float. Range:             1.5 -             3.5 Default:               2 
+  tone-map-gamma-g    : Set the tone mapping curve from a gamma value (Channel G)
+                        flags: readable, writable
+                        Float. Range:             1.5 -             3.5 Default:               2 
+  tone-map-gamma-r    : Set the tone mapping curve from a gamma value (Channel R)
+                        flags: readable, writable
+                        Float. Range:             1.5 -             3.5 Default:               2 
+  typefind            : Run typefind before negotiating (deprecated, non-functional)
+                        flags: readable, writable, deprecated
+                        Boolean. Default: false
+  verbose-level       : Capture Library Verbose level
+                        flags: readable, writable
+                        Integer. Range: 0 - 4 Default: 0 
+  white-balance-temp  : White Balance Temperature [°]
+                        flags: readable, writable
+                        Integer. Range: 2800 - 12000 Default: 5000
 ```
 
 ### `ZED Video Demuxer Element` properties
@@ -648,6 +786,32 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
     autovideoconvert ! fpsdisplaysink
 ```
 
+### Local ZED X One RGB stream + RGB rendering with FPS information (default settings)
+
+* Jetson: [`zedxone-simple-fps_rendering.sh`](./scripts/jetson/zedxone-simple-fps_rendering.sh)
+
+```
+    gst-launch-1.0 zedxonesrc ! queue ! autovideoconvert ! queue ! fpsdisplaysink
+```
+
+### Local ZED X One 4K RGB stream at 15 FPS + RGB rendering with FPS information
+
+* Jetson: [`zedxone-4k-simple-fps_rendering.sh`](./scripts/jetson/zedxone-4k-simple-fps_rendering.sh)
+
+```
+    gst-launch-1.0 zedxonesrc camera-resolution=3 camera-fps=15 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
+```
+
+### Local ZED X One GS 1200p RGB stream at 60 FPS + RGB rendering with FPS information
+
+* Jetson: [`zedxone-simple-60-fps_rendering.sh`](./scripts/jetson/zedxone-simple-60-fps_rendering.sh)
+
+```
+    gst-launch-1.0 zedxonesrc camera-resolution=2 camera-fps=60 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
+```
+
+
+
 ## RTSP Server
 
 *Available only for Linux*
@@ -679,7 +843,7 @@ It is mandatory to define at least one payload named `pay0`; it is possible to d
 
 ## Ready-To-Use scripts
 
-Ready to use scripts are available in the scripts/ folder for windows and linux.
+Ready to use scripts are available in the `scripts` folder for Windows, Desktop Linux, and Jetson
 
 - local-od-fps_overlay : Left and Depth image rendering with object detection (FAST HUMAN BODY TRACKING) data (overlay).
 - local-rgb-depth-sens-csv : Left and Depth image rendering and sensors data saved in csv file.

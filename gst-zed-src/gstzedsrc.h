@@ -1,7 +1,7 @@
 // /////////////////////////////////////////////////////////////////////////
 
 //
-// Copyright (c) 2020, STEREOLABS.
+// Copyright (c) 2024, STEREOLABS.
 //
 // All rights reserved.
 //
@@ -91,9 +91,9 @@ struct _GstZedSrc {
     gfloat init_orient_roll;
     gfloat init_orient_pitch;
     gfloat init_orient_yaw;
+    gint pos_trk_mode;
 
     gboolean object_detection;
-    gboolean od_image_sync;                          // bool image_sync
     gboolean od_enable_tracking;                     // bool enable_tracking
     gboolean od_enable_segm_output;                  // bool enable_segmentation TODO
     gint od_detection_model;                         // sl::OBJECT_DETECTION_MODEL detection_model
@@ -119,7 +119,6 @@ struct _GstZedSrc {
 
     gboolean body_tracking;
     gboolean bt_enable_segm_output;   // bool enable_segmentation
-    gboolean bt_image_sync;           // bool image_sync
     gint bt_model;                    // sl::BODY_TRACKING_MODEL detection_model
     gint bt_format;                   // sl::BODY_FORMAT body_format
     gboolean bt_reduce_precision;     // bool allow_reduced_precision_inference

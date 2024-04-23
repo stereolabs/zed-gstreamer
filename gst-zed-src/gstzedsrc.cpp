@@ -1,7 +1,7 @@
 // /////////////////////////////////////////////////////////////////////////
 
 //
-// Copyright (c) 2020, STEREOLABS.
+// Copyright (c) 2024, STEREOLABS.
 //
 // All rights reserved.
 //
@@ -93,9 +93,9 @@ enum {
     PROP_POS_INIT_ROLL,
     PROP_POS_INIT_PITCH,
     PROP_POS_INIT_YAW,
+    PROP_POS_MODE,
     PROP_COORD_SYS,
     PROP_OD_ENABLE,
-    PROP_OD_IMAGE_SYNC,
     PROP_OD_TRACKING,
     PROP_OD_SEGM,
     PROP_OD_DET_MODEL,
@@ -211,6 +211,11 @@ typedef enum {
     GST_ZEDSRC_SIDE_BOTH = 2
 } GstZedSrcSide;
 
+typedef enum {
+    GST_ZEDSRC_PT_GEN_1 = 0,
+    GST_ZEDSRC_PT_GEN_2 = 1
+} GstZedSrcPtMode;
+
 //////////////// DEFAULT PARAMETERS
 /////////////////////////////////////////////////////////////////////////////
 
@@ -247,6 +252,7 @@ typedef enum {
 
 // POSITIONAL TRACKING
 #define DEFAULT_PROP_POS_TRACKING              FALSE
+#define DEFAULT_PROP_PT_MODE                   GST_ZEDSRC_PT_GEN_2
 #define DEFAULT_PROP_CAMERA_STATIC             FALSE
 #define DEFAULT_PROP_POS_AREA_FILE_PATH        ""
 #define DEFAULT_PROP_POS_ENABLE_AREA_MEMORY    TRUE
@@ -333,6 +339,23 @@ static GType gst_zedsrc_side_get_type(void) {
     }
 
     return zedsrc_side_type;
+}
+
+#define GST_TYPE_ZED_PT_MODE (gst_zedsrc_pt_mode_get_type())
+static GType gst_zedsrc_pt_mode_get_type(void) {
+    static GType zedsrc_pt_mode_type = 0;
+
+    if (!zedsrc_pt_mode_type) {
+        static GEnumValue pattern_types[] = {
+            {static_cast<gint>(sl::POSITIONAL_TRACKING_MODE::GEN_1), "Generation 1", "GEN_1"},
+            {static_cast<gint>(sl::POSITIONAL_TRACKING_MODE::GEN_2), "Generation 2", "GEN_2"},
+            {0, NULL, NULL},
+        };
+
+        zedsrc_pt_mode_type = g_enum_register_static("GstZedsrcPtMode", pattern_types);
+    }
+
+    return zedsrc_pt_mode_type;
 }
 
 #define GST_TYPE_ZED_RESOL (gst_zedsrc_resol_get_type())
@@ -580,6 +603,8 @@ static GType gst_zedsrc_depth_mode_get_type(void) {
 
     if (!zedsrc_depth_mode_type) {
         static GEnumValue pattern_types[] = {
+            {static_cast<gint>(sl::DEPTH_MODE::NEURAL_PLUS),
+             "More accurate Neural disparity estimation, Requires AI module.", "NEURAL_PLUS"},
             {static_cast<gint>(sl::DEPTH_MODE::NEURAL),
              "End to End Neural disparity estimation, requires AI module", "NEURAL"},
             {static_cast<gint>(sl::DEPTH_MODE::ULTRA),
@@ -950,6 +975,13 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_POS_MODE,
+        g_param_spec_enum("positional-tracking-mode", "Positional tracking mode",
+                          "Positional tracking mode", GST_TYPE_ZED_PT_MODE,
+                          DEFAULT_PROP_PT_MODE,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
         gobject_class, PROP_CAMERA_STATIC,
         g_param_spec_boolean("set-as-static", "Camera static",
                              "Set to TRUE if the camera is static", DEFAULT_PROP_CAMERA_STATIC,
@@ -1062,13 +1094,6 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
         gobject_class, PROP_OD_ENABLE,
         g_param_spec_boolean("od-enabled", "Object Detection enable",
                              "Set to TRUE to enable Object Detection", DEFAULT_PROP_OD_ENABLE,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_OD_IMAGE_SYNC,
-        g_param_spec_boolean("od-image-sync", "Object detection frame sync",
-                             "Set to TRUE to enable Object Detection frame synchronization ",
-                             DEFAULT_PROP_OD_SYNC,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -1204,13 +1229,6 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     //         "bt-segm", "BT Segmentation Mask output",
     //         "Set to TRUE to enable segmentation mask output for the detected bodies",
     //         DEFAULT_PROP_BT_SEGM, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_BT_SYNC,
-        g_param_spec_boolean("bt-image-sync", "Body Tracking frame sync",
-                             "Set to TRUE to enable Body Tracking frame synchronization ",
-                             DEFAULT_PROP_BT_SYNC,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_BT_MODEL,
@@ -1438,9 +1456,9 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->init_orient_roll = DEFAULT_PROP_POS_INIT_ROLL;
     src->init_orient_pitch = DEFAULT_PROP_POS_INIT_PITCH;
     src->init_orient_yaw = DEFAULT_PROP_POS_INIT_YAW;
+    src->pos_trk_mode = DEFAULT_PROP_PT_MODE;
 
     src->object_detection = DEFAULT_PROP_OD_ENABLE;
-    src->od_image_sync = DEFAULT_PROP_OD_SYNC;
     src->od_enable_tracking = DEFAULT_PROP_OD_TRACKING;
     src->od_enable_segm_output = DEFAULT_PROP_OD_SEGM;
     src->od_detection_model = DEFAULT_PROP_OD_MODEL;
@@ -1459,7 +1477,6 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 
     src->body_tracking = DEFAULT_PROP_BT_ENABLE;
     src->bt_enable_segm_output = DEFAULT_PROP_BT_SEGM;
-    src->bt_image_sync = DEFAULT_PROP_BT_SYNC;
     src->bt_model = DEFAULT_PROP_BT_MODEL;
     src->bt_format = DEFAULT_PROP_BT_FORMAT;
     src->bt_reduce_precision = DEFAULT_PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE;
@@ -1594,6 +1611,9 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
     case PROP_POS_TRACKING:
         src->pos_tracking = g_value_get_boolean(value);
         break;
+    case PROP_POS_MODE:
+        src->pos_trk_mode = g_value_get_enum(value);
+        break;
     case PROP_CAMERA_STATIC:
         src->camera_static = g_value_get_boolean(value);
         break;
@@ -1639,9 +1659,6 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_OD_ENABLE:
         src->object_detection = g_value_get_boolean(value);
-        break;
-    case PROP_OD_IMAGE_SYNC:
-        src->od_image_sync = g_value_get_boolean(value);
         break;
     case PROP_OD_TRACKING:
         src->od_enable_tracking = g_value_get_boolean(value);
@@ -1693,9 +1710,6 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_BT_SEGM:
         src->bt_enable_segm_output = g_value_get_boolean(value);
-        break;
-    case PROP_BT_SYNC:
-        src->bt_image_sync = g_value_get_boolean(value);
         break;
     case PROP_BT_MODEL:
         src->bt_model = g_value_get_enum(value);
@@ -1888,6 +1902,9 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     case PROP_POS_TRACKING:
         g_value_set_boolean(value, src->pos_tracking);
         break;
+    case PROP_POS_MODE:
+        g_value_set_enum(value, src->pos_trk_mode);
+        break;
     case PROP_CAMERA_STATIC:
         g_value_set_boolean(value, src->camera_static);
         break;
@@ -1932,9 +1949,6 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         break;
     case PROP_OD_ENABLE:
         g_value_set_boolean(value, src->object_detection);
-        break;
-    case PROP_OD_IMAGE_SYNC:
-        g_value_set_boolean(value, src->od_image_sync);
         break;
     case PROP_OD_TRACKING:
         g_value_set_boolean(value, src->od_enable_tracking);
@@ -1987,9 +2001,6 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     /*case PROP_BT_SEGM:
     g_value_set_float(value, src->bt_enable_segm_output);
     break;*/
-    case PROP_BT_SYNC:
-        g_value_set_boolean(value, src->bt_image_sync);
-        break;
     case PROP_BT_MODEL:
         g_value_set_enum(value, src->bt_model);
         break;
@@ -2384,6 +2395,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Positional tracking status: %s", (src->pos_tracking ? "ON" : "OFF"));
     if (src->pos_tracking) {
         sl::PositionalTrackingParameters pos_trk_params;
+        pos_trk_params.mode = static_cast<sl::POSITIONAL_TRACKING_MODE>(src->pos_trk_mode);
+        GST_INFO(" * Pos. Tracking mode: %s", sl::toString(pos_trk_params.mode).c_str());
         pos_trk_params.set_as_static = (src->camera_static == TRUE);
         GST_INFO(" * Camera static: %s", (pos_trk_params.set_as_static ? "TRUE" : "FALSE"));
         sl::String area_file_path(static_cast<char *>(src->area_file_path.str));
@@ -2450,8 +2463,6 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     if (src->object_detection) {
         sl::ObjectDetectionParameters od_params;
         od_params.instance_module_id = OD_INSTANCE_MODULE_ID;
-        //od_params.image_sync = (src->od_image_sync == TRUE);
-        //GST_INFO(" * Image sync: %s", (od_params.image_sync ? "TRUE" : "FALSE"));
         od_params.enable_tracking = (src->od_enable_tracking == TRUE);
         GST_INFO(" * Object tracking: %s", (od_params.enable_tracking ? "TRUE" : "FALSE"));
         od_params.enable_segmentation = (src->od_enable_segm_output == TRUE);
@@ -2514,8 +2525,6 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Body Segmentation: %s", (bt_params.enable_segmentation ? "TRUE" : "FALSE"));
         bt_params.enable_tracking = src->bt_enable_trk;
         GST_INFO(" * Tracking: %s", (bt_params.enable_tracking ? "TRUE" : "FALSE"));
-        //bt_params.image_sync = src->bt_image_sync;
-        //GST_INFO(" * Image sync: %s", (bt_params.image_sync ? "TRUE" : "FALSE"));
         bt_params.max_range = src->bt_max_range;
         GST_INFO(" * Max Range: %g mm", bt_params.max_range);
         bt_params.prediction_timeout_s = src->bt_pred_timeout;
