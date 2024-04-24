@@ -847,7 +847,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     
     g_object_class_install_property(
         gobject_class, PROP_OPENCV_CALIB_FILE,
-        g_param_spec_string("optional-opencv-calibration-file", "Optional Opencv Calibration File", "Optional Opencv Calibration File", 
+        g_param_spec_string("opencv-calibration-file", "Optional OpenCV Calibration File", "Optional OpenCV Calibration File", 
                             DEFAULT_PROP_OPENCV_CALIB_FILE,
                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -1419,7 +1419,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->camera_id = DEFAULT_PROP_CAM_ID;
     src->camera_sn = DEFAULT_PROP_CAM_SN;
     src->svo_file = *g_string_new(DEFAULT_PROP_SVO_FILE);
-    src->optional_opencv_calibration_file = *g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
+    src->opencv_calibration_file = *g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
     src->stream_ip = *g_string_new(DEFAULT_PROP_STREAM_IP);
 
     src->stream_port = DEFAULT_PROP_STREAM_PORT;
@@ -1548,7 +1548,7 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_OPENCV_CALIB_FILE:
         str = g_value_get_string(value);
-        src->optional_opencv_calibration_file = *g_string_new(str);
+        src->opencv_calibration_file = *g_string_new(str);
         break;
     case PROP_STREAM_IP:
         str = g_value_get_string(value);
@@ -1840,7 +1840,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_string(value, src->svo_file.str);
         break;
     case PROP_OPENCV_CALIB_FILE:
-        g_value_set_string(value, src->optional_opencv_calibration_file.str);
+        g_value_set_string(value, src->opencv_calibration_file.str);
         break;
     case PROP_STREAM_IP:
         g_value_set_string(value, src->stream_ip.str);
@@ -2239,8 +2239,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Disable self calibration: %s",
              (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
 		
-    sl::String optional_opencv_calibration_file(src->optional_opencv_calibration_file.str);
-    init_params.optional_opencv_calibration_file = optional_opencv_calibration_file;
+    sl::String opencv_calibration_file(src->opencv_calibration_file.str);
+    init_params.optional_opencv_calibration_file = opencv_calibration_file;
     GST_INFO(" * Calibration File: %s ", init_params.optional_opencv_calibration_file.c_str());
 
     std::cout << "Setting depth_mode to " << init_params.depth_mode << std::endl;
