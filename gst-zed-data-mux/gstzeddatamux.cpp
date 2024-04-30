@@ -61,7 +61,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE("src", GST_PAD
                                                                                    "format = (string)BGRA, "
                                                                                    "width = (int)1920, "
                                                                                    "height = (int)2160, "
-                                                                                   "framerate = (fraction) { 15, 30 }"
+                                                                                   "framerate = (fraction) { 15, 30, 60 }"
                                                                                    ";"
                                                                                    "video/x-raw, "   // Double stream HD2K
                                                                                    "format = (string)BGRA, "
@@ -97,7 +97,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE("src", GST_PAD
                                                                                    "format = (string)BGRA, "
                                                                                    "width = (int)1920, "
                                                                                    "height = (int)1080, "
-                                                                                   "framerate = (fraction) { 15, 30 }"
+                                                                                   "framerate = (fraction) { 15, 30, 60 }"
                                                                                    ";"
                                                                                    "video/x-raw, "   // Color HD2K
                                                                                    "format = (string)BGRA, "
@@ -133,7 +133,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE("src", GST_PAD
                                                                                    "format = (string)GRAY16_LE, "
                                                                                    "width = (int)1920, "
                                                                                    "height = (int)1080, "
-                                                                                   "framerate = (fraction) { 15, 30 }"
+                                                                                   "framerate = (fraction) { 15, 30, 60 }"
                                                                                    ";"
                                                                                    "video/x-raw, "   // Depth HD2K
                                                                                    "format = (string)GRAY16_LE, "
@@ -170,7 +170,7 @@ static GstStaticPadTemplate sink_video_factory = GST_STATIC_PAD_TEMPLATE("sink_v
                                                                                           "format = (string)BGRA, "
                                                                                           "width = (int)1920, "
                                                                                           "height = (int)2160, "
-                                                                                          "framerate = (fraction) { 15, 30 }"
+                                                                                          "framerate = (fraction) { 15, 30, 60 }"
                                                                                           ";"
                                                                                           "video/x-raw, "   // Double stream HD2K
                                                                                           "format = (string)BGRA, "
@@ -206,7 +206,7 @@ static GstStaticPadTemplate sink_video_factory = GST_STATIC_PAD_TEMPLATE("sink_v
                                                                                           "format = (string)BGRA, "
                                                                                           "width = (int)1920, "
                                                                                           "height = (int)1080, "
-                                                                                          "framerate = (fraction) { 15, 30 }"
+                                                                                          "framerate = (fraction) { 15, 30, 60 }"
                                                                                           ";"
                                                                                           "video/x-raw, "   // Color HD2K
                                                                                           "format = (string)BGRA, "
@@ -242,7 +242,7 @@ static GstStaticPadTemplate sink_video_factory = GST_STATIC_PAD_TEMPLATE("sink_v
                                                                                           "format = (string)GRAY16_LE, "
                                                                                           "width = (int)1920, "
                                                                                           "height = (int)1080, "
-                                                                                          "framerate = (fraction) { 15, 30 }"
+                                                                                          "framerate = (fraction) { 15, 30, 60 }"
                                                                                           ";"
                                                                                           "video/x-raw, "   // Depth HD2K
                                                                                           "format = (string)GRAY16_LE, "
