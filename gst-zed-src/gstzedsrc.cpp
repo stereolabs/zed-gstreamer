@@ -670,7 +670,7 @@ static GstStaticPadTemplate gst_zedsrc_src_template =
                                              "format = (string)BGRA, "
                                              "width = (int)1920, "
                                              "height = (int)2160, "
-                                             "framerate = (fraction) { 15, 30 }"
+                                             "framerate = (fraction) { 15, 30, 60 }"
                                              ";"
                                              "video/x-raw, "   // Double stream HD2K
                                              "format = (string)BGRA, "
@@ -706,7 +706,7 @@ static GstStaticPadTemplate gst_zedsrc_src_template =
                                              "format = (string)BGRA, "
                                              "width = (int)1920, "
                                              "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30 }"
+                                             "framerate = (fraction) { 15, 30, 60 }"
                                              ";"
                                              "video/x-raw, "   // Color HD2K
                                              "format = (string)BGRA, "
@@ -742,7 +742,7 @@ static GstStaticPadTemplate gst_zedsrc_src_template =
                                              "format = (string)GRAY16_LE, "
                                              "width = (int)1920, "
                                              "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30 }"
+                                             "framerate = (fraction) { 15, 30, 60 }"
                                              ";"
                                              "video/x-raw, "   // Depth HD2K
                                              "format = (string)GRAY16_LE, "
