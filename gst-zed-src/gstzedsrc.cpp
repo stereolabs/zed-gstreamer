@@ -60,6 +60,7 @@ enum {
     PROP_CAM_ID,
     PROP_CAM_SN,
     PROP_SVO_FILE,
+    PROP_OPENCV_CALIB_FILE,
     PROP_STREAM_IP,
     PROP_STREAM_PORT,
     PROP_DEPTH_MIN,
@@ -226,6 +227,7 @@ typedef enum {
 #define DEFAULT_PROP_CAM_ID         0
 #define DEFAULT_PROP_CAM_SN         0
 #define DEFAULT_PROP_SVO_FILE       ""
+#define DEFAULT_PROP_OPENCV_CALIB_FILE       ""
 #define DEFAULT_PROP_STREAM_IP      ""
 #define DEFAULT_PROP_STREAM_PORT    30000
 #define DEFAULT_PROP_STREAM_TYPE    0
@@ -842,6 +844,12 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
         g_param_spec_string("svo-file-path", "SVO file", "Input from SVO file",
                             DEFAULT_PROP_SVO_FILE,
                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    
+    g_object_class_install_property(
+        gobject_class, PROP_OPENCV_CALIB_FILE,
+        g_param_spec_string("opencv-calibration-file", "Optional OpenCV Calibration File", "Optional OpenCV Calibration File", 
+                            DEFAULT_PROP_OPENCV_CALIB_FILE,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_STREAM_IP,
@@ -1411,8 +1419,9 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->camera_id = DEFAULT_PROP_CAM_ID;
     src->camera_sn = DEFAULT_PROP_CAM_SN;
     src->svo_file = *g_string_new(DEFAULT_PROP_SVO_FILE);
+    src->opencv_calibration_file = *g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
     src->stream_ip = *g_string_new(DEFAULT_PROP_STREAM_IP);
-    ;
+
     src->stream_port = DEFAULT_PROP_STREAM_PORT;
     src->stream_type = DEFAULT_PROP_STREAM_TYPE;
 
@@ -1536,6 +1545,10 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
     case PROP_SVO_FILE:
         str = g_value_get_string(value);
         src->svo_file = *g_string_new(str);
+        break;
+    case PROP_OPENCV_CALIB_FILE:
+        str = g_value_get_string(value);
+        src->opencv_calibration_file = *g_string_new(str);
         break;
     case PROP_STREAM_IP:
         str = g_value_get_string(value);
@@ -1825,6 +1838,9 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         break;
     case PROP_SVO_FILE:
         g_value_set_string(value, src->svo_file.str);
+        break;
+    case PROP_OPENCV_CALIB_FILE:
+        g_value_set_string(value, src->opencv_calibration_file.str);
         break;
     case PROP_STREAM_IP:
         g_value_set_string(value, src->stream_ip.str);
@@ -2222,6 +2238,10 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     init_params.camera_disable_self_calib = src->camera_disable_self_calib == TRUE;
     GST_INFO(" * Disable self calibration: %s",
              (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
+		
+    sl::String opencv_calibration_file(src->opencv_calibration_file.str);
+    init_params.optional_opencv_calibration_file = opencv_calibration_file;
+    GST_INFO(" * Calibration File: %s ", init_params.optional_opencv_calibration_file.c_str());
 
     std::cout << "Setting depth_mode to " << init_params.depth_mode << std::endl;
 
