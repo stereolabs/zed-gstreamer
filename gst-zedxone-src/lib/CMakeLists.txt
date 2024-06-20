@@ -84,7 +84,7 @@ message("${SPECIAL_OS_LIBS}")
 add_library(${libname} SHARED ${ARGUS_CAPTURE_SRC} ${ARGUS_CAPTURE_HDR} ${TegraMM_COMMON_SOURCES})
 
 ### Link library with deps
-target_link_libraries(${libname} ${SPECIAL_OS_LIBS} drm X11)
+target_link_libraries(${libname} ${SPECIAL_OS_LIBS} drm X11 vulkan)
 
 set_target_properties(${libname} PROPERTIES
     PUBLIC_HEADER "${ARGUS_CAPTURE_HDR}"
