@@ -17,6 +17,7 @@
 #include <math.h>
 #include <shared_mutex>
 #include <linux/version.h>
+#include <memory>
 
 
 #define SAFE_DELETE(e) if (e) { \
