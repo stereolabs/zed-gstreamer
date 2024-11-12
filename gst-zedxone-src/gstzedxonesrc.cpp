@@ -58,7 +58,6 @@ enum {
     PROP_CAM_ID,
     PROP_SWAP_RB,
     PROP_TIMEOUT_MSEC,
-    PROP_AE_ANTI_BANDING,
     PROP_ANALOG_GAIN_RANGE_MIN,
     PROP_ANALOG_GAIN_RANGE_MAX,
     PROP_DIGITAL_GAIN_RANGE_MIN,
@@ -72,14 +71,12 @@ enum {
     PROP_SATURATION,
     PROP_DENOISING,
     PROP_EXP_COMPENSATION,
-    PROP_SHARPENING,
-    PROP_MAN_ANALOG_GAIN_DB,
+    PROP_SHARPNESS,
+    PROP_MAN_ANALOG_GAIN,
     PROP_MAN_DIGITAL_GAIN,
     PROP_MAN_EXPOSURE_USEC,
     PROP_MANUAL_WB,
-    PROP_TONE_MAP_R_GAMMA,
-    PROP_TONE_MAP_G_GAMMA,
-    PROP_TONE_MAP_B_GAMMA,
+    PROP_TONE_MAP_GAMMA,
     PROP_AEC_AGC_ROI_X,
     PROP_AEC_AGC_ROI_Y,
     PROP_AEC_AGC_ROI_W,
@@ -115,37 +112,31 @@ typedef enum {
 #define DEFAULT_PROP_CAM_RES GST_ZEDXONESRC_1200P
 #define DEFAULT_PROP_CAM_FPS GST_ZEDXONESRC_15FPS
 #define DEFAULT_PROP_VERBOSE_LVL 0
-#define DEFAULT_PROP_CAM_ID 0
-#define DEFAULT_PROP_SWAP_RB 0
+#define DEFAULT_PROP_CAM_ID -1
+#define DEFAULT_PROP_CAM_SN -1
 #define DEFAULT_PROP_TIMEOUT_MSEC 1000
 
 // CAMERA CONTROLS
-#define DEFAULT_PROP_AE_ANTI_BANDING GST_AE_ANTI_BAND_AUTO
-#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN 0.1
-#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX 30.0
-#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN 1.0
-#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX 256.0
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN 1000
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX 16000
+#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN 1
+#define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX 256
 #define DEFAULT_PROP_EXPOSURE_RANGE_MIN 28
 #define DEFAULT_PROP_EXPOSURE_RANGE_MAX 66000
 #define DEFAULT_PROP_AUTO_ANALOG_GAIN TRUE
 #define DEFAULT_PROP_AUTO_DIGITAL_GAIN TRUE
 #define DEFAULT_PROP_AUTO_EXPOSURE TRUE
 #define DEFAULT_PROP_AUTO_WB TRUE
-#define DEFAULT_PROP_SATURATION 1.0
-#define DEFAULT_PROP_DENOISING 0.5
-#define DEFAULT_PROP_EXP_COMPENSATION 0.0
-#define DEFAULT_PROP_SHARPENING 1.0
-#define DEFAULT_PROP_MAN_ANALOG_GAIN_DB 1.0
-#define DEFAULT_PROP_MAN_DIGITAL_GAIN 128
-#define DEFAULT_PROP_MAN_EXPOSURE_USEC 2000
+#define DEFAULT_PROP_SATURATION 4
+#define DEFAULT_PROP_GAMMA 4
+#define DEFAULT_PROP_DENOISING 50
+#define DEFAULT_PROP_EXP_COMPENSATION 50
+#define DEFAULT_PROP_SHARPNESS 4
+#define DEFAULT_PROP_TONE_MAP_GAMMA 8
+#define DEFAULT_PROP_MAN_ANALOG_GAIN 1255
+#define DEFAULT_PROP_MAN_DIGITAL_GAIN 1
+#define DEFAULT_PROP_MAN_EXPOSURE_USEC 16000
 #define DEFAULT_PROP_MANUAL_WB 5000
-#define DEFAULT_PROP_TONE_MAP_R_GAMMA 2.0
-#define DEFAULT_PROP_TONE_MAP_G_GAMMA 2.0
-#define DEFAULT_PROP_TONE_MAP_B_GAMMA 2.0
-#define DEFAULT_PROP_AEG_AGC_ROI_X -1
-#define DEFAULT_PROP_AEG_AGC_ROI_Y -1
-#define DEFAULT_PROP_AEG_AGC_ROI_W -1
-#define DEFAULT_PROP_AEG_AGC_ROI_H -1
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define GST_TYPE_ZEDXONE_RESOL (gst_zedxonesrc_resol_get_type())
@@ -345,12 +336,6 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_SWAP_RB,
-        g_param_spec_boolean("swap-rb", "Swap RB", "Swap Red and Blue color channels",
-                             DEFAULT_PROP_SWAP_RB,
-                             (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
         gobject_class, PROP_TIMEOUT_MSEC,
         g_param_spec_int("camera-timeout", "Timeout [msec]", "Connection timeout in milliseconds",
                          100, 100000000, DEFAULT_PROP_TIMEOUT_MSEC,
@@ -389,24 +374,24 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                              (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_MAN_ANALOG_GAIN_DB,
-        g_param_spec_float("analog-gain", "Analog Gain [dB]", "Analog Gain value in dB", 0.1, 30.0,
-                           DEFAULT_PROP_MAN_ANALOG_GAIN_DB,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        gobject_class, PROP_MAN_ANALOG_GAIN,
+        g_param_spec_int("analog-gain", "Analog Gain", "Analog Gain value", 1000, 16000,
+                         DEFAULT_PROP_MAN_ANALOG_GAIN,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_ANALOG_GAIN_RANGE_MIN,
-        g_param_spec_float("auto-analog-gain-range-min", "Minimum Automatic Analog Gain [dB]",
-                           "Minimum Analog Gain in dB for the automatic analog gain setting", 0.1,
-                           30.0, DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("auto-analog-gain-range-min", "Minimum Automatic Analog Gain",
+                         "Minimum Analog Gain for the automatic analog gain setting", 1000, 16000,
+                         DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_ANALOG_GAIN_RANGE_MAX,
-        g_param_spec_float("auto-analog-gain-range-max", "Maximum Automatic Analog Gain [dB]",
-                           "Maximum Analog Gain in dB for the automatic analog gain setting", 0.1,
-                           30.0, DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("auto-analog-gain-range-max", "Maximum Automatic Analog Gain",
+                         "Maximum Analog Gain for the automatic analog gain setting", 1000, 16000,
+                         DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_AUTO_DIGITAL_GAIN,
@@ -422,17 +407,17 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_DIGITAL_GAIN_RANGE_MIN,
-        g_param_spec_float("auto-digital-gain-range-min", "Minimum Automatic Digital Gain",
-                           "Minimum Digital Gain for the automatic digital gain setting", 1.0,
-                           256.0, DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("auto-digital-gain-range-min", "Minimum Automatic Digital Gain",
+                         "Minimum Digital Gain for the automatic digital gain setting", 1, 256,
+                         DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_DIGITAL_GAIN_RANGE_MAX,
-        g_param_spec_float("auto-digital-gain-range-max", "Maximum Automatic Digital Gain",
-                           "Maximum Digital Gain for the automatic digital gain setting", 1.0,
-                           256.0, DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("auto-digital-gain-range-max", "Maximum Automatic Digital Gain",
+                         "Maximum Digital Gain for the automatic digital gain setting", 1, 256,
+                         DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_AUTO_WB,
@@ -447,92 +432,44 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_AE_ANTI_BANDING,
-        g_param_spec_enum("anti-banding", "Anti Banding", "AE Anti Banding", GST_TYPE_ANTI_BANDING,
-                          DEFAULT_PROP_AE_ANTI_BANDING,
-                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
         gobject_class, PROP_SATURATION,
-        g_param_spec_float("saturation", "Color Saturation", "Color Saturation", 0.0, 2.0,
-                           DEFAULT_PROP_SATURATION,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("saturation", "Color Saturation", "Color Saturation", 0, 8,
+                         DEFAULT_PROP_SATURATION,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_DENOISING,
-        g_param_spec_float("denoising", "Denoising", "Denoising factor", 0.0, 1.0,
-                           DEFAULT_PROP_DENOISING,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("denoising", "Denoising", "Denoising factor", 0, 100,
+                         DEFAULT_PROP_DENOISING,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_EXP_COMPENSATION,
-        g_param_spec_float("exposure-compensation", "Exposure Compensation",
-                           "Exposure Compensation", -2.0, 2.0, DEFAULT_PROP_EXP_COMPENSATION,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int("exposure-compensation", "Exposure Compensation", "Exposure Compensation",
+                         0, 100, DEFAULT_PROP_EXP_COMPENSATION,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_SHARPENING,
-        g_param_spec_float("sharpening", "Image Sharpening", "Image Sharpening", 0.0, 1.0,
-                           DEFAULT_PROP_SHARPENING,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        gobject_class, PROP_SHARPNESS,
+        g_param_spec_int("sharpness", "Image Sharpness", "Image Sharpness", 0, 8,
+                         DEFAULT_PROP_SHARPNESS,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_TONE_MAP_R_GAMMA,
-        g_param_spec_float("tone-map-gamma-r", "Tone Map from Gamma (Ch. R)",
-                           "Set the tone mapping curve from a gamma value (Channel R)", 1.5, 3.5,
-                           DEFAULT_PROP_TONE_MAP_R_GAMMA,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_TONE_MAP_G_GAMMA,
-        g_param_spec_float("tone-map-gamma-g", "Tone Map from Gamma (Ch. G)",
-                           "Set the tone mapping curve from a gamma value (Channel G)", 1.5, 3.5,
-                           DEFAULT_PROP_TONE_MAP_G_GAMMA,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_TONE_MAP_B_GAMMA,
-        g_param_spec_float("tone-map-gamma-b", "Tone Map from Gamma (Ch. B)",
-                           "Set the tone mapping curve from a gamma value (Channel B)", 1.5, 3.5,
-                           DEFAULT_PROP_TONE_MAP_B_GAMMA,
-                           (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_AEC_AGC_ROI_X,
-        g_param_spec_int(
-            "ctrl-aec-agc-roi-x", "Camera control: auto gain/exposure ROI top left 'X' coordinate",
-            "Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)", -1, 3810,
-            DEFAULT_PROP_AEG_AGC_ROI_X, (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_AEC_AGC_ROI_Y,
-        g_param_spec_int(
-            "ctrl-aec-agc-roi-y", "Camera control: auto gain/exposure ROI top left 'Y' coordinate",
-            "Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)", -1, 2160,
-            DEFAULT_PROP_AEG_AGC_ROI_Y, (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_AEC_AGC_ROI_W,
-        g_param_spec_int("ctrl-aec-agc-roi-w", "Camera control: auto gain/exposure ROI width",
-                         "Auto gain/exposure ROI width (-1 to not set ROI)", -1, 3810,
-                         DEFAULT_PROP_AEG_AGC_ROI_W,
-                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_AEC_AGC_ROI_H,
-        g_param_spec_int("ctrl-aec-agc-roi-h", "Camera control: auto gain/exposure ROI height",
-                         "Auto gain/exposure ROI height (-1 to not set ROI)", -1, 2160,
-                         DEFAULT_PROP_AEG_AGC_ROI_H,
-                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        gobject_class, PROP_TONE_MAP_GAMMA,
+        g_param_spec_int("gamma", "Tone Map from Gamma",
+                         "Set the tone mapping curve from a gamma value", 1, 9,
+                         DEFAULT_PROP_TONE_MAP_GAMMA,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
-    if (src->zed->isOpened()) {
-        src->zed->closeCamera();
+    if (src->_zed->isOpened()) {
+        src->_zed->close();
     }
 
-    src->out_framesize = 0;
-    src->is_started = FALSE;
+    src->_outFramesize = 0;
+    src->_isStarted = FALSE;
 
     if (src->caps) {
         gst_caps_unref(src->caps);
@@ -548,51 +485,42 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     gst_base_src_set_format(GST_BASE_SRC(src), GST_FORMAT_TIME);
 
     // ----> Parameters initialization
-    src->camera_resolution = DEFAULT_PROP_CAM_RES;
-    src->camera_fps = DEFAULT_PROP_CAM_FPS;
-    src->verbose_level = DEFAULT_PROP_VERBOSE_LVL;
-    src->camera_id = DEFAULT_PROP_CAM_ID;
-    src->swap_rb = DEFAULT_PROP_SWAP_RB;
-    src->cam_timeout_msec = DEFAULT_PROP_TIMEOUT_MSEC;
+    src->_cameraResolution = DEFAULT_PROP_CAM_RES;
+    src->_cameraFps = DEFAULT_PROP_CAM_FPS;
+    src->_sdkVerboseLevel = DEFAULT_PROP_VERBOSE_LVL;
+    src->_cameraId = DEFAULT_PROP_CAM_ID;
+    src->_camTimeout_msec = DEFAULT_PROP_TIMEOUT_MSEC;
 
-    src->ae_anti_banding = DEFAULT_PROP_AE_ANTI_BANDING;
-    src->color_saturation = DEFAULT_PROP_SATURATION;
-    src->denoising = DEFAULT_PROP_DENOISING;
-    src->exposure_compensation = DEFAULT_PROP_EXP_COMPENSATION;
-    src->sharpening = DEFAULT_PROP_SHARPENING;
-    src->tone_mapping_r_gamma = DEFAULT_PROP_TONE_MAP_R_GAMMA;
-    src->tone_mapping_g_gamma = DEFAULT_PROP_TONE_MAP_G_GAMMA;
-    src->tone_mapping_b_gamma = DEFAULT_PROP_TONE_MAP_B_GAMMA;
+    src->_colorSaturation = DEFAULT_PROP_SATURATION;
+    src->_denoising = DEFAULT_PROP_DENOISING;
+    src->_exposureCompensation = DEFAULT_PROP_EXP_COMPENSATION;
+    src->_sharpness = DEFAULT_PROP_SHARPNESS;
+    src->_gamma = DEFAULT_PROP_GAMMA;
 
-    src->auto_exposure = DEFAULT_PROP_AUTO_EXPOSURE;
-    src->exposure_range_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
-    src->exposure_range_max = DEFAULT_PROP_EXPOSURE_RANGE_MAX;
-    src->manual_exposure_usec = DEFAULT_PROP_MAN_EXPOSURE_USEC;
+    src->_autoExposure = DEFAULT_PROP_AUTO_EXPOSURE;
+    src->_exposureRange_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
+    src->_exposureRange_max = DEFAULT_PROP_EXPOSURE_RANGE_MAX;
+    src->_manualExposure_usec = DEFAULT_PROP_MAN_EXPOSURE_USEC;
 
-    src->auto_analog_gain = DEFAULT_PROP_AUTO_ANALOG_GAIN;
-    src->analog_frame_gain_range_min = DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN;
-    src->analog_frame_gain_range_max = DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX;
-    src->manual_analog_gain_db = DEFAULT_PROP_MAN_ANALOG_GAIN_DB;
+    src->_autoAnalogGain = DEFAULT_PROP_AUTO_ANALOG_GAIN;
+    src->_analogGainRange_min = DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN;
+    src->_analogGainRange_max = DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX;
+    src->_manualAnalogGain = DEFAULT_PROP_MAN_ANALOG_GAIN;
 
-    src->auto_digital_gain = DEFAULT_PROP_AUTO_DIGITAL_GAIN;
-    src->digital_frame_gain_range_min = DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN;
-    src->digital_frame_gain_range_max = DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX;
-    src->manual_digital_gain_value = DEFAULT_PROP_MAN_DIGITAL_GAIN;
+    src->_autoDigitalGain = DEFAULT_PROP_AUTO_DIGITAL_GAIN;
+    src->_digitalGainRange_min = DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN;
+    src->_digitalGainRange_max = DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX;
+    src->_manualDigitalGain = DEFAULT_PROP_MAN_DIGITAL_GAIN;
 
-    src->auto_wb = DEFAULT_PROP_AUTO_WB;
-    src->manual_wb = DEFAULT_PROP_MANUAL_WB;
-
-    src->aec_agc_roi_x = DEFAULT_PROP_AEG_AGC_ROI_X;
-    src->aec_agc_roi_y = DEFAULT_PROP_AEG_AGC_ROI_Y;
-    src->aec_agc_roi_w = DEFAULT_PROP_AEG_AGC_ROI_W;
-    src->aec_agc_roi_h = DEFAULT_PROP_AEG_AGC_ROI_H;
+    src->_autoWb = DEFAULT_PROP_AUTO_WB;
+    src->_manualWb = DEFAULT_PROP_MANUAL_WB;
     // <---- Parameters initialization
 
-    src->stop_requested = FALSE;
+    src->_stopRequested = FALSE;
     src->caps = NULL;
 
-    if (!src->zed) {
-        src->zed = std::make_unique<oc::ArgusBayerCapture>();
+    if (!src->_zed) {
+        src->_zed = std::make_unique<sl::CameraOne>();
     }
 
     gst_zedxonesrc_reset(src);
@@ -608,100 +536,76 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
 
     switch (property_id) {
     case PROP_CAM_RES:
-        src->camera_resolution = g_value_get_enum(value);
+        src->_cameraResolution = g_value_get_enum(value);
         break;
     case PROP_CAM_FPS:
-        src->camera_fps = g_value_get_enum(value);
+        src->_cameraFps = g_value_get_enum(value);
         break;
     case PROP_VERBOSE_LVL:
-        src->verbose_level = g_value_get_int(value);
+        src->_sdkVerboseLevel = g_value_get_int(value);
         break;
     case PROP_CAM_ID:
-        src->camera_id = g_value_get_int(value);
-        break;
-    case PROP_SWAP_RB:
-        src->swap_rb = g_value_get_boolean(value);
+        src->_cameraId = g_value_get_int(value);
         break;
     case PROP_TIMEOUT_MSEC:
-        src->cam_timeout_msec = g_value_get_int(value);
-        break;
-    case PROP_AE_ANTI_BANDING:
-        src->ae_anti_banding = g_value_get_enum(value);
+        src->_camTimeout_msec = g_value_get_int(value);
         break;
     case PROP_SATURATION:
-        src->color_saturation = g_value_get_float(value);
+        src->_colorSaturation = g_value_get_int(value);
         break;
     case PROP_DENOISING:
-        src->denoising = g_value_get_float(value);
+        src->_denoising = g_value_get_int(value);
         break;
     case PROP_EXP_COMPENSATION:
-        src->exposure_compensation = g_value_get_float(value);
+        src->_exposureCompensation = g_value_get_int(value);
         break;
-    case PROP_SHARPENING:
-        src->sharpening = g_value_get_float(value);
+    case PROP_SHARPNESS:
+        src->_sharpness = g_value_get_int(value);
         break;
-    case PROP_TONE_MAP_R_GAMMA:
-        src->tone_mapping_r_gamma = g_value_get_float(value);
-        break;
-    case PROP_TONE_MAP_G_GAMMA:
-        src->tone_mapping_g_gamma = g_value_get_float(value);
-        break;
-    case PROP_TONE_MAP_B_GAMMA:
-        src->tone_mapping_b_gamma = g_value_get_float(value);
+    case PROP_TONE_MAP_GAMMA:
+        src->_gamma = g_value_get_int(value);
         break;
     case PROP_AUTO_EXPOSURE:
-        src->auto_exposure = g_value_get_boolean(value);
+        src->_autoExposure = g_value_get_boolean(value);
         break;
     case PROP_MAN_EXPOSURE_USEC:
-        src->manual_exposure_usec = g_value_get_int(value);
+        src->_manualExposure_usec = g_value_get_int(value);
         break;
     case PROP_EXPOSURE_RANGE_MIN:
-        src->exposure_range_min = g_value_get_int(value);
+        src->_exposureRange_min = g_value_get_int(value);
         break;
     case PROP_EXPOSURE_RANGE_MAX:
-        src->exposure_range_max = g_value_get_int(value);
+        src->_exposureRange_max = g_value_get_int(value);
         break;
     case PROP_AUTO_ANALOG_GAIN:
-        src->auto_analog_gain = g_value_get_boolean(value);
+        src->_autoAnalogGain = g_value_get_boolean(value);
         break;
-    case PROP_MAN_ANALOG_GAIN_DB:
-        src->manual_analog_gain_db = g_value_get_float(value);
+    case PROP_MAN_ANALOG_GAIN:
+        src->_manualAnalogGain = g_value_get_int(value);
         break;
     case PROP_ANALOG_GAIN_RANGE_MIN:
-        src->analog_frame_gain_range_min = g_value_get_float(value);
+        src->_analogGainRange_min = g_value_get_int(value);
         break;
     case PROP_ANALOG_GAIN_RANGE_MAX:
-        src->analog_frame_gain_range_max = g_value_get_float(value);
+        src->_analogGainRange_max = g_value_get_int(value);
         break;
     case PROP_AUTO_DIGITAL_GAIN:
-        src->auto_digital_gain = g_value_get_boolean(value);
+        src->_autoDigitalGain = g_value_get_boolean(value);
         break;
     case PROP_MAN_DIGITAL_GAIN:
-        src->manual_digital_gain_value = g_value_get_int(value);
+        src->_manualDigitalGain = g_value_get_int(value);
         break;
     case PROP_DIGITAL_GAIN_RANGE_MIN:
-        src->digital_frame_gain_range_min = g_value_get_float(value);
+        src->_digitalGainRange_min = g_value_get_int(value);
         break;
     case PROP_DIGITAL_GAIN_RANGE_MAX:
-        src->digital_frame_gain_range_max = g_value_get_float(value);
+        src->_digitalGainRange_max = g_value_get_int(value);
         break;
     case PROP_AUTO_WB:
-        src->auto_wb = g_value_get_boolean(value);
+        src->_autoWb = g_value_get_boolean(value);
         break;
     case PROP_MANUAL_WB:
-        src->manual_wb = g_value_get_int(value);
-        break;
-    case PROP_AEC_AGC_ROI_X:
-        src->aec_agc_roi_x = g_value_get_int(value);
-        break;
-    case PROP_AEC_AGC_ROI_Y:
-        src->aec_agc_roi_y = g_value_get_int(value);
-        break;
-    case PROP_AEC_AGC_ROI_W:
-        src->aec_agc_roi_w = g_value_get_int(value);
-        break;
-    case PROP_AEC_AGC_ROI_H:
-        src->aec_agc_roi_h = g_value_get_int(value);
+        src->_manualWb = g_value_get_int(value);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
@@ -720,100 +624,76 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
 
     switch (property_id) {
     case PROP_CAM_RES:
-        g_value_set_enum(value, src->camera_resolution);
+        g_value_set_enum(value, src->_cameraResolution);
         break;
     case PROP_CAM_FPS:
-        g_value_set_enum(value, src->camera_fps);
+        g_value_set_enum(value, src->_cameraFps);
         break;
     case PROP_VERBOSE_LVL:
-        g_value_set_int(value, src->verbose_level);
+        g_value_set_int(value, src->_sdkVerboseLevel);
         break;
     case PROP_CAM_ID:
-        g_value_set_int(value, src->camera_id);
-        break;
-    case PROP_SWAP_RB:
-        g_value_set_boolean(value, src->swap_rb);
+        g_value_set_int(value, src->_cameraId);
         break;
     case PROP_TIMEOUT_MSEC:
-        g_value_set_int(value, src->cam_timeout_msec);
-        break;
-    case PROP_AE_ANTI_BANDING:
-        g_value_set_enum(value, src->ae_anti_banding);
+        g_value_set_int(value, src->_camTimeout_msec);
         break;
     case PROP_SATURATION:
-        g_value_set_float(value, src->color_saturation);
+        g_value_set_int(value, src->_colorSaturation);
         break;
     case PROP_DENOISING:
-        g_value_set_float(value, src->denoising);
+        g_value_set_int(value, src->_denoising);
         break;
     case PROP_EXP_COMPENSATION:
-        g_value_set_float(value, src->exposure_compensation);
+        g_value_set_int(value, src->_exposureCompensation);
         break;
-    case PROP_SHARPENING:
-        g_value_set_float(value, src->sharpening);
+    case PROP_SHARPNESS:
+        g_value_set_int(value, src->_sharpness);
         break;
-    case PROP_TONE_MAP_R_GAMMA:
-        g_value_set_float(value, src->tone_mapping_r_gamma);
-        break;
-    case PROP_TONE_MAP_G_GAMMA:
-        g_value_set_float(value, src->tone_mapping_g_gamma);
-        break;
-    case PROP_TONE_MAP_B_GAMMA:
-        g_value_set_float(value, src->tone_mapping_b_gamma);
+    case PROP_TONE_MAP_GAMMA:
+        g_value_set_int(value, src->_gamma);
         break;
     case PROP_AUTO_EXPOSURE:
-        g_value_set_boolean(value, src->auto_exposure);
+        g_value_set_boolean(value, src->_autoExposure);
         break;
     case PROP_MAN_EXPOSURE_USEC:
-        g_value_set_int(value, src->manual_exposure_usec);
+        g_value_set_int(value, src->_manualExposure_usec);
         break;
     case PROP_EXPOSURE_RANGE_MIN:
-        g_value_set_int(value, src->exposure_range_min);
+        g_value_set_int(value, src->_exposureRange_min);
         break;
     case PROP_EXPOSURE_RANGE_MAX:
-        g_value_set_int(value, src->exposure_range_max);
+        g_value_set_int(value, src->_exposureRange_max);
         break;
     case PROP_AUTO_ANALOG_GAIN:
-        g_value_set_boolean(value, src->auto_analog_gain);
+        g_value_set_boolean(value, src->_autoAnalogGain);
         break;
-    case PROP_MAN_ANALOG_GAIN_DB:
-        g_value_set_float(value, src->manual_analog_gain_db);
+    case PROP_MAN_ANALOG_GAIN:
+        g_value_set_int(value, src->_manualAnalogGain);
         break;
     case PROP_ANALOG_GAIN_RANGE_MIN:
-        g_value_set_float(value, src->analog_frame_gain_range_min);
+        g_value_set_int(value, src->_analogGainRange_min);
         break;
     case PROP_ANALOG_GAIN_RANGE_MAX:
-        g_value_set_float(value, src->analog_frame_gain_range_max);
+        g_value_set_int(value, src->_analogGainRange_max);
         break;
     case PROP_AUTO_DIGITAL_GAIN:
-        g_value_set_boolean(value, src->auto_digital_gain);
+        g_value_set_boolean(value, src->_autoDigitalGain);
         break;
     case PROP_MAN_DIGITAL_GAIN:
-        g_value_set_int(value, src->manual_digital_gain_value);
+        g_value_set_int(value, src->_manualDigitalGain);
         break;
     case PROP_DIGITAL_GAIN_RANGE_MIN:
-        g_value_set_float(value, src->digital_frame_gain_range_min);
+        g_value_set_int(value, src->_digitalGainRange_min);
         break;
     case PROP_DIGITAL_GAIN_RANGE_MAX:
-        g_value_set_float(value, src->digital_frame_gain_range_max);
+        g_value_set_int(value, src->_digitalGainRange_max);
         break;
     case PROP_AUTO_WB:
-        g_value_set_boolean(value, src->auto_wb);
+        g_value_set_boolean(value, src->_autoWb);
         break;
     case PROP_MANUAL_WB:
-        g_value_set_int(value, src->manual_wb);
-        break;
-    case PROP_AEC_AGC_ROI_X:
-        g_value_set_int(value, src->aec_agc_roi_x);
-        break;
-    case PROP_AEC_AGC_ROI_Y:
-        g_value_set_int(value, src->aec_agc_roi_y);
-        break;
-    case PROP_AEC_AGC_ROI_W:
-        g_value_set_int(value, src->aec_agc_roi_w);
-        break;
-    case PROP_AEC_AGC_ROI_H:
-        g_value_set_int(value, src->aec_agc_roi_h);
+        g_value_set_int(value, src->_manualWb);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
@@ -857,13 +737,13 @@ static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
     guint32 width, height;
     gint fps;
     GstVideoInfo vinfo;
-    GstVideoFormat format = src->swap_rb ? GST_VIDEO_FORMAT_RGBA : GST_VIDEO_FORMAT_BGRA;
+    GstVideoFormat format = GST_VIDEO_FORMAT_BGRA;
 
-    if (!resol_to_w_h(static_cast<GstZedXOneSrcRes>(src->camera_resolution), width, height)) {
+    if (!resol_to_w_h(static_cast<GstZedXOneSrcRes>(src->_cameraResolution), width, height)) {
         return FALSE;
     }
 
-    fps = src->camera_fps;
+    fps = src->_cameraFps;
 
     if (format != GST_VIDEO_FORMAT_UNKNOWN) {
         gst_video_info_init(&vinfo);
@@ -871,13 +751,13 @@ static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
         if (src->caps) {
             gst_caps_unref(src->caps);
         }
-        src->out_framesize = (guint) GST_VIDEO_INFO_SIZE(&vinfo);
+        src->_outFramesize = (guint) GST_VIDEO_INFO_SIZE(&vinfo);
         vinfo.fps_n = fps;
         vinfo.fps_d = 1;
         src->caps = gst_video_info_to_caps(&vinfo);
     }
 
-    gst_base_src_set_blocksize(GST_BASE_SRC(src), src->out_framesize);
+    gst_base_src_set_blocksize(GST_BASE_SRC(src), src->_outFramesize);
     gst_base_src_set_caps(GST_BASE_SRC(src), src->caps);
     GST_DEBUG_OBJECT(src, "Created caps %" GST_PTR_FORMAT, src->caps);
 
@@ -890,166 +770,117 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_calculate_caps");
 
-    // ----> Set config parameters
-    guint32 width, height;
-    if (!resol_to_w_h(static_cast<GstZedXOneSrcRes>(src->camera_resolution), width, height)) {
-        return FALSE;
-    }
-
-    int major, minor, patch;
-    oc::ArgusVirtualCapture::getVersion(major, minor, patch);
-    GST_INFO("ZED Argus Capture Version: %d.%d.%d", major, minor, patch);
-
-    std::vector<oc::ArgusDevice> devs = oc::ArgusBayerCapture::getArgusDevices();
-    for (int i = 0; i < devs.size(); i++) {
-        GST_INFO("##################");
-        GST_INFO(" Device: %d", devs.at(i).id);
-        GST_INFO(" Name: %s", devs.at(i).name.c_str());
-        GST_INFO(" Badge: %s", devs.at(i).badge.c_str());
-        GST_INFO(" Available: %s", (devs.at(i).available ? "TRUE" : "FALSE"));
-    }
-    GST_INFO("***********************");
+    // ----> Set init parameters
+    sl::InitParametersOne init_params;
 
     GST_INFO("CAMERA INITIALIZATION PARAMETERS");
 
-    oc::ArgusCameraConfig config;
-    config.mDeviceId = src->camera_id;
-    GST_INFO(" * Camera ID: %d", src->camera_id);
-    config.mWidth = width;
-    config.mHeight = height;
-    GST_INFO(" * Camera resolution: %d x %d", (int) width, (int) height);
-    config.mFPS = src->camera_fps;
-    GST_INFO(" * Camera FPS: %d", src->camera_fps);
-    config.mChannel = 4;
-    GST_INFO(" * Camera channels: %d", config.mChannel);
-    config.mSwapRB = src->swap_rb;
-    GST_INFO(" * Swap RB: %s", (src->swap_rb ? "TRUE" : "FALSE"));
-    config.verbose_level = src->verbose_level;
-    GST_INFO(" * Verbose level: %d", src->verbose_level);
+    init_params.async_grab_camera_recovery;
+    init_params.camera_fps;
+    init_params.camera_image_flip;
+    init_params.camera_resolution;
+    init_params.enable_hdr;
+    init_params.open_timeout_sec;
+    init_params.optional_opencv_calibration_file;
+    init_params.sdk_verbose;
+    init_params.svo_real_time_mode;
 
-    GST_INFO(" * Connection timeout: %d msec", src->cam_timeout_msec);
-    // <---- Set config parameters
+    if (src->_svoFile.len != 0) {
+        sl::String svo(static_cast<char *>(src->_svoFile.str));
+        init_params.input.setFromSVOFile(svo);
+        init_params.svo_real_time_mode = src->_svoRealTimeMode;
+
+        GST_INFO(" * Input SVO filename: %s", src->_svoFile.str);
+        GST_INFO(" * Input SVO real time mode: %s", (src->_svoRealTimeMode ? "ON" : "OFF"));
+    } else if (src->_cameraId != DEFAULT_PROP_CAM_ID) {
+        init_params.input.setFromCameraID(src->_cameraId);
+
+        GST_INFO(" * Input Camera ID: %d", src->_cameraId);
+    } else if (src->_cameraSN != DEFAULT_PROP_CAM_SN) {
+        init_params.input.setFromSerialNumber(src->_cameraSN);
+
+        GST_INFO(" * Input Camera SN: %d", src->_cameraSN);
+    } else if (src->_streamIp.len != 0) {
+        sl::String ip(static_cast<char *>(src->_streamIp.str));
+        init_params.input.setFromStream(ip, src->_streamPort);
+
+        GST_INFO(" * Input Stream: %s:%d", src->_streamIp.str, src->_streamPort);
+    } else {
+        GST_INFO(" * Input from default device");
+    }
+    // <---- Set init parameters
 
     // ----> Open camera
-    GST_INFO("Opening camera #%d ...", (int) config.mDeviceId);
+    GST_INFO("Opening camera...");
 
-    oc::ARGUS_STATE ret = src->zed->openCamera(config);
+    sl::ERROR_CODE ret = src->_zed->open(init_params);
 
-    if (ret != oc::ARGUS_STATE::OK) {
+    if (ret != sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                          ("Failed to open camera, '%s'", oc::ARGUS_STATE2str(ret).c_str()),
+                          ("Failed to open camera, '%s - %s'", sl::toString(ret).c_str(),
+                           sl::toVerbose(ret).c_str()),
                           (NULL));
         return FALSE;
     }
     GST_INFO("... camera ready");
-    GST_INFO(" * %dx%d@%dFPS", src->zed->getWidth(), src->zed->getHeight(), src->zed->getFPS());
+    auto info = src->_zed->getCameraInformation();
+    GST_INFO(" * %s - %dx%d@%gFPS", sl::toString(info.camera_model).c_str(),static_cast<int>(info.camera_configuration.resolution.width),
+             static_cast<int>(info.camera_configuration.resolution.height), info.camera_configuration.fps);
 
     usleep(5000);
     // <---- Open camera
 
     // ----> Camera Controls
-    // GST_INFO("CAMERA CONTROL DEFAULT PARAMETERS");
-    // uint64_t min_u64;
-    // uint64_t max_u64;
-    // float min_f;
-    // float max_f;
-
-    // src->zed->getExposureLimits(min_u64, max_u64);
-    // GST_INFO(" * Exposure Limits: [%d,%d]", (int) min_u64, (int) max_u64);
-    // src->zed->getAnalogGainLimits(min_f, max_f);
-    // GST_INFO(" * Analog Gain Limits: [%g,%g]", min_f, max_f);
-    // src->zed->getDigitalGainLimits(min_f, max_f);
-    // GST_INFO(" * Digital Gain Limits: [%g,%g]", min_f, max_f);
-
-    // float sat = src->zed->getColorSaturation();
-    // GST_INFO(" * Default Saturation: %g", sat);
-    // float den = src->zed->getDenoisingValue();
-    // GST_INFO(" * Default Denoising: %g", den);
-    // float exp = src->zed->getExposureCompensation();
-    // GST_INFO(" * Default Exposure Compensation: %g", exp);
-    // float sharp = src->zed->getSharpening();
-    // GST_INFO(" * Default Sharpening: %g", sharp);
-
-    GST_INFO("CAMERA CONTROL PARAMETERS");
-    int res;
-
-    // AE ANTI BANDING
-    res = src->zed->setAEAntiBanding(static_cast<oc::AEANTIBANDING>(src->ae_anti_banding));
-    if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set AE Anti Banding: %d", res),
-                          (NULL));
-        return FALSE;
-    }
-    std::string ae;
-    switch (static_cast<GstZedXOneSrcAeAntiBand>(src->ae_anti_banding)) {
-    case GST_AE_ANTI_BAND_AUTO:
-        ae = "AUTO";
-        break;
-
-    case GST_AE_ANTI_BAND_50HZ:
-        ae = "50 Hz";
-        break;
-
-    case GST_AE_ANTI_BAND_60HZ:
-        ae = "60 Hz";
-        break;
-
-    case GST_AE_ANTI_BAND_OFF:
-    default:
-        ae = "OFF";
-        break;
-    }
-    GST_INFO(" * AE Anti Banding: %s", ae.c_str());
+    GST_INFO("*** CAMERA CONTROL PARAMETERS ***");
 
     // COLOR SATURATION
-    res = src->zed->setColorSaturation(src->color_saturation);
+    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::SATURATION, static_cast<int>(src->_colorSaturation));
     if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Color saturation: %d", res),
-                          (NULL));
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Color saturation: %s", sl::toString(res).c_str()), (NULL));
         return FALSE;
     }
-    GST_INFO(" * Color Saturation: %g", src->color_saturation);
+    GST_INFO(" * Color Saturation: %d", src->_colorSaturation);
 
     // DENOISING
-    res = src->zed->setDenoisingValue(src->denoising);
+    ret = src->_zed->setDenoisingValue(src->_denoising);
     if (res != 0) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set denoising: %d", res), (NULL));
         return FALSE;
     }
-    GST_INFO(" * Denoising: %g", src->denoising);
+    GST_INFO(" * Denoising: %g", src->_denoising);
 
     // EXPOSURE COMPENSATION
-    res = src->zed->setExposureCompensation(src->exposure_compensation);
+    res = src->_zed->setExposureCompensation(src->_exposureCompensation);
     if (res != 0) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                           ("Failed to set exposure compensation value: %d", res), (NULL));
         return FALSE;
     }
-    GST_INFO(" * Exposure Compensation: %g", src->exposure_compensation);
+    GST_INFO(" * Exposure Compensation: %g", src->_exposureCompensation);
 
-    // SHARPENING
-    res = src->zed->setSharpening(src->sharpening);
+    // SHARPNESS
+    res = src->_zed->setSharpness(src->_sharpness);
     if (res != 0) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                          ("Failed to set image sharpening value: %d", res), (NULL));
+                          ("Failed to set image sharpness value: %d", res), (NULL));
         return FALSE;
     }
-    GST_INFO(" * Image Sharpening: %g", src->sharpening);
+    GST_INFO(" * Image Sharpness: %g", src->_sharpness);
 
     // TONE MAPPING FROM GAMMA
-    res = src->zed->setToneMappingFromGamma(0, src->tone_mapping_r_gamma);
+    res = src->_zed->setToneMappingFromGamma(0, src->tone_mapping_r_gamma);
     if (res != 0) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                           ("Failed to set Tone Mapping for channel red: %d", res), (NULL));
         return FALSE;
     }
-    res = src->zed->setToneMappingFromGamma(1, src->tone_mapping_g_gamma);
+    res = src->_zed->setToneMappingFromGamma(1, src->tone_mapping_g_gamma);
     if (res != 0) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                           ("Failed to set Tone Mapping for channel green: %d", res), (NULL));
         return FALSE;
     }
-    res = src->zed->setToneMappingFromGamma(2, src->tone_mapping_b_gamma);
+    res = src->_zed->setToneMappingFromGamma(2, src->tone_mapping_b_gamma);
     if (res != 0) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                           ("Failed to set Tone Mapping for channel blue: %d", res), (NULL));
@@ -1058,160 +889,160 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Tone Mapping from gamma: [%g,%g,%g]", src->tone_mapping_r_gamma, src->tone_mapping_g_gamma, src->tone_mapping_b_gamma);
 
     // EXPOSURE
-    if (src->auto_exposure == TRUE) {
-        res = src->zed->setAutomaticExposure();
+    if (src->_autoExposure == TRUE) {
+        res = src->_zed->setAutomaticExposure();
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Automatic exposure: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Automatic Exposure: TRUE");
-        res = src->zed->setFrameExposureRange(src->exposure_range_min, src->exposure_range_max);
+        res = src->_zed->setFrameExposureRange(src->_exposureRange_min, src->_exposureRange_max);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Automatic exposure range: %d", res), (NULL));
             return FALSE;
         }
-        GST_INFO(" * Automatic Exposure range: [%d,%d] µsec", src->exposure_range_min,
-                 src->exposure_range_max);
+        GST_INFO(" * Automatic Exposure range: [%d,%d] µsec", src->_exposureRange_min,
+                 src->_exposureRange_max);
     } else {
         uint64_t min, max;
-        res = src->zed->getFrameExposureRange(min, max);
+        res = src->_zed->getFrameExposureRange(min, max);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to retrieve exposure limits: %d", res), (NULL));
             return FALSE;
         }
 
-        if (src->manual_exposure_usec > max) {
+        if (src->_manualExposure_usec > max) {
             GST_WARNING("Manual exposure time (%d) setting is higher than the maximum limit "
                         "(%d). "
                         "Value truncated to %d µsec",
-                        src->manual_exposure_usec, (int) max, (int) max);
-            src->manual_exposure_usec = max;
+                        src->_manualExposure_usec, (int) max, (int) max);
+            src->_manualExposure_usec = max;
         }
-        if (src->manual_exposure_usec < min) {
+        if (src->_manualExposure_usec < min) {
             GST_WARNING("Manual exposure time (%d) setting is lower than the minimum limit "
                         "(%d). "
                         "Value truncated to %d µsec",
-                        src->manual_exposure_usec, (int) min, (int) min);
-            src->manual_exposure_usec = min;
+                        src->_manualExposure_usec, (int) min, (int) min);
+            src->_manualExposure_usec = min;
         }
-        res = src->zed->setManualTimeExposure((uint64_t) src->manual_exposure_usec);
+        res = src->_zed->setManualTimeExposure((uint64_t) src->_manualExposure_usec);
 
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual exposure: %d", res),
                               (NULL));
             return FALSE;
         }
-        GST_INFO(" * Manual Exposure: %d µsec", src->manual_exposure_usec);
+        GST_INFO(" * Manual Exposure: %d µsec", src->_manualExposure_usec);
     }
 
     // ANALOG GAIN
-    if (src->auto_analog_gain == TRUE) {
-        res = src->zed->setAutomaticAnalogGain();
+    if (src->_autoAnalogGain == TRUE) {
+        res = src->_zed->setAutomaticAnalogGain();
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Automatic Analog Gain: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Automatic Analog Gain: TRUE");
-        res = src->zed->setAnalogFrameGainRange(src->analog_frame_gain_range_min,
-                                                src->analog_frame_gain_range_max);
+        res = src->_zed->setAnalogFrameGainRange(src->_analogGainRange_min,
+                                                 src->_analogGainRange_max);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Automatic Analog Gain range: %d", res), (NULL));
             return FALSE;
         }
-        GST_INFO(" * Automatic Analog Gain range: [%d,%d] dB", src->analog_frame_gain_range_min,
-                 src->analog_frame_gain_range_max);
+        GST_INFO(" * Automatic Analog Gain range: [%d,%d] dB", src->_analogGainRange_min,
+                 src->_analogGainRange_max);
     } else {
         float min, max;
-        res = src->zed->getAnalogGainLimits(min, max);
+        res = src->_zed->getAnalogGainLimits(min, max);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to retrieve analog gain limits: %d", res), (NULL));
             return FALSE;
         }
 
-        if (src->manual_analog_gain_db > max) {
+        if (src->_manualAnalogGain > max) {
             GST_WARNING("Manual analog gain (%g) setting is higher than the maximum limit "
                         "(%g). "
                         "Value truncated to %g dB",
-                        src->manual_analog_gain_db, max, max);
-            src->manual_analog_gain_db = max;
+                        src->_manualAnalogGain, max, max);
+            src->_manualAnalogGain = max;
         }
-        if (src->manual_analog_gain_db < min) {
+        if (src->_manualAnalogGain < min) {
             GST_WARNING("Manual analog gain time (%g) setting is lower than the minimum limit "
                         "(%g). "
                         "Value truncated to %g dB",
-                        src->manual_analog_gain_db, min, min);
-            src->manual_analog_gain_db = min;
+                        src->_manualAnalogGain, min, min);
+            src->_manualAnalogGain = min;
         }
-        res = src->zed->setManualAnalogGainReal(src->manual_analog_gain_db);
+        res = src->_zed->setManualAnalogGainReal(src->_manualAnalogGain);
 
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Manual Analog Gain: %d", res), (NULL));
             return FALSE;
         }
-        GST_INFO(" * Manual Analog Gain: %g dB", src->manual_analog_gain_db);
+        GST_INFO(" * Manual Analog Gain: %g dB", src->_manualAnalogGain);
     }
 
     // DIGITAL GAIN
-    if (src->auto_digital_gain == TRUE) {
-        res = src->zed->setAutomaticDigitalGain();
+    if (src->_autoDigitalGain == TRUE) {
+        res = src->_zed->setAutomaticDigitalGain();
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Automatic Digital Gain: %d", res), (NULL));
             return FALSE;
         }
         GST_INFO(" * Automatic Digital Gain: TRUE");
-        res = src->zed->setDigitalFrameGainRange(src->digital_frame_gain_range_min,
-                                                 src->digital_frame_gain_range_max);
+        res = src->_zed->setDigitalFrameGainRange(src->_digitalGainRange_min,
+                                                  src->_digitalGainRange_max);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Automatic Digital Gain range: %d", res), (NULL));
             return FALSE;
         }
-        GST_INFO(" * Automatic Digital Gain range: [%g,%g]", src->digital_frame_gain_range_min,
-                 src->digital_frame_gain_range_max);
+        GST_INFO(" * Automatic Digital Gain range: [%g,%g]", src->_digitalGainRange_min,
+                 src->_digitalGainRange_max);
     } else {
         float min, max;
-        res = src->zed->getDigitalGainLimits(min, max);
+        res = src->_zed->getDigitalGainLimits(min, max);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to retrieve digital gain limits: %d", res), (NULL));
             return FALSE;
         }
 
-        if (src->manual_digital_gain_value > max) {
+        if (src->_manualDigitalGain > max) {
             GST_WARNING("Manual digital gain (%d) setting is higher than the maximum limit "
                         "(%g). "
                         "Value truncated to %g",
-                        src->manual_digital_gain_value, max, max);
-            src->manual_digital_gain_value = max;
+                        src->_manualDigitalGain, max, max);
+            src->_manualDigitalGain = max;
         }
-        if (src->manual_digital_gain_value < min) {
+        if (src->_manualDigitalGain < min) {
             GST_WARNING("Manual digital gain time (%d) setting is lower than the minimum limit "
                         "(%g). "
                         "Value truncated to %g",
-                        src->manual_digital_gain_value, min, min);
-            src->manual_digital_gain_value = min;
+                        src->_manualDigitalGain, min, min);
+            src->_manualDigitalGain = min;
         }
-        res = src->zed->setManualDigitalGainReal(src->manual_digital_gain_value);
+        res = src->_zed->setManualDigitalGainReal(src->_manualDigitalGain);
 
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Manual Digital Gain: %d", res), (NULL));
             return FALSE;
         }
-        GST_INFO(" * Manual Digital Gain: %d", src->manual_digital_gain_value);
+        GST_INFO(" * Manual Digital Gain: %d", src->_manualDigitalGain);
     }
 
     // WHITE BALANCE
-    if (src->auto_wb == TRUE) {
-        res = src->zed->setAutomaticWhiteBalance(TRUE);
+    if (src->_autoWb == TRUE) {
+        res = src->_zed->setAutomaticWhiteBalance(TRUE);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Automatic White Balance: %d", res), (NULL));
@@ -1219,19 +1050,19 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         }
         GST_INFO(" * Automatic White Balance: TRUE");
     } else {
-        res = src->zed->setAutomaticWhiteBalance(FALSE);
+        res = src->_zed->setAutomaticWhiteBalance(FALSE);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Automatic White Balance: %d", res), (NULL));
             return FALSE;
         }
-        res = src->zed->setManualWhiteBalance(src->manual_wb);
+        res = src->_zed->setManualWhiteBalance(src->_manualWb);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set White Balance value: %d", res), (NULL));
             return FALSE;
         }
-        GST_INFO(" * Manual White Balance: %d°", src->manual_wb);
+        GST_INFO(" * Manual White Balance: %d°", src->_manualWb);
     }
 
     // REGION OF INTEREST FOR AEC AND AGC    
@@ -1242,7 +1073,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         roi.y = src->aec_agc_roi_y;
         roi.width = src->aec_agc_roi_w;
         roi.height = src->aec_agc_roi_h;
-        res = src->zed->setROIforAECAGC(roi);
+        res = src->_zed->setROIforAECAGC(roi);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set ROI for AEC and AGC: %d", res), (NULL));
@@ -1329,7 +1160,7 @@ static gboolean gst_zedxonesrc_unlock(GstBaseSrc *bsrc) {
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_unlock");
 
-    src->stop_requested = TRUE;
+    src->_stopRequested = TRUE;
 
     return TRUE;
 }
@@ -1339,7 +1170,7 @@ static gboolean gst_zedxonesrc_unlock_stop(GstBaseSrc *bsrc) {
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_unlock_stop");
 
-    src->stop_requested = FALSE;
+    src->_stopRequested = FALSE;
 
     return TRUE;
 }
@@ -1355,18 +1186,18 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     static int temp_ugly_buf_index = 0;
 
-    if (!src->is_started) {
-        src->acq_start_time = gst_clock_get_time(gst_element_get_clock(GST_ELEMENT(src)));
+    if (!src->_isStarted) {
+        src->_acqStartTime = gst_clock_get_time(gst_element_get_clock(GST_ELEMENT(src)));
 
-        src->is_started = TRUE;
+        src->_isStarted = TRUE;
     }
 
     // ----> Check if a new frame is available
     auto start = std::chrono::system_clock::now();
-    while (!src->zed->isNewFrame()) {
+    while (!src->_zed->isNewFrame()) {
         auto end = std::chrono::system_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        if (elapsed.count() > src->cam_timeout_msec) {
+        if (elapsed.count() > src->_camTimeout_msec) {
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Camera timeout. Disconnected?"), (NULL));
             return GST_FLOW_ERROR;
         }
@@ -1386,8 +1217,8 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
 
     // ----> Check memory size
-    gsize data_size = static_cast<gsize>(src->zed->getWidth() * src->zed->getHeight() *
-                                         src->zed->getNumberOfChannels());
+    gsize data_size = static_cast<gsize>(src->_zed->getWidth() * src->_zed->getHeight() *
+                                         src->_zed->getNumberOfChannels());
     if (minfo.size != data_size) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("ZED X One Data size mismatch!"), (NULL));
         return GST_FLOW_ERROR;
@@ -1395,16 +1226,16 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Check memory size
 
     // ----> Memory copy
-    memcpy(minfo.data, src->zed->getPixels(), minfo.size);
+    memcpy(minfo.data, src->_zed->getPixels(), minfo.size);
     // <---- Memory copy
 
     // ----> Camera controls
     int res;
 
     // COLOR SATURATION
-    float sat = src->zed->getColorSaturation();
-    if (fabs(sat - src->color_saturation) > 0.5f) {
-        res = src->zed->setColorSaturation(src->color_saturation);
+    float sat = src->_zed->getColorSaturation();
+    if (fabs(sat - src->_colorSaturation) > 0.5f) {
+        res = src->_zed->setColorSaturation(src->_colorSaturation);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Color saturation: %d", res),
                               (NULL));
@@ -1412,9 +1243,9 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
 
     // DENOISING
-    float den = src->zed->getDenoisingValue();
-    if (fabs(den - src->denoising) > 0.1f) {
-        res = src->zed->setDenoisingValue(src->denoising);
+    float den = src->_zed->getDenoisingValue();
+    if (fabs(den - src->_denoising) > 0.1f) {
+        res = src->_zed->setDenoisingValue(src->_denoising);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Denoising: %d", res),
                               (NULL));
@@ -1422,66 +1253,66 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
 
     // EXPOSURE COMPENSATION
-    float exp_comp = src->zed->getExposureCompensation();
-    if (fabs(exp_comp - src->exposure_compensation) > 0.1f) {
-        res = src->zed->setExposureCompensation(src->exposure_compensation);
+    float exp_comp = src->_zed->getExposureCompensation();
+    if (fabs(exp_comp - src->_exposureCompensation) > 0.1f) {
+        res = src->_zed->setExposureCompensation(src->_exposureCompensation);
         if (res != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                               ("Failed to set Exposure Compensation: %d", res), (NULL));
         }
     }
 
-    // SHARPENING
-    float sharp = src->zed->getSharpening();
-    if (fabs(sharp - src->sharpening) > 0.1f) {
-        res = src->zed->setSharpening(src->sharpening);
+    // SHARPNESS
+    float sharp = src->_zed->getSharpness();
+    if (fabs(sharp - src->_sharpness) > 0.1f) {
+        res = src->_zed->setSharpness(src->_sharpness);
         if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Image Sharpening: %d", res),
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Image Sharpness: %d", res),
                               (NULL));
         }
     }
 
     // EXPOSURE
-    if (src->auto_exposure == FALSE) {
-        gint exp = static_cast<gint>(src->zed->getFrameExposureTime());
-        if (abs(exp - src->manual_exposure_usec) > 10) {
-            if (src->zed->setManualTimeExposure((uint64_t) src->manual_exposure_usec) != 0) {
+    if (src->_autoExposure == FALSE) {
+        gint exp = static_cast<gint>(src->_zed->getFrameExposureTime());
+        if (abs(exp - src->_manualExposure_usec) > 10) {
+            if (src->_zed->setManualTimeExposure((uint64_t) src->_manualExposure_usec) != 0) {
                 GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Exposure"),
                                   (NULL));
             }
-            GST_INFO("Forced manual exposure value. Expected %d, was %d", src->manual_exposure_usec,
+            GST_INFO("Forced manual exposure value. Expected %d, was %d", src->_manualExposure_usec,
                      exp);
         }
     }
 
     // DIGITAL GAIN
-    if (src->auto_digital_gain == FALSE) {
-        float dig_gain = src->zed->getDigitalFrameGain();
-        if (fabs(dig_gain - src->manual_digital_gain_value) > 5.0) {
-            if (src->zed->setManualDigitalGainReal(src->manual_digital_gain_value) != 0) {
+    if (src->_autoDigitalGain == FALSE) {
+        float dig_gain = src->_zed->getDigitalFrameGain();
+        if (fabs(dig_gain - src->_manualDigitalGain) > 5.0) {
+            if (src->_zed->setManualDigitalGainReal(src->_manualDigitalGain) != 0) {
                 GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Digital Gain"),
                                   (NULL));
             }
             GST_INFO("Forced manual digital gain value. Expected %d, was %g",
-                     src->manual_digital_gain_value, dig_gain);
+                     src->_manualDigitalGain, dig_gain);
         }
     }
 
     // WHITE BALANCE
-    if (src->auto_wb == FALSE) {
-        gint wb = static_cast<int>(src->zed->getManualWhiteBalance());
-        if (abs(wb - src->manual_wb) > 5.0) {
-            if (src->zed->setManualWhiteBalance(src->manual_wb) != 0) {
+    if (src->_autoWb == FALSE) {
+        gint wb = static_cast<int>(src->_zed->getManualWhiteBalance());
+        if (abs(wb - src->_manualWb) > 5.0) {
+            if (src->_zed->setManualWhiteBalance(src->_manualWb) != 0) {
                 GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual White Balance"),
                                   (NULL));
             }
-            GST_INFO("Forced manual white balance value. Expected %d, was %d", src->manual_wb, wb);
+            GST_INFO("Forced manual white balance value. Expected %d, was %d", src->_manualWb, wb);
         }
     }
     // <---- Camera controls
 
     // // ----> Info metadata
-    // sl::CameraInformation cam_info = src->zed->getCameraInformation();
+    // sl::CameraInformation cam_info = src->_zed->getCameraInformation();
     // ZedInfo info;
     // info.cam_model = (gint) cam_info.camera_model;
     // info.stream_type = src->stream_type;
@@ -1495,12 +1326,12 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // // ----> Sensors metadata
     // ZedSensors sens;
-    // if (src->zed->getCameraInformation().camera_model != sl::MODEL::ZED) {
+    // if (src->_zed->getCameraInformation().camera_model != sl::MODEL::ZED) {
     //     sens.sens_avail = TRUE;
     //     sens.imu.imu_avail = TRUE;
 
     //     sl::SensorsData sens_data;
-    //     src->zed->getSensorsData(sens_data, sl::TIME_REFERENCE::IMAGE);
+    //     src->_zed->getSensorsData(sens_data, sl::TIME_REFERENCE::IMAGE);
 
     //     sens.imu.acc[0] = sens_data.imu.linear_acceleration.x;
     //     sens.imu.acc[1] = sens_data.imu.linear_acceleration.y;
@@ -1509,7 +1340,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     //     sens.imu.gyro[1] = sens_data.imu.angular_velocity.y;
     //     sens.imu.gyro[2] = sens_data.imu.angular_velocity.z;
 
-    //     if (src->zed->getCameraInformation().camera_model != sl::MODEL::ZED_M) {
+    //     if (src->_zed->getCameraInformation().camera_model != sl::MODEL::ZED_M) {
     //         sens.mag.mag_avail = TRUE;
     //         sens.mag.mag[0] = sens_data.magnetometer.magnetic_field_calibrated.x;
     //         sens.mag.mag[1] = sens_data.magnetometer.magnetic_field_calibrated.y;
@@ -1560,7 +1391,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     gst_buffer_unmap(buf, &minfo);
     // gst_buffer_unref(buf); // NOTE(Walter) do not uncomment to not crash
 
-    if (src->stop_requested) {
+    if (src->_stopRequested) {
         return GST_FLOW_FLUSHING;
     }
 

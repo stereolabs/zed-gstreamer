@@ -553,7 +553,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   saturation          : Color Saturation
                         flags: readable, writable
                         Float. Range:               0 -               2 Default:               1 
-  sharpening          : Image Sharpening
+  sharpness          : Image Sharpness
                         flags: readable, writable
                         Float. Range:               0 -               1 Default:               1 
   swap-rb             : Swap Red and Blue color channels

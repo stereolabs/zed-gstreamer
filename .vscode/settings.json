@@ -91,7 +91,11 @@
     "__tree": "cpp",
     "queue": "cpp",
     "stack": "cpp",
-    "locale": "cpp"
+    "locale": "cpp",
+    "*.ipp": "cpp",
+    "ranges": "cpp",
+    "__node_handle": "cpp",
+    "filesystem": "cpp"
   },
   "C_Cpp.errorSquiggles": "disabled",
   "editor.tabSize": 4
