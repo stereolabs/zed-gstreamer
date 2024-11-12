@@ -6,13 +6,13 @@
 
 <p align="center">
   <a href="#key-features">Key Features</a> •
-  <a href="#build">Build</a> •
-  <a href="#elements-properties">Elements properties</a> •
-  <a href="#metadata">Metadata</a> •
-  <a href="#pipeline-examples">Example pipelines</a> • 
-  <a href="#rtsp-server">RTSP Server</a> • 
-  <a href="#related">Related</a> •
-  <a href="#license">License</a>
+  <a href="#build-and-install"> Install</a> •
+  <a href="#elements-properties"> Elements properties</a> •
+  <a href="#metadata"> Metadata</a> •
+  <a href="#pipeline-examples"> Example pipelines</a> •
+  <a href="#rtsp-server"> RTSP Server</a> •
+  <a href="#related"> Related</a> •
+  <a href="#license"> License</a>
 </p>
 <br>
 
@@ -30,32 +30,32 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 * [`zedodoverlay`](./gst-zed-od-overlay): example transform filter element that receives ZED combined stream with metadata, extracts Object Detection information and draws the overlays on the oncoming filter
 * [`RTSP Server`](./gst-zed-rtsp-server): application for Linux that instantiates an RTSP server from a text launch pipeline "gst-launch" like.
 
-## Build
+## Build and install
 
 ### Prerequisites
 
- * [ZED SDK v4.1](https://www.stereolabs.com/developers/release/)
- * CMake (v3.6+)
- * GStreamer 1.0
+* [ZED SDK v4.1](https://www.stereolabs.com/developers/release/)
+* CMake (v3.6+)
+* GStreamer 1.0
 
 ### Windows installation
 
- * Install the latest ZED SDK v4 from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
- * Install [Git](https://git-scm.com/) or download a ZIP archive
- * Install [CMake](https://cmake.org/)
- * Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
- * The installer should set the installation path via the `GSTREAMER_1_0_ROOT_X86_64` environment variable.
- * Add the path `%GSTREAMER_1_0_ROOT_X86_64%\bin` to the system variable `PATH`
- * Run the following commands from a terminal or command prompt, assuming CMake and Git are in your `PATH`.
+* Install the latest ZED SDK v4 from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
+* Install [Git](https://git-scm.com/) or download a ZIP archive
+* Install [CMake](https://cmake.org/)
+* Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
+* The installer should set the installation path via the `GSTREAMER_1_0_ROOT_X86_64` environment variable.
+* Add the path `%GSTREAMER_1_0_ROOT_X86_64%\bin` to the system variable `PATH`
+* Run the following commands from a terminal or command prompt, assuming CMake and Git are in your `PATH`.
 
-     ```
+     ```bash
      git clone https://github.com/stereolabs/zed-gstreamer.git
      cd zed-gstreamer
      mkdir build
      cd build
      cmake -G "Visual Studio 16 2019" ..
      cmake --build . --target INSTALL --config Release
-     ```   
+     ```
 
 ### Linux installation
 
@@ -85,42 +85,46 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 #### Clone the repository
 
-    $ git clone https://github.com/stereolabs/zed-gstreamer.git
-    $ cd zed-gstreamer
+```bash
+git clone https://github.com/stereolabs/zed-gstreamer.git
+cd zed-gstreamer
+```
 
 #### Build
 
-    $ mkdir build
-    $ cd build
-    $ cmake -DCMAKE_BUILD_TYPE=Release ..
-    $ make # Note: do not use the `-j` flag because parallel build is not supported
-    $ sudo make install
+```bash
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make # Note: do not use the `-j` flag because parallel build is not supported
+sudo make install
+```
 
 ### Installation test
 
- * Check `ZED Video Source Element` installation inspecting its properties:
+* Check `ZED Video Source Element` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zedsrc`
 
-      `gst-inspect-1.0 zedsrc`
+* Check `ZED X One Video Source Element` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zedxonesrc`
 
- * Check `ZED X One Video Source Element` installation inspecting its properties:
-
-      `gst-inspect-1.0 zedxonesrc`
-
- * Check `ZED Video Demuxer` installation inspecting its properties:
-
-      `gst-inspect-1.0 zeddemux`
+* Check `ZED Video Demuxer` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zeddemux`
 
 * Check `ZED Data Mux Element` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zeddatamux`
 
-     `gst-inspect-1.0 zeddatamux`
+* Check `ZED CSV Sink Element` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zeddatacsvsink`
 
- * Check `ZED CSV Sink Element` installation inspecting its properties:
-
-      `gst-inspect-1.0 zeddatacsvsink`
-
- * Check `ZED Object Detection Overlay Element` installation inspecting its properties:
-
-      `gst-inspect-1.0 zedodoverlay`
+* Check `ZED Object Detection Overlay Element` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zedodoverlay`
 
 ## Elements properties
 
@@ -128,7 +132,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 Most of the properties follow the same name as the C++ API. Except that `_` is replaced by `-` to follow gstreamer common formatting.
 
-```
+```bash
   area-file-path      : Area localization file that describes the surroundings, saved from a previous tracking session.
                         flags: readable, writable
                         String. Default: ""
@@ -450,7 +454,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
 
 ### `ZED X One Video Source Element` properties
 
-```
+```bash
   analog-gain         : Analog Gain value in dB
                         flags: readable, writable
                         Float. Range:             0.1 -              30 Default:               1 
@@ -581,7 +585,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
 
 ### `ZED Video Demuxer Element` properties
 
-```
+```bash
   is-depth            : Aux source is GRAY16 depth
                         flags: readable, writable
                         Boolean. Default: true
@@ -592,7 +596,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
 
 ### `ZED Data CSV sink Element` properties
 
-```
+```bash
   append              : Append to an already existing CSV file
                         flags: readable, writable
                         Boolean. Default: false
@@ -653,10 +657,11 @@ The `GstZedSrcMeta` structure is provided to handle the `zedmeta` metadata and i
 ### GstZedSrcMeta structure
 
 The GstZedSrcMeta is subdivided in four sub-structures:
- * `ZedInfo`: info about camera model, stream type and original stream size
- * `ZedPose`: position and orientation of the camera if positional tracking is enabled
- * `ZedSensors`: sensors data (only ZED-Mini and ZED2)
- * `ZedObjectData`: detected object information (only ZED2)
+
+* `ZedInfo`: info about camera model, stream type and original stream size
+* `ZedPose`: position and orientation of the camera if positional tracking is enabled
+* `ZedSensors`: sensors data (only ZED-Mini and ZED2)
+* `ZedObjectData`: detected object information (only ZED2)
 
 More details about the sub-structures are available in the [`gstzedmeta.h` file](./gst-zed-meta/gstzedmeta.h)
 
@@ -667,7 +672,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`simple-fps_rendering.sh`](./scripts/linux/simple-fps_rendering.sh)
 * Windows: [`simple-fps_rendering.bat`](./scripts/windows/simple-fps_rendering.bat)
 
-```
+```bash
     gst-launch-1.0 zedsrc ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
@@ -676,7 +681,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`simple-depth-fps_rendering.sh`](./scripts/linux/simple-depth-fps_rendering.sh)
 * Windows: [`simple-depth-fps_rendering.bat`](./scripts/windows/simple-depth-fps_rendering.bat)
 
-```
+```bash
     gst-launch-1.0 zedsrc stream-type=3 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
@@ -685,7 +690,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb_left_right-fps_rendering.sh`](./scripts/linux/local-rgb_left_right-fps_rendering.sh)
 * Windows: [`local-rgb_left_right-fps_rendering.bat`](./scripts/windows/local-rgb_left_right-fps_rendering.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=2 ! queue ! \
     zeddemux is-depth=false name=demux \
@@ -698,7 +703,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb_left_depth-fps_rendering.sh`](./scripts/linux/local-rgb_left_depth-fps_rendering.sh)
 * Windows: [`local-rgb_left_depth-fps_rendering.bat`](./scripts/windows/local-rgb_left_depth-fps_rendering.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=4 ! queue ! \
     zeddemux name=demux \
@@ -711,7 +716,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb-depth-sens-csv.sh`](./scripts/linux/local-rgb-depth-sens-csv.sh)
 * Windows: [`local-rgb-depth-sens-csv.bat`](./scripts/windows/local-rgb-depth-sens-csv.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=4 ! \
     zeddemux stream-data=TRUE name=demux \
@@ -725,7 +730,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb-od_multi-overlay.sh`](./scripts/linux/local-rgb-od_multi-overlay.sh)
 * Windows: [`local-rgb-od_multi-overlay.bat`](./scripts/windows/local-rgb-od_multi-overlay.bat)
 
-```    
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=0 od-enabled=true od-detection-model=0 ! queue ! \
     zedodoverlay ! queue ! \
@@ -737,7 +742,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb-skel_fast-overlay.sh`](./scripts/linux/local-rgb-skel_fast-overlay.sh)
 * Windows: [`local-rgb-skel_fast-overlay.bat`](./scripts/windows/local-rgb-skel_fast-overlay.bat)
 
-```    
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=2 bt-enabled=true bt-detection-model=0 ! queue ! \
     zedodoverlay ! queue ! \
@@ -749,7 +754,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb-skel_accurate-overlay.sh`](./scripts/linux/local-rgb-skel_accurate-overlay.sh)
 * Windows: [`local-rgb-skel_accurate-overlay.bat`](./scripts/windows/local-rgb-skel_accurate-overlay.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=0 bt-enabled=true bt-detection-model=2 ! queue ! \
     zedodoverlay ! queue ! \
@@ -761,7 +766,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-od-fps_overlay.sh`](./scripts/linux/local-od-fps_overlay.sh)
 * Windows: [`local-od-fps_overlay.bat`](./scripts/windows/local-od-fps_overlay.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=4 bt-enabled=true bt-detection-model=0 ! \
     zeddemux name=demux \
@@ -774,7 +779,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb-rescale-od-overlay.sh`](./scripts/linux/local-rgb-rescale-od-overlay.sh)
 * Windows: [`local-rgb-rescale-od-overlay.bat`](./scripts/windows/local-rgb-rescale-od-overlay.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zeddatamux name=mux \
     zedsrc stream-type=4 bt-enabled=true bt-detection-model=0 ! \
@@ -790,7 +795,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 * Jetson: [`zedxone-simple-fps_rendering.sh`](./scripts/jetson/zedxone-simple-fps_rendering.sh)
 
-```
+```bash
     gst-launch-1.0 zedxonesrc ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
@@ -798,7 +803,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 * Jetson: [`zedxone-4k-simple-fps_rendering.sh`](./scripts/jetson/zedxone-4k-simple-fps_rendering.sh)
 
-```
+```bash
     gst-launch-1.0 zedxonesrc camera-resolution=3 camera-fps=15 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
@@ -806,36 +811,34 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 * Jetson: [`zedxone-simple-60-fps_rendering.sh`](./scripts/jetson/zedxone-simple-60-fps_rendering.sh)
 
-```
+```bash
     gst-launch-1.0 zedxonesrc camera-resolution=2 camera-fps=60 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
-
-
-## RTSP Server
-
-*Available only for Linux*
+## RTSP Server *[Available only for Linux]*
 
 An application to start an RTSP server from a text pipeline (using the same sintax of the CLI command [`gst-launch-1.0`](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html)) is provided.
 
 Usage:
 
-```
+```bash
    gst-zed-rtsp-launch [OPTION?] PIPELINE-DESCRIPTION
 ```
 
 Help Options:
-*  `-h`, `--help` -> Show help options.
-*  `--help-all` -> Show all help options.
-*  `--help-gst` -> Show GStreamer Options.
+
+* `-h`, `--help` -> Show help options.
+* `--help-all` -> Show all help options.
+* `--help-gst` -> Show GStreamer Options.
 
 Application Options:
-*  `-p`, `--port=PORT` -> Port to listen on (default: 8554).
-*  `-a`, `--address=HOST` -> Host address (default: 127.0.0.1).
 
-Example: 
+* `-p`, `--port=PORT` -> Port to listen on (default: 8554).
+* `-a`, `--address=HOST` -> Host address (default: 127.0.0.1).
 
-```
+Example:
+
+```bash
    gst-zed-rtsp-launch zedsrc ! videoconvert ! 'video/x-raw, format=(string)I420' ! x264enc ! rtph264pay pt=96 name=pay0
 ```
 
@@ -845,25 +848,26 @@ It is mandatory to define at least one payload named `pay0`; it is possible to d
 
 Ready to use scripts are available in the `scripts` folder for Windows, Desktop Linux, and Jetson
 
-- local-od-fps_overlay : Left and Depth image rendering with object detection (FAST HUMAN BODY TRACKING) data (overlay).
-- local-rgb-depth-sens-csv : Left and Depth image rendering and sensors data saved in csv file.
-- local-rgb_left_depth-fps_rendering : Left and Depth image rendering.
-- local-rgb_left_right-fps_rendering : Left and Right image rendering.
-- local-rgb-od_multi-overlay : Left image rendering with object detection on overlay (MULTI_CLASS)
-- local-rgb-rescale-od-overlay : Left and Depth image rendering with object detection with rescaling filter
-- local-rgb-skel_accurate-overlay : Left image rendering with human body pose ACCURATE overlay
-- local-rgb-skel_fast-overlay : Left/Right in top/bottom image rendering with human body pose FAST overlay
+* local-od-fps_overlay : Left and Depth image rendering with object detection (FAST HUMAN BODY TRACKING) data (overlay).
+* local-rgb-depth-sens-csv : Left and Depth image rendering and sensors data saved in csv file.
+* local-rgb_left_depth-fps_rendering : Left and Depth image rendering.
+* local-rgb_left_right-fps_rendering : Left and Right image rendering.
+* local-rgb-od_multi-overlay : Left image rendering with object detection on overlay (MULTI_CLASS)
+* local-rgb-rescale-od-overlay : Left and Depth image rendering with object detection with rescaling filter
+* local-rgb-skel_accurate-overlay : Left image rendering with human body pose ACCURATE overlay
+* local-rgb-skel_fast-overlay : Left/Right in top/bottom image rendering with human body pose FAST overlay
 
-- [Linux only] udp and rtsp sender/receiver.
+* [Linux only] udp and rtsp sender/receiver.
 
 ## Related
 
-- [Stereolabs](https://www.stereolabs.com)
-- [ZED SDK](https://www.stereolabs.com/developers/)
+* [Stereolabs](https://www.stereolabs.com)
+* [ZED SDK](https://www.stereolabs.com/developers/)
 
 ## License
 
 This library is licensed under the LGPL License.
 
 ## Support
-If you need assistance go to our Community site at https://community.stereolabs.com/
+
+If you need assistance go to our [Community site](https://community.stereolabs.com/).
