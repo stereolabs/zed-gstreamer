@@ -74,7 +74,7 @@ enum {
     PROP_ANALOG_GAIN_RANGE_MIN,
     PROP_ANALOG_GAIN_RANGE_MAX,
     PROP_AUTO_DIGITAL_GAIN,
-    PROP_DIGITAL_GAIN,    
+    PROP_DIGITAL_GAIN,
     PROP_DIGITAL_GAIN_RANGE_MIN,
     PROP_DIGITAL_GAIN_RANGE_MAX,
     PROP_DENOISING,
@@ -478,32 +478,34 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_cameraResolution = DEFAULT_PROP_CAM_RES;
     src->_cameraFps = DEFAULT_PROP_CAM_FPS;
     src->_sdkVerboseLevel = DEFAULT_PROP_VERBOSE_LVL;
-    src->_cameraId = DEFAULT_PROP_CAM_ID;
     src->_camTimeout_msec = DEFAULT_PROP_TIMEOUT_MSEC;
-
+    src->_cameraId = DEFAULT_PROP_CAM_ID;
+    src->_cameraSN = DEFAULT_PROP_CAM_SN;
+    src->_opencvCalibrationFile = = *g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
+    
     src->_colorSaturation = DEFAULT_PROP_SATURATION;
-    src->_denoising = DEFAULT_PROP_DENOISING;
-    src->_exposureCompensation = DEFAULT_PROP_EXP_COMPENSATION;
     src->_sharpness = DEFAULT_PROP_SHARPNESS;
     src->_gamma = DEFAULT_PROP_GAMMA;
+    src->_autoWb = DEFAULT_PROP_AUTO_WB;
+    src->_manualWb = DEFAULT_PROP_WB_TEMP;
 
     src->_autoExposure = DEFAULT_PROP_AUTO_EXPOSURE;
     src->_exposureRange_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
     src->_exposureRange_max = DEFAULT_PROP_EXPOSURE_RANGE_MAX;
-    src->_manualExposure_usec = DEFAULT_PROP_MAN_EXPOSURE_USEC;
+    src->_exposure_usec = DEFAULT_PROP_EXPOSURE;
+    src->_exposureCompensation = DEFAULT_PROP_EXP_COMPENSATION;
 
     src->_autoAnalogGain = DEFAULT_PROP_AUTO_ANALOG_GAIN;
     src->_analogGainRange_min = DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN;
     src->_analogGainRange_max = DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX;
-    src->_manualAnalogGain = DEFAULT_PROP_MAN_ANALOG_GAIN;
+    src->_manualAnalogGain = DEFAULT_PROP_ANALOG_GAIN;
 
     src->_autoDigitalGain = DEFAULT_PROP_AUTO_DIGITAL_GAIN;
     src->_digitalGainRange_min = DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN;
     src->_digitalGainRange_max = DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX;
-    src->_manualDigitalGain = DEFAULT_PROP_MAN_DIGITAL_GAIN;
+    src->_manualDigitalGain = DEFAULT_PROP_DIGITAL_GAIN;
 
-    src->_autoWb = DEFAULT_PROP_AUTO_WB;
-    src->_manualWb = DEFAULT_PROP_MANUAL_WB;
+    src->_denoising = DEFAULT_PROP_DENOISING;
     // <---- Parameters initialization
 
     src->_stopRequested = FALSE;
@@ -533,33 +535,40 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_VERBOSE_LVL:
         src->_sdkVerboseLevel = g_value_get_int(value);
+        break;    
+    case PROP_TIMEOUT_MSEC:
+        src->_camTimeout_msec = g_value_get_int(value);
         break;
     case PROP_CAM_ID:
         src->_cameraId = g_value_get_int(value);
         break;
-    case PROP_TIMEOUT_MSEC:
-        src->_camTimeout_msec = g_value_get_int(value);
+    case PROP_CAM_SN:
+        src->_cameraSN = g_value_get_int(value);
+        break;
+    case PROP_OPENCV_CALIB_FILE:
+        str = g_value_get_string(value);
+        src->_opencvCalibrationFile = *g_string_new(str);
         break;
     case PROP_SATURATION:
         src->_colorSaturation = g_value_get_int(value);
         break;
-    case PROP_DENOISING:
-        src->_denoising = g_value_get_int(value);
-        break;
-    case PROP_EXP_COMPENSATION:
-        src->_exposureCompensation = g_value_get_int(value);
-        break;
     case PROP_SHARPNESS:
         src->_sharpness = g_value_get_int(value);
         break;
-    case PROP_TONE_MAP_GAMMA:
+    case PROP_GAMMA:
         src->_gamma = g_value_get_int(value);
         break;
+    case PROP_AUTO_WB:
+        src->_autoWb = g_value_get_boolean(value);
+        break;
+    case PROP_WB_TEMP:
+        src->_manualWb = g_value_get_int(value);
+        break;    
     case PROP_AUTO_EXPOSURE:
         src->_autoExposure = g_value_get_boolean(value);
         break;
-    case PROP_MAN_EXPOSURE_USEC:
-        src->_manualExposure_usec = g_value_get_int(value);
+    case PROP_EXPOSURE_USEC:
+        src->_exposure_usec = g_value_get_int(value);
         break;
     case PROP_EXPOSURE_RANGE_MIN:
         src->_exposureRange_min = g_value_get_int(value);
@@ -567,11 +576,14 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     case PROP_EXPOSURE_RANGE_MAX:
         src->_exposureRange_max = g_value_get_int(value);
         break;
+    case PROP_EXP_COMPENSATION:
+        src->_exposureCompensation = g_value_get_int(value);
+        break;
     case PROP_AUTO_ANALOG_GAIN:
         src->_autoAnalogGain = g_value_get_boolean(value);
         break;
-    case PROP_MAN_ANALOG_GAIN:
-        src->_manualAnalogGain = g_value_get_int(value);
+    case PROP_ANALOG_GAIN:
+        src->_analogGain = g_value_get_int(value);
         break;
     case PROP_ANALOG_GAIN_RANGE_MIN:
         src->_analogGainRange_min = g_value_get_int(value);
@@ -582,20 +594,17 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     case PROP_AUTO_DIGITAL_GAIN:
         src->_autoDigitalGain = g_value_get_boolean(value);
         break;
-    case PROP_MAN_DIGITAL_GAIN:
-        src->_manualDigitalGain = g_value_get_int(value);
+    case PROP_DIGITAL_GAIN:
+        src->_digitalGain = g_value_get_int(value);
         break;
     case PROP_DIGITAL_GAIN_RANGE_MIN:
         src->_digitalGainRange_min = g_value_get_int(value);
         break;
     case PROP_DIGITAL_GAIN_RANGE_MAX:
         src->_digitalGainRange_max = g_value_get_int(value);
-        break;
-    case PROP_AUTO_WB:
-        src->_autoWb = g_value_get_boolean(value);
-        break;
-    case PROP_MANUAL_WB:
-        src->_manualWb = g_value_get_int(value);
+        break;    
+    case PROP_DENOISING:
+        src->_denoising = g_value_get_int(value);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
@@ -622,32 +631,38 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
     case PROP_VERBOSE_LVL:
         g_value_set_int(value, src->_sdkVerboseLevel);
         break;
-    case PROP_CAM_ID:
-        g_value_set_int(value, src->_cameraId);
-        break;
     case PROP_TIMEOUT_MSEC:
         g_value_set_int(value, src->_camTimeout_msec);
         break;
+    case PROP_CAM_ID:
+        g_value_set_int(value, src->_cameraId);
+        break;
+    case PROP_CAM_SN:
+        g_value_set_int(value, src->_cameraSN);
+        break;
+    case PROP_OPENCV_CALIB_FILE:
+        g_value_set_string(value, src->_opencvCalibrationFile.str);
+        break;    
     case PROP_SATURATION:
         g_value_set_int(value, src->_colorSaturation);
-        break;
-    case PROP_DENOISING:
-        g_value_set_int(value, src->_denoising);
-        break;
-    case PROP_EXP_COMPENSATION:
-        g_value_set_int(value, src->_exposureCompensation);
         break;
     case PROP_SHARPNESS:
         g_value_set_int(value, src->_sharpness);
         break;
-    case PROP_TONE_MAP_GAMMA:
+    case PROP_GAMMA:
         g_value_set_int(value, src->_gamma);
         break;
+    case PROP_AUTO_WB:
+        g_value_set_boolean(value, src->_autoWb);
+        break;
+    case PROP_WB_TEMP:
+        g_value_set_int(value, src->_manualWb);
+        break; 
     case PROP_AUTO_EXPOSURE:
         g_value_set_boolean(value, src->_autoExposure);
         break;
-    case PROP_MAN_EXPOSURE_USEC:
-        g_value_set_int(value, src->_manualExposure_usec);
+    case PROP_EXPOSURE:
+        g_value_set_int(value, src->_exposure_usec);
         break;
     case PROP_EXPOSURE_RANGE_MIN:
         g_value_set_int(value, src->_exposureRange_min);
@@ -655,11 +670,14 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
     case PROP_EXPOSURE_RANGE_MAX:
         g_value_set_int(value, src->_exposureRange_max);
         break;
+    case PROP_EXP_COMPENSATION:
+        g_value_set_int(value, src->_exposureCompensation);
+        break;
     case PROP_AUTO_ANALOG_GAIN:
         g_value_set_boolean(value, src->_autoAnalogGain);
         break;
-    case PROP_MAN_ANALOG_GAIN:
-        g_value_set_int(value, src->_manualAnalogGain);
+    case PROP_ANALOG_GAIN:
+        g_value_set_int(value, src->_analogGain);
         break;
     case PROP_ANALOG_GAIN_RANGE_MIN:
         g_value_set_int(value, src->_analogGainRange_min);
@@ -670,20 +688,17 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
     case PROP_AUTO_DIGITAL_GAIN:
         g_value_set_boolean(value, src->_autoDigitalGain);
         break;
-    case PROP_MAN_DIGITAL_GAIN:
-        g_value_set_int(value, src->_manualDigitalGain);
+    case PROP_DIGITAL_GAIN:
+        g_value_set_int(value, src->_digitalGain);
         break;
     case PROP_DIGITAL_GAIN_RANGE_MIN:
         g_value_set_int(value, src->_digitalGainRange_min);
         break;
     case PROP_DIGITAL_GAIN_RANGE_MAX:
         g_value_set_int(value, src->_digitalGainRange_max);
-        break;
-    case PROP_AUTO_WB:
-        g_value_set_boolean(value, src->_autoWb);
-        break;
-    case PROP_MANUAL_WB:
-        g_value_set_int(value, src->_manualWb);
+        break;    
+    case PROP_DENOISING:
+        g_value_set_int(value, src->_denoising);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
