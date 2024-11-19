@@ -55,32 +55,29 @@ enum {
     PROP_CAM_RES,
     PROP_CAM_FPS,
     PROP_VERBOSE_LVL,
-    PROP_CAM_ID,
-    PROP_SWAP_RB,
     PROP_TIMEOUT_MSEC,
-    PROP_ANALOG_GAIN_RANGE_MIN,
-    PROP_ANALOG_GAIN_RANGE_MAX,
-    PROP_DIGITAL_GAIN_RANGE_MIN,
-    PROP_DIGITAL_GAIN_RANGE_MAX,
+    PROP_CAM_ID,
+    PROP_CAM_SN,
+    PROP_OPENCV_CALIB_FILE,
+    PROP_SATURATION,
+    PROP_SHARPNESS,
+    PROP_GAMMA,
+    PROP_AUTO_WB,
+    PROP_WB_TEMP,
+    PROP_AUTO_EXPOSURE,
+    PROP_EXPOSURE,
     PROP_EXPOSURE_RANGE_MIN,
     PROP_EXPOSURE_RANGE_MAX,
-    PROP_AUTO_ANALOG_GAIN,
-    PROP_AUTO_DIGITAL_GAIN,
-    PROP_AUTO_EXPOSURE,
-    PROP_AUTO_WB,
-    PROP_SATURATION,
-    PROP_DENOISING,
     PROP_EXP_COMPENSATION,
-    PROP_SHARPNESS,
-    PROP_MAN_ANALOG_GAIN,
-    PROP_MAN_DIGITAL_GAIN,
-    PROP_MAN_EXPOSURE_USEC,
-    PROP_MANUAL_WB,
-    PROP_TONE_MAP_GAMMA,
-    PROP_AEC_AGC_ROI_X,
-    PROP_AEC_AGC_ROI_Y,
-    PROP_AEC_AGC_ROI_W,
-    PROP_AEC_AGC_ROI_H,
+    PROP_AUTO_ANALOG_GAIN,
+    PROP_ANALOG_GAIN,
+    PROP_ANALOG_GAIN_RANGE_MIN,
+    PROP_ANALOG_GAIN_RANGE_MAX,
+    PROP_AUTO_DIGITAL_GAIN,
+    PROP_DIGITAL_GAIN,    
+    PROP_DIGITAL_GAIN_RANGE_MIN,
+    PROP_DIGITAL_GAIN_RANGE_MAX,
+    PROP_DENOISING,
     N_PROPERTIES
 };
 
@@ -88,6 +85,7 @@ typedef enum {
     GST_ZEDXONESRC_SVGA,    // 960 x 600
     GST_ZEDXONESRC_1080P,   // 1920 x 1080
     GST_ZEDXONESRC_1200P,   // 1920 x 1200
+    GST_ZEDXONESRC_QHDPLUS, // 3800x1800
     GST_ZEDXONESRC_4K       // 3840 x 2160
 } GstZedXOneSrcRes;
 
@@ -98,45 +96,35 @@ typedef enum {
     GST_ZEDXONESRC_15FPS = 15
 } GstZedXOneSrcFPS;
 
-typedef enum {
-    GST_AE_ANTI_BAND_OFF = 0,
-    GST_AE_ANTI_BAND_AUTO = 1,
-    GST_AE_ANTI_BAND_50HZ = 2,
-    GST_AE_ANTI_BAND_60HZ = 3
-} GstZedXOneSrcAeAntiBand;
-
 //////////////// DEFAULT PARAMETERS
 /////////////////////////////////////////////////////////////////////////////
 
-// INITIALIZATION
 #define DEFAULT_PROP_CAM_RES GST_ZEDXONESRC_1200P
-#define DEFAULT_PROP_CAM_FPS GST_ZEDXONESRC_15FPS
-#define DEFAULT_PROP_VERBOSE_LVL 0
+#define DEFAULT_PROP_CAM_FPS GST_ZEDXONESRC_30FPS
+#define DEFAULT_PROP_VERBOSE_LVL 1
+#define DEFAULT_PROP_TIMEOUT_MSEC 5000
 #define DEFAULT_PROP_CAM_ID -1
-#define DEFAULT_PROP_CAM_SN -1
-#define DEFAULT_PROP_TIMEOUT_MSEC 1000
-
-// CAMERA CONTROLS
+#define DEFAULT_PROP_CAM_SN 0
+#define DEFAULT_PROP_OPENCV_CALIB_FILE ""
+#define DEFAULT_PROP_SATURATION 4
+#define DEFAULT_PROP_SHARPNESS 4
+#define DEFAULT_PROP_GAMMA 8
+#define DEFAULT_PROP_AUTO_WB TRUE
+#define DEFAULT_PROP_WB_TEMP 4200
+#define DEFAULT_PROP_AUTO_EXPOSURE TRUE
+#define DEFAULT_PROP_EXPOSURE 10000
+#define DEFAULT_PROP_EXPOSURE_RANGE_MIN 28
+#define DEFAULT_PROP_EXPOSURE_RANGE_MAX 30000
+#define DEFAULT_PROP_EXP_COMPENSATION 50
+#define DEFAULT_PROP_AUTO_ANALOG_GAIN TRUE
+#define DEFAULT_PROP_ANALOG_GAIN 1000
 #define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN 1000
 #define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX 16000
+#define DEFAULT_PROP_AUTO_DIGITAL_GAIN FALSE
+#define DEFAULT_PROP_DIGITAL_GAIN 1
 #define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN 1
 #define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX 256
-#define DEFAULT_PROP_EXPOSURE_RANGE_MIN 28
-#define DEFAULT_PROP_EXPOSURE_RANGE_MAX 66000
-#define DEFAULT_PROP_AUTO_ANALOG_GAIN TRUE
-#define DEFAULT_PROP_AUTO_DIGITAL_GAIN TRUE
-#define DEFAULT_PROP_AUTO_EXPOSURE TRUE
-#define DEFAULT_PROP_AUTO_WB TRUE
-#define DEFAULT_PROP_SATURATION 4
-#define DEFAULT_PROP_GAMMA 4
 #define DEFAULT_PROP_DENOISING 50
-#define DEFAULT_PROP_EXP_COMPENSATION 50
-#define DEFAULT_PROP_SHARPNESS 4
-#define DEFAULT_PROP_TONE_MAP_GAMMA 8
-#define DEFAULT_PROP_MAN_ANALOG_GAIN 1255
-#define DEFAULT_PROP_MAN_DIGITAL_GAIN 1
-#define DEFAULT_PROP_MAN_EXPOSURE_USEC 16000
-#define DEFAULT_PROP_MANUAL_WB 5000
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define GST_TYPE_ZEDXONE_RESOL (gst_zedxonesrc_resol_get_type())
@@ -146,6 +134,7 @@ static GType gst_zedxonesrc_resol_get_type(void) {
     if (!zedxonesrc_resol_type) {
         static GEnumValue pattern_types[] = {
             {static_cast<gint>(GST_ZEDXONESRC_4K), "3840x2160", "4K"},
+            {static_cast<gint>(GST_ZEDXONESRC_QHDPLUS), "3800x1800", "QHDPLUS"},
             {static_cast<gint>(GST_ZEDXONESRC_1200P), "1920x1200", "HD1200"},
             {static_cast<gint>(GST_ZEDXONESRC_1080P), "1920x1080", "HD1080"},
             {static_cast<gint>(GST_ZEDXONESRC_SVGA), "960x600", "SVGA"},
@@ -164,7 +153,7 @@ static GType gst_zedxonesrc_fps_get_type(void) {
 
     if (!zedxonesrc_fps_type) {
         static GEnumValue pattern_types[] = {
-            {GST_ZEDXONESRC_120FPS, "Only with SVGA. Not available with 4K mode", "120 FPS"},
+            {GST_ZEDXONESRC_120FPS, "Only with SVGA", "120 FPS"},
             {GST_ZEDXONESRC_60FPS, "Not available with 4K mode", "60  FPS"},
             {GST_ZEDXONESRC_30FPS, "Not available with 4K mode", "30  FPS"},
             {GST_ZEDXONESRC_15FPS, "all resolutions (NO GMSL2)", "15  FPS"},
@@ -177,26 +166,6 @@ static GType gst_zedxonesrc_fps_get_type(void) {
     return zedxonesrc_fps_type;
 }
 
-#define GST_TYPE_ANTI_BANDING (gst_zedxonesrc_anti_banding_get_type())
-static GType gst_zedxonesrc_anti_banding_get_type(void) {
-    static GType zedxonesrc_anti_banding_type = 0;
-
-    if (!zedxonesrc_anti_banding_type) {
-        static GEnumValue pattern_types[] = {
-            {GST_AE_ANTI_BAND_OFF, "Anti Banding disabled", "Disabled"},
-            {GST_AE_ANTI_BAND_AUTO, "Automatic Anti Banding", "Automatic"},
-            {GST_AE_ANTI_BAND_50HZ, "50 Hz Anti Banding", "50 Hz"},
-            {GST_AE_ANTI_BAND_60HZ, "60 Hz Anti Banding", "60 Hz"},
-            {0, NULL, NULL},
-        };
-
-        zedxonesrc_anti_banding_type =
-            g_enum_register_static("GstZedXOneSrcAntiBanding", pattern_types);
-    }
-
-    return zedxonesrc_anti_banding_type;
-}
-
 /* pad templates */
 static GstStaticPadTemplate gst_zedxonesrc_src_template =
     GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
@@ -204,6 +173,12 @@ static GstStaticPadTemplate gst_zedxonesrc_src_template =
                                              "format = (string)BGRA, "
                                              "width = (int)3840, "
                                              "height = (int)2160, "
+                                             "framerate = (fraction)15"
+                                             ";"
+                                             "video/x-raw, "   // Color QHDPLUS
+                                             "format = (string)BGRA, "
+                                             "width = (int)3800, "
+                                             "height = (int)1800, "
                                              "framerate = (fraction)15"
                                              ";"
                                              "video/x-raw, "   // Color HD1200
@@ -264,6 +239,11 @@ bool resol_to_w_h(const GstZedXOneSrcRes &resol, guint32 &out_w, guint32 &out_h)
     case GST_ZEDXONESRC_1200P:
         out_w = 1920;
         out_h = 1200;
+        break;
+
+    case GST_ZEDXONESRC_QHDPLUS:
+        out_w = 3800;
+        out_h = 1800;
         break;
 
     case GST_ZEDXONESRC_4K:
@@ -330,136 +310,146 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_CAM_ID,
-        g_param_spec_int("camera-id", "Camera ID", "Select camera from cameraID", 0, 255,
-                         DEFAULT_PROP_CAM_ID,
-                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
         gobject_class, PROP_TIMEOUT_MSEC,
         g_param_spec_int("camera-timeout", "Timeout [msec]", "Connection timeout in milliseconds",
                          100, 100000000, DEFAULT_PROP_TIMEOUT_MSEC,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_CAM_ID,
+        g_param_spec_int("camera-id", "Camera ID", "Select camera from cameraID", 0, 255,
+                         DEFAULT_PROP_CAM_ID,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_CAM_SN,
+        g_param_spec_int("camera-sn", "Camera Serial Number", "Select camera from the serial number", 0, 999999999,
+                         DEFAULT_PROP_CAM_ID,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OPENCV_CALIB_FILE,
+        g_param_spec_string("opencv-calibration-file", "Optional OpenCV Calibration File", "Optional OpenCV Calibration File", 
+                            DEFAULT_PROP_OPENCV_CALIB_FILE,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_SATURATION,
+        g_param_spec_int("ctrl-saturation", "Camera control: saturation", "Image saturation", 0, 8,
+                         DEFAULT_PROP_SATURATION,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    
+    g_object_class_install_property(
+        gobject_class, PROP_SHARPNESS,
+        g_param_spec_int("ctrl-sharpness", "Camera control: sharpness", "Image sharpness", 0, 8,
+                         DEFAULT_PROP_SHARPNESS,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    
+    g_object_class_install_property(
+        gobject_class, PROP_GAMMA,
+        g_param_spec_int("ctrl-gamma", "Camera control: gamma", "Image gamma", 1, 9, DEFAULT_PROP_GAMMA,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    
+    g_object_class_install_property(
+        gobject_class, PROP_AUTO_WB,
+        g_param_spec_boolean("ctrl-whitebalance-auto", "Camera control: automatic whitebalance",
+                             "Image automatic white balance", DEFAULT_PROP_AUTO_WB,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    
+    g_object_class_install_property(
+        gobject_class, PROP_WB_TEMP,
+        g_param_spec_int("ctrl-whitebalance-temperature", "Camera control: white balance temperature",
+                         "Image white balance temperature", 2800, 6500, DEFAULT_PROP_WB_TEMP,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
         gobject_class, PROP_AUTO_EXPOSURE,
-        g_param_spec_boolean("auto-exposure", "Automatic Exposure", "Enable Automatic Exposure",
+        g_param_spec_boolean("auto-exposure", "Camera control: Automatic Exposure", "Enable Automatic Exposure",
                              DEFAULT_PROP_AUTO_EXPOSURE,
                              (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_MAN_EXPOSURE_USEC,
-        g_param_spec_int("exposure-time", "Exposure time [µsec]", "Exposure time in microseconds",
-                         28, 66000, DEFAULT_PROP_MAN_EXPOSURE_USEC,
+        gobject_class, PROP_EXPOSURE,
+        g_param_spec_int("exposure-time", "Camera control: Exposure time [µsec]", "Exposure time in microseconds",
+                         28, 66000, DEFAULT_PROP_EXPOSURE,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_EXPOSURE_RANGE_MIN,
-        g_param_spec_int("auto-exposure-range-min", "Minimum Exposure time [µsec]",
+        g_param_spec_int("auto-exposure-range-min", "Camera control: Minimum Exposure time [µsec]",
                          "Minimum exposure time in microseconds for the automatic exposure setting",
                          28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MIN,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_EXPOSURE_RANGE_MAX,
-        g_param_spec_int("auto-exposure-range-max", "Maximum Exposure time [µsec]",
+        g_param_spec_int("auto-exposure-range-max", "Camera control: Maximum Exposure time [µsec]",
                          "Maximum exposure time in microseconds for the automatic exposure setting",
                          28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MAX,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_EXP_COMPENSATION,
+        g_param_spec_int("exposure-compensation", "Camera control: Exposure Compensation", "Exposure Compensation",
+                         0, 100, DEFAULT_PROP_EXP_COMPENSATION,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
         gobject_class, PROP_AUTO_ANALOG_GAIN,
-        g_param_spec_boolean("auto-analog-gain", "Automatic Analog Gain",
+        g_param_spec_boolean("auto-analog-gain", "Camera control: Automatic Analog Gain",
                              "Enable Automatic Analog Gain", DEFAULT_PROP_AUTO_ANALOG_GAIN,
                              (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_MAN_ANALOG_GAIN,
-        g_param_spec_int("analog-gain", "Analog Gain", "Analog Gain value", 1000, 16000,
-                         DEFAULT_PROP_MAN_ANALOG_GAIN,
+        gobject_class, PROP_ANALOG_GAIN,
+        g_param_spec_int("analog-gain", "Analog Gain", "Camera control: Analog Gain value", 1000, 16000,
+                         DEFAULT_PROP_ANALOG_GAIN,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_ANALOG_GAIN_RANGE_MIN,
-        g_param_spec_int("auto-analog-gain-range-min", "Minimum Automatic Analog Gain",
+        g_param_spec_int("auto-analog-gain-range-min", "Camera control: Minimum Automatic Analog Gain",
                          "Minimum Analog Gain for the automatic analog gain setting", 1000, 16000,
                          DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_ANALOG_GAIN_RANGE_MAX,
-        g_param_spec_int("auto-analog-gain-range-max", "Maximum Automatic Analog Gain",
+        g_param_spec_int("auto-analog-gain-range-max", "Camera control: Maximum Automatic Analog Gain",
                          "Maximum Analog Gain for the automatic analog gain setting", 1000, 16000,
                          DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_AUTO_DIGITAL_GAIN,
-        g_param_spec_boolean("auto-digital-gain", "Automatic Digital Gain",
+        g_param_spec_boolean("auto-digital-gain", "Camera control: Automatic Digital Gain",
                              "Enable Automatic Digital Gain", DEFAULT_PROP_AUTO_DIGITAL_GAIN,
                              (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_MAN_DIGITAL_GAIN,
-        g_param_spec_int("digital-gain", "Digital Gain", "Digital Gain value", 1, 256,
-                         DEFAULT_PROP_MAN_DIGITAL_GAIN,
+        gobject_class, PROP_DIGITAL_GAIN,
+        g_param_spec_int("digital-gain", "Camera control: Digital Gain", "Digital Gain value", 1, 256,
+                         DEFAULT_PROP_DIGITAL_GAIN,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_DIGITAL_GAIN_RANGE_MIN,
-        g_param_spec_int("auto-digital-gain-range-min", "Minimum Automatic Digital Gain",
+        g_param_spec_int("auto-digital-gain-range-min", "Camera control: Minimum Automatic Digital Gain",
                          "Minimum Digital Gain for the automatic digital gain setting", 1, 256,
                          DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_DIGITAL_GAIN_RANGE_MAX,
-        g_param_spec_int("auto-digital-gain-range-max", "Maximum Automatic Digital Gain",
+        g_param_spec_int("auto-digital-gain-range-max", "Camera control: Maximum Automatic Digital Gain",
                          "Maximum Digital Gain for the automatic digital gain setting", 1, 256,
                          DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_AUTO_WB,
-        g_param_spec_boolean("auto-wb", "Automatic White Balance", "Enable Automatic White Balance",
-                             DEFAULT_PROP_AUTO_WB,
-                             (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_MANUAL_WB,
-        g_param_spec_int("white-balance-temp", "White Balance Temperature [°]",
-                         "White Balance Temperature [°]", 2800, 12000, DEFAULT_PROP_MANUAL_WB,
-                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_SATURATION,
-        g_param_spec_int("saturation", "Color Saturation", "Color Saturation", 0, 8,
-                         DEFAULT_PROP_SATURATION,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
+   
     g_object_class_install_property(
         gobject_class, PROP_DENOISING,
-        g_param_spec_int("denoising", "Denoising", "Denoising factor", 0, 100,
+        g_param_spec_int("denoising", "Camera control: Denoising", "Denoising factor", 0, 100,
                          DEFAULT_PROP_DENOISING,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_EXP_COMPENSATION,
-        g_param_spec_int("exposure-compensation", "Exposure Compensation", "Exposure Compensation",
-                         0, 100, DEFAULT_PROP_EXP_COMPENSATION,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_SHARPNESS,
-        g_param_spec_int("sharpness", "Image Sharpness", "Image Sharpness", 0, 8,
-                         DEFAULT_PROP_SHARPNESS,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_TONE_MAP_GAMMA,
-        g_param_spec_int("gamma", "Tone Map from Gamma",
-                         "Set the tone mapping curve from a gamma value", 1, 9,
-                         DEFAULT_PROP_TONE_MAP_GAMMA,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
@@ -471,9 +461,9 @@ static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
     src->_outFramesize = 0;
     src->_isStarted = FALSE;
 
-    if (src->caps) {
-        gst_caps_unref(src->caps);
-        src->caps = NULL;
+    if (src->_caps) {
+        gst_caps_unref(src->_caps);
+        src->_caps = NULL;
     }
 }
 
@@ -517,7 +507,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     // <---- Parameters initialization
 
     src->_stopRequested = FALSE;
-    src->caps = NULL;
+    src->_caps = NULL;
 
     if (!src->_zed) {
         src->_zed = std::make_unique<sl::CameraOne>();
@@ -723,9 +713,9 @@ void gst_zedxonesrc_finalize(GObject *object) {
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_finalize");
 
     /* clean up object here */
-    if (src->caps) {
-        gst_caps_unref(src->caps);
-        src->caps = NULL;
+    if (src->_caps) {
+        gst_caps_unref(src->_caps);
+        src->_caps = NULL;
     }
 
     G_OBJECT_CLASS(gst_zedxonesrc_parent_class)->finalize(object);
@@ -748,18 +738,18 @@ static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
     if (format != GST_VIDEO_FORMAT_UNKNOWN) {
         gst_video_info_init(&vinfo);
         gst_video_info_set_format(&vinfo, format, width, height);
-        if (src->caps) {
-            gst_caps_unref(src->caps);
+        if (src->_caps) {
+            gst_caps_unref(src->_caps);
         }
         src->_outFramesize = (guint) GST_VIDEO_INFO_SIZE(&vinfo);
         vinfo.fps_n = fps;
         vinfo.fps_d = 1;
-        src->caps = gst_video_info_to_caps(&vinfo);
+        src->_caps = gst_video_info_to_caps(&vinfo);
     }
 
     gst_base_src_set_blocksize(GST_BASE_SRC(src), src->_outFramesize);
-    gst_base_src_set_caps(GST_BASE_SRC(src), src->caps);
-    GST_DEBUG_OBJECT(src, "Created caps %" GST_PTR_FORMAT, src->caps);
+    gst_base_src_set_caps(GST_BASE_SRC(src), src->_caps);
+    GST_DEBUG_OBJECT(src, "Created caps %" GST_PTR_FORMAT, src->_caps);
 
     return TRUE;
 }
@@ -1113,8 +1103,8 @@ static GstCaps *gst_zedxonesrc_get_caps(GstBaseSrc *bsrc, GstCaps *filter) {
     GstZedXOneSrc *src = GST_ZED_X_ONE_SRC(bsrc);
     GstCaps *caps;
 
-    if (src->caps) {
-        caps = gst_caps_copy(src->caps);
+    if (src->_caps) {
+        caps = gst_caps_copy(src->_caps);
     } else {
         caps = gst_pad_get_pad_template_caps(GST_BASE_SRC_PAD(src));
     }

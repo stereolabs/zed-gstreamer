@@ -49,46 +49,43 @@ struct _GstZedXOneSrc {
     gboolean _stopRequested;   // stop request flagout_framesize
 
     // ----> Properties
-    gint _cameraResolution;   // * Camera resolution [enum]
-    gint _cameraFps;          // * Camera FPS
-    gint _sdkVerboseLevel;    // * Capture library verbose level
-    gint _camTimeout_msec;    // * Camera communication timeout
-    gint _cameraId;           // * Camera ID
-    gint _cameraSN;           // * Camera Serial Number
-    GString _svoFile;       // * SVO file path
-    gboolean _svoRealTimeMode;   // * SVO real-time mode
-    GString _opencvCalibrationFile;  // * OpenCV calibration file path
-    GString _streamIp;      // * Stream IP address
-    gint _streamPort;      // * Stream port
+    gint _cameraResolution;         // Camera resolution [enum]
+    gint _cameraFps;                // Camera FPS
+    gint _sdkVerboseLevel;          // Capture library verbose level
+    gint _camTimeout_msec;          // Camera communication timeout
+    gint _cameraId;                 // Camera ID
+    gint _cameraSN;                 // Camera Serial Number
+    GString _opencvCalibrationFile; // OpenCV calibration file path
 
-    gboolean _autoExposure;      // * Enable Automatic Exposure
-    gint _exposureRange_min;     // * Minimum value for Automatic Exposure
-    gint _exposureRange_max;     // * Maximum value for Automatic Exposure
-    gint _manualExposure_usec;   // * Manual Exposure time
+    gint _saturation    // Image Saturation
+    gint _sharpness;    // Image Sharpness
+    gint _gamma;        // Image Gamma
+    gboolean _autoWb;   // Enable Automatic White Balance
+    gint _manualWb;     // Manual White Balance [2800,6500]
 
-    gboolean _autoAnalogGain;    // * Enable Automatic Analog Gain
-    gint _analogGainRange_min;   // * Minimum value for Automatic Analog Gain
-    gint _analogGainRange_max;   // * Maximum value for Automatic Analog Gain
-    gint _manualAnalogGain;      // * Manual Analog Gain
+    gboolean _autoExposure;      // Enable Automatic Exposure
+    gint _exposure_usec;         // Manual Exposure time [28,30000]
+    gint _exposureRange_min;     // Minimum value for Automatic Exposure [28,30000]
+    gint _exposureRange_max;     // Maximum value for Automatic Exposure [28,30000]
+    gint _exposureCompensation;  // Exposure Compensation [0,100]
 
-    gboolean _autoDigitalGain;    // * Enable Automatic Digital Gain
-    gint _digitalGainRange_min;   // * Minimum value for Automatic Digital Gain
-    gint _digitalGainRange_max;   // * Maximum value for Automatic Digital Gain
-    gint _manualDigitalGain;      // * Manual Digital Gain [1,256]
+    gboolean _autoAnalogGain;    // Enable Automatic Analog Gain
+    gint _analogGain;            // Manual Analog Gain [1000,16000]
+    gint _analogGainRange_min;   // Minimum value for Automatic Analog Gain [1000,16000]
+    gint _analogGainRange_max;   // Maximum value for Automatic Analog Gain [1000,16000]
+    
 
-    gboolean _autoWb;   // * Enable Automatic White Balance
-    gint _manualWb;     // * Manual White Balance [2800,12000]
-
-    gint _colorSaturation;        // * Color Saturation
-    gint _denoising;              // * Image Denoising
-    gint _exposureCompensation;   // * Exposure Compensation
-    gint _sharpness;              // * Image Sharpness
-    gint _gamma;                  // * Image Gamma
+    gboolean _autoDigitalGain;  // Enable Automatic Digital Gain
+    gint _digitalGain;          // Manual Digital Gain [1,256]
+    gint _digitalGainRange_min; // Minimum value for Automatic Digital Gain [1,256]
+    gint _digitalGainRange_max; // Maximum value for Automatic Digital Gain [1,256]
+    
+    gint _denoising;    // Image Denoising [0,100]
     // <---- Properties
 
     GstClockTime _acqStartTime;   // Acquisition start time
 
-    GstCaps *caps;         // Stream caps
+    GstCaps *_caps;         // Stream caps
     guint _outFramesize;   // Output frame size in byte
 };
 
