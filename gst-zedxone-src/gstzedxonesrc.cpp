@@ -309,26 +309,26 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_VERBOSE_LVL,
-        g_param_spec_int("verbose-level", "Capture Library Verbose",
-                         "Capture Library Verbose level", 0, 4, DEFAULT_PROP_VERBOSE_LVL,
+        g_param_spec_int("verbose-level", "ZED SDK Verbose level",
+                         "ZED SDK Verbose level", 0, 999, DEFAULT_PROP_VERBOSE_LVL,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_TIMEOUT_SEC,
-        g_param_spec_int("camera-timeout", "Open Timeout [sec]", "Connection opening timeout in seconds",
-                         100, 100000000, DEFAULT_PROP_TIMEOUT_SEC,
-                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_float("camera-timeout", "Open Timeout [sec]", "Connection opening timeout in seconds",
+                         0.5f, 86400.f, DEFAULT_PROP_TIMEOUT_SEC,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_CAM_ID,
-        g_param_spec_int("camera-id", "Camera ID", "Select camera from cameraID", 0, 255,
+        g_param_spec_int("camera-id", "Camera ID", "Select camera from cameraID", -1, 255,
                          DEFAULT_PROP_CAM_ID,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_CAM_SN,
-        g_param_spec_int("camera-sn", "Camera Serial Number", "Select camera from the serial number", 0, 999999999,
-                         DEFAULT_PROP_CAM_ID,
+        g_param_spec_int64("camera-sn", "Camera Serial Number", "Select camera from the serial number", 0, 999999999,
+                         DEFAULT_PROP_CAM_SN,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -342,7 +342,13 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
         g_param_spec_boolean("camera-flip", "Camera flip status",
                              "Invert image if camera is flipped", DEFAULT_PROP_CAM_FLIP,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    
+
+    g_object_class_install_property(
+        gobject_class, PROP_ENABLE_HDR,
+        g_param_spec_boolean("enable-hdr", "HDR status",
+                             "Enable HDR if supported by resolution and frame rate.", DEFAULT_PROP_ENABLE_HDR,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+   
     g_object_class_install_property(
         gobject_class, PROP_SATURATION,
         g_param_spec_int("ctrl-saturation", "Camera control: saturation", "Image saturation", 0, 8,
@@ -556,7 +562,7 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         src->_cameraId = g_value_get_int(value);
         break;
     case PROP_CAM_SN:
-        src->_cameraSN = g_value_get_int(value);
+        src->_cameraSN = g_value_get_int64(value);
         break;
     case PROP_OPENCV_CALIB_FILE:
         str = g_value_get_string(value);
@@ -657,7 +663,7 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         g_value_set_int(value, src->_cameraId);
         break;
     case PROP_CAM_SN:
-        g_value_set_int(value, src->_cameraSN);
+        g_value_set_int64(value, src->_cameraSN);
         break;
     case PROP_OPENCV_CALIB_FILE:
         g_value_set_string(value, src->_opencvCalibrationFile.str);
@@ -819,9 +825,31 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Input Camera SN: %ld", src->_cameraSN);
     }
 
-    GST_INFO("CAMERA INITIALIZATION PARAMETERS");    
+    GST_INFO("CAMERA INITIALIZATION PARAMETERS");
     init_params.async_grab_camera_recovery = false;
-    init_params.camera_resolution = static_cast<sl::RESOLUTION>(src->_cameraResolution);
+    
+    switch(src->_cameraResolution) {
+        case GST_ZEDXONESRC_SVGA:
+            init_params.camera_resolution = sl::RESOLUTION::SVGA;
+            break;
+        case GST_ZEDXONESRC_1080P:
+            init_params.camera_resolution = sl::RESOLUTION::HD1080;
+            break;
+        case GST_ZEDXONESRC_1200P:
+            init_params.camera_resolution = sl::RESOLUTION::HD1200;
+            break;
+        case GST_ZEDXONESRC_QHDPLUS:
+            init_params.camera_resolution = sl::RESOLUTION::QHDPLUS;
+            break;
+        case GST_ZEDXONESRC_4K:
+            init_params.camera_resolution = sl::RESOLUTION::HD4K;
+            break;
+        default:
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set camera resolution"), (NULL));
+            return FALSE;
+    }
+    
     GST_INFO(" * Camera resolution: %s", sl::toString(init_params.camera_resolution).c_str());
     init_params.camera_fps = src->_cameraFps;
     GST_INFO(" * Camera FPS: %d", init_params.camera_fps);
@@ -831,7 +859,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Open timeout [sec]: %g", init_params.open_timeout_sec);
     init_params.camera_image_flip = (src->_cameraImageFlip?sl::FLIP_MODE::ON:sl::FLIP_MODE::OFF);
     GST_INFO(" * Camera flipped: %s", (init_params.camera_image_flip?"TRUE":"FALSE"));
-    init_params.enable_hdr = src->_cameraImageFlip;
+    init_params.enable_hdr = src->_enableHDR;
     GST_INFO(" * Enable HDR: %s", (init_params.enable_hdr?"TRUE":"FALSE"));
     sl::String opencv_calibration_file(src->_opencvCalibrationFile.str);
     init_params.optional_opencv_calibration_file = opencv_calibration_file;
