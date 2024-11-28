@@ -52,12 +52,14 @@ struct _GstZedXOneSrc {
     gint _cameraResolution;         // Camera resolution [enum]
     gint _cameraFps;                // Camera FPS
     gint _sdkVerboseLevel;          // Capture library verbose level
-    gint _camTimeout_msec;          // Camera communication timeout
+    gfloat _camTimeout_sec;         // Camera open timeout
     gint _cameraId;                 // Camera ID
-    gint _cameraSN;                 // Camera Serial Number
+    gint64 _cameraSN;               // Camera Serial Number
     GString _opencvCalibrationFile; // OpenCV calibration file path
+    gboolean _cameraImageFlip;      // Camera flipped
+    gboolean _enableHDR;            // HDR mode
 
-    gint _saturation    // Image Saturation
+    gint _saturation;   // Image Saturation
     gint _sharpness;    // Image Sharpness
     gint _gamma;        // Image Gamma
     gboolean _autoWb;   // Enable Automatic White Balance

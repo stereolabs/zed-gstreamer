@@ -55,10 +55,12 @@ enum {
     PROP_CAM_RES,
     PROP_CAM_FPS,
     PROP_VERBOSE_LVL,
-    PROP_TIMEOUT_MSEC,
+    PROP_TIMEOUT_SEC,
     PROP_CAM_ID,
     PROP_CAM_SN,
     PROP_OPENCV_CALIB_FILE,
+    PROP_IMAGE_FLIP,
+    PROP_ENABLE_HDR,
     PROP_SATURATION,
     PROP_SHARPNESS,
     PROP_GAMMA,
@@ -102,9 +104,11 @@ typedef enum {
 #define DEFAULT_PROP_CAM_RES GST_ZEDXONESRC_1200P
 #define DEFAULT_PROP_CAM_FPS GST_ZEDXONESRC_30FPS
 #define DEFAULT_PROP_VERBOSE_LVL 1
-#define DEFAULT_PROP_TIMEOUT_MSEC 5000
+#define DEFAULT_PROP_TIMEOUT_SEC 5.0f
 #define DEFAULT_PROP_CAM_ID -1
 #define DEFAULT_PROP_CAM_SN 0
+#define DEFAULT_PROP_CAM_FLIP FALSE
+#define DEFAULT_PROP_ENABLE_HDR FALSE
 #define DEFAULT_PROP_OPENCV_CALIB_FILE ""
 #define DEFAULT_PROP_SATURATION 4
 #define DEFAULT_PROP_SHARPNESS 4
@@ -310,9 +314,9 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
-        gobject_class, PROP_TIMEOUT_MSEC,
-        g_param_spec_int("camera-timeout", "Timeout [msec]", "Connection timeout in milliseconds",
-                         100, 100000000, DEFAULT_PROP_TIMEOUT_MSEC,
+        gobject_class, PROP_TIMEOUT_SEC,
+        g_param_spec_int("camera-timeout", "Open Timeout [sec]", "Connection opening timeout in seconds",
+                         100, 100000000, DEFAULT_PROP_TIMEOUT_SEC,
                          (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -333,6 +337,12 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                             DEFAULT_PROP_OPENCV_CALIB_FILE,
                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    g_object_class_install_property(
+        gobject_class, PROP_IMAGE_FLIP,
+        g_param_spec_boolean("camera-flip", "Camera flip status",
+                             "Invert image if camera is flipped", DEFAULT_PROP_CAM_FLIP,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    
     g_object_class_install_property(
         gobject_class, PROP_SATURATION,
         g_param_spec_int("ctrl-saturation", "Camera control: saturation", "Image saturation", 0, 8,
@@ -478,12 +488,14 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_cameraResolution = DEFAULT_PROP_CAM_RES;
     src->_cameraFps = DEFAULT_PROP_CAM_FPS;
     src->_sdkVerboseLevel = DEFAULT_PROP_VERBOSE_LVL;
-    src->_camTimeout_msec = DEFAULT_PROP_TIMEOUT_MSEC;
+    src->_camTimeout_sec = DEFAULT_PROP_TIMEOUT_SEC;
     src->_cameraId = DEFAULT_PROP_CAM_ID;
     src->_cameraSN = DEFAULT_PROP_CAM_SN;
-    src->_opencvCalibrationFile = = *g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
+    src->_opencvCalibrationFile = *g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
+    src->_cameraImageFlip = DEFAULT_PROP_CAM_FLIP;
+    src->_enableHDR = DEFAULT_PROP_ENABLE_HDR;
     
-    src->_colorSaturation = DEFAULT_PROP_SATURATION;
+    src->_saturation = DEFAULT_PROP_SATURATION;
     src->_sharpness = DEFAULT_PROP_SHARPNESS;
     src->_gamma = DEFAULT_PROP_GAMMA;
     src->_autoWb = DEFAULT_PROP_AUTO_WB;
@@ -498,12 +510,12 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_autoAnalogGain = DEFAULT_PROP_AUTO_ANALOG_GAIN;
     src->_analogGainRange_min = DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN;
     src->_analogGainRange_max = DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX;
-    src->_manualAnalogGain = DEFAULT_PROP_ANALOG_GAIN;
+    src->_analogGain = DEFAULT_PROP_ANALOG_GAIN;
 
     src->_autoDigitalGain = DEFAULT_PROP_AUTO_DIGITAL_GAIN;
     src->_digitalGainRange_min = DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN;
     src->_digitalGainRange_max = DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX;
-    src->_manualDigitalGain = DEFAULT_PROP_DIGITAL_GAIN;
+    src->_digitalGain = DEFAULT_PROP_DIGITAL_GAIN;
 
     src->_denoising = DEFAULT_PROP_DENOISING;
     // <---- Parameters initialization
@@ -521,6 +533,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
 void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValue *value,
                                  GParamSpec *pspec) {
     GstZedXOneSrc *src;
+    const gchar *str;
 
     src = GST_ZED_X_ONE_SRC(object);
 
@@ -536,8 +549,8 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     case PROP_VERBOSE_LVL:
         src->_sdkVerboseLevel = g_value_get_int(value);
         break;    
-    case PROP_TIMEOUT_MSEC:
-        src->_camTimeout_msec = g_value_get_int(value);
+    case PROP_TIMEOUT_SEC:
+        src->_camTimeout_sec = g_value_get_float(value);
         break;
     case PROP_CAM_ID:
         src->_cameraId = g_value_get_int(value);
@@ -549,8 +562,14 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         str = g_value_get_string(value);
         src->_opencvCalibrationFile = *g_string_new(str);
         break;
+    case PROP_IMAGE_FLIP:
+        src->_cameraImageFlip = g_value_get_boolean(value);
+        break;
+    case PROP_ENABLE_HDR:
+        src->_enableHDR = g_value_get_boolean(value);
+        break;
     case PROP_SATURATION:
-        src->_colorSaturation = g_value_get_int(value);
+        src->_saturation = g_value_get_int(value);
         break;
     case PROP_SHARPNESS:
         src->_sharpness = g_value_get_int(value);
@@ -567,7 +586,7 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     case PROP_AUTO_EXPOSURE:
         src->_autoExposure = g_value_get_boolean(value);
         break;
-    case PROP_EXPOSURE_USEC:
+    case PROP_EXPOSURE:
         src->_exposure_usec = g_value_get_int(value);
         break;
     case PROP_EXPOSURE_RANGE_MIN:
@@ -631,8 +650,8 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
     case PROP_VERBOSE_LVL:
         g_value_set_int(value, src->_sdkVerboseLevel);
         break;
-    case PROP_TIMEOUT_MSEC:
-        g_value_set_int(value, src->_camTimeout_msec);
+    case PROP_TIMEOUT_SEC:
+        g_value_set_float(value, src->_camTimeout_sec);
         break;
     case PROP_CAM_ID:
         g_value_set_int(value, src->_cameraId);
@@ -642,9 +661,15 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_OPENCV_CALIB_FILE:
         g_value_set_string(value, src->_opencvCalibrationFile.str);
-        break;    
+        break;
+    case PROP_IMAGE_FLIP:
+        g_value_set_boolean(value, src->_cameraImageFlip);
+        break;
+    case PROP_ENABLE_HDR:
+        g_value_set_boolean(value, src->_enableHDR);
+        break;
     case PROP_SATURATION:
-        g_value_set_int(value, src->_colorSaturation);
+        g_value_set_int(value, src->_saturation);
         break;
     case PROP_SHARPNESS:
         g_value_set_int(value, src->_sharpness);
@@ -770,331 +795,60 @@ static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
 }
 
 static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
+#if (ZED_SDK_MAJOR_VERSION != 4 && ZED_SDK_MINOR_VERSION != 2 && ZED_SDK_SUB_VERSION != 2)
+    GST_ELEMENT_ERROR(src, LIBRARY, FAILED, 
+    ("Wrong ZED SDK version. SDK v4.2.2 required "),
+                      (NULL));
+#endif
 
     GstZedXOneSrc *src = GST_ZED_X_ONE_SRC(bsrc);
+    sl::ERROR_CODE ret;
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_calculate_caps");
 
     // ----> Set init parameters
     sl::InitParametersOne init_params;
 
-    GST_INFO("CAMERA INITIALIZATION PARAMETERS");
-
-    init_params.async_grab_camera_recovery;
-    init_params.camera_fps;
-    init_params.camera_image_flip;
-    init_params.camera_resolution;
-    init_params.enable_hdr;
-    init_params.open_timeout_sec;
-    init_params.optional_opencv_calibration_file;
-    init_params.sdk_verbose;
-    init_params.svo_real_time_mode;
-
-    if (src->_svoFile.len != 0) {
-        sl::String svo(static_cast<char *>(src->_svoFile.str));
-        init_params.input.setFromSVOFile(svo);
-        init_params.svo_real_time_mode = src->_svoRealTimeMode;
-
-        GST_INFO(" * Input SVO filename: %s", src->_svoFile.str);
-        GST_INFO(" * Input SVO real time mode: %s", (src->_svoRealTimeMode ? "ON" : "OFF"));
-    } else if (src->_cameraId != DEFAULT_PROP_CAM_ID) {
+    if (src->_cameraId != DEFAULT_PROP_CAM_ID) {
         init_params.input.setFromCameraID(src->_cameraId);
 
         GST_INFO(" * Input Camera ID: %d", src->_cameraId);
     } else if (src->_cameraSN != DEFAULT_PROP_CAM_SN) {
         init_params.input.setFromSerialNumber(src->_cameraSN);
 
-        GST_INFO(" * Input Camera SN: %d", src->_cameraSN);
-    } else if (src->_streamIp.len != 0) {
-        sl::String ip(static_cast<char *>(src->_streamIp.str));
-        init_params.input.setFromStream(ip, src->_streamPort);
-
-        GST_INFO(" * Input Stream: %s:%d", src->_streamIp.str, src->_streamPort);
-    } else {
-        GST_INFO(" * Input from default device");
+        GST_INFO(" * Input Camera SN: %ld", src->_cameraSN);
     }
+
+    GST_INFO("CAMERA INITIALIZATION PARAMETERS");    
+    init_params.async_grab_camera_recovery = false;
+    init_params.camera_resolution = static_cast<sl::RESOLUTION>(src->_cameraResolution);
+    GST_INFO(" * Camera resolution: %s", sl::toString(init_params.camera_resolution).c_str());
+    init_params.camera_fps = src->_cameraFps;
+    GST_INFO(" * Camera FPS: %d", init_params.camera_fps);
+    init_params.sdk_verbose = src->_sdkVerboseLevel;
+    GST_INFO(" * SDK verbose level: %d", init_params.sdk_verbose);
+    init_params.open_timeout_sec = src->_camTimeout_sec;
+    GST_INFO(" * Open timeout [sec]: %g", init_params.open_timeout_sec);
+    init_params.camera_image_flip = (src->_cameraImageFlip?sl::FLIP_MODE::ON:sl::FLIP_MODE::OFF);
+    GST_INFO(" * Camera flipped: %s", (init_params.camera_image_flip?"TRUE":"FALSE"));
+    init_params.enable_hdr = src->_cameraImageFlip;
+    GST_INFO(" * Enable HDR: %s", (init_params.enable_hdr?"TRUE":"FALSE"));
+    sl::String opencv_calibration_file(src->_opencvCalibrationFile.str);
+    init_params.optional_opencv_calibration_file = opencv_calibration_file;
+    GST_INFO(" * OpenCV calib file: %s", init_params.optional_opencv_calibration_file.c_str());
     // <---- Set init parameters
 
     // ----> Open camera
-    GST_INFO("Opening camera...");
-
-    sl::ERROR_CODE ret = src->_zed->open(init_params);
+    ret = src->_zed->open(init_params);
 
     if (ret != sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                          ("Failed to open camera, '%s - %s'", sl::toString(ret).c_str(),
-                           sl::toVerbose(ret).c_str()),
-                          (NULL));
+                          ("Failed to open camera, '%s'", sl::toString(ret).c_str()), (NULL));
         return FALSE;
     }
-    GST_INFO("... camera ready");
-    auto info = src->_zed->getCameraInformation();
-    GST_INFO(" * %s - %dx%d@%gFPS", sl::toString(info.camera_model).c_str(),static_cast<int>(info.camera_configuration.resolution.width),
-             static_cast<int>(info.camera_configuration.resolution.height), info.camera_configuration.fps);
-
-    usleep(5000);
     // <---- Open camera
 
     // ----> Camera Controls
-    GST_INFO("*** CAMERA CONTROL PARAMETERS ***");
-
-    // COLOR SATURATION
-    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::SATURATION, static_cast<int>(src->_colorSaturation));
-    if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Color saturation: %s", sl::toString(res).c_str()), (NULL));
-        return FALSE;
-    }
-    GST_INFO(" * Color Saturation: %d", src->_colorSaturation);
-
-    // DENOISING
-    ret = src->_zed->setDenoisingValue(src->_denoising);
-    if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set denoising: %d", res), (NULL));
-        return FALSE;
-    }
-    GST_INFO(" * Denoising: %g", src->_denoising);
-
-    // EXPOSURE COMPENSATION
-    res = src->_zed->setExposureCompensation(src->_exposureCompensation);
-    if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                          ("Failed to set exposure compensation value: %d", res), (NULL));
-        return FALSE;
-    }
-    GST_INFO(" * Exposure Compensation: %g", src->_exposureCompensation);
-
-    // SHARPNESS
-    res = src->_zed->setSharpness(src->_sharpness);
-    if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                          ("Failed to set image sharpness value: %d", res), (NULL));
-        return FALSE;
-    }
-    GST_INFO(" * Image Sharpness: %g", src->_sharpness);
-
-    // TONE MAPPING FROM GAMMA
-    res = src->_zed->setToneMappingFromGamma(0, src->tone_mapping_r_gamma);
-    if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                          ("Failed to set Tone Mapping for channel red: %d", res), (NULL));
-        return FALSE;
-    }
-    res = src->_zed->setToneMappingFromGamma(1, src->tone_mapping_g_gamma);
-    if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                          ("Failed to set Tone Mapping for channel green: %d", res), (NULL));
-        return FALSE;
-    }
-    res = src->_zed->setToneMappingFromGamma(2, src->tone_mapping_b_gamma);
-    if (res != 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                          ("Failed to set Tone Mapping for channel blue: %d", res), (NULL));
-        return FALSE;
-    }
-    GST_INFO(" * Tone Mapping from gamma: [%g,%g,%g]", src->tone_mapping_r_gamma, src->tone_mapping_g_gamma, src->tone_mapping_b_gamma);
-
-    // EXPOSURE
-    if (src->_autoExposure == TRUE) {
-        res = src->_zed->setAutomaticExposure();
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Automatic exposure: %d", res), (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Automatic Exposure: TRUE");
-        res = src->_zed->setFrameExposureRange(src->_exposureRange_min, src->_exposureRange_max);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Automatic exposure range: %d", res), (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Automatic Exposure range: [%d,%d] µsec", src->_exposureRange_min,
-                 src->_exposureRange_max);
-    } else {
-        uint64_t min, max;
-        res = src->_zed->getFrameExposureRange(min, max);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to retrieve exposure limits: %d", res), (NULL));
-            return FALSE;
-        }
-
-        if (src->_manualExposure_usec > max) {
-            GST_WARNING("Manual exposure time (%d) setting is higher than the maximum limit "
-                        "(%d). "
-                        "Value truncated to %d µsec",
-                        src->_manualExposure_usec, (int) max, (int) max);
-            src->_manualExposure_usec = max;
-        }
-        if (src->_manualExposure_usec < min) {
-            GST_WARNING("Manual exposure time (%d) setting is lower than the minimum limit "
-                        "(%d). "
-                        "Value truncated to %d µsec",
-                        src->_manualExposure_usec, (int) min, (int) min);
-            src->_manualExposure_usec = min;
-        }
-        res = src->_zed->setManualTimeExposure((uint64_t) src->_manualExposure_usec);
-
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual exposure: %d", res),
-                              (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Manual Exposure: %d µsec", src->_manualExposure_usec);
-    }
-
-    // ANALOG GAIN
-    if (src->_autoAnalogGain == TRUE) {
-        res = src->_zed->setAutomaticAnalogGain();
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Automatic Analog Gain: %d", res), (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Automatic Analog Gain: TRUE");
-        res = src->_zed->setAnalogFrameGainRange(src->_analogGainRange_min,
-                                                 src->_analogGainRange_max);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Automatic Analog Gain range: %d", res), (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Automatic Analog Gain range: [%d,%d] dB", src->_analogGainRange_min,
-                 src->_analogGainRange_max);
-    } else {
-        float min, max;
-        res = src->_zed->getAnalogGainLimits(min, max);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to retrieve analog gain limits: %d", res), (NULL));
-            return FALSE;
-        }
-
-        if (src->_manualAnalogGain > max) {
-            GST_WARNING("Manual analog gain (%g) setting is higher than the maximum limit "
-                        "(%g). "
-                        "Value truncated to %g dB",
-                        src->_manualAnalogGain, max, max);
-            src->_manualAnalogGain = max;
-        }
-        if (src->_manualAnalogGain < min) {
-            GST_WARNING("Manual analog gain time (%g) setting is lower than the minimum limit "
-                        "(%g). "
-                        "Value truncated to %g dB",
-                        src->_manualAnalogGain, min, min);
-            src->_manualAnalogGain = min;
-        }
-        res = src->_zed->setManualAnalogGainReal(src->_manualAnalogGain);
-
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Manual Analog Gain: %d", res), (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Manual Analog Gain: %g dB", src->_manualAnalogGain);
-    }
-
-    // DIGITAL GAIN
-    if (src->_autoDigitalGain == TRUE) {
-        res = src->_zed->setAutomaticDigitalGain();
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Automatic Digital Gain: %d", res), (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Automatic Digital Gain: TRUE");
-        res = src->_zed->setDigitalFrameGainRange(src->_digitalGainRange_min,
-                                                  src->_digitalGainRange_max);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Automatic Digital Gain range: %d", res), (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Automatic Digital Gain range: [%g,%g]", src->_digitalGainRange_min,
-                 src->_digitalGainRange_max);
-    } else {
-        float min, max;
-        res = src->_zed->getDigitalGainLimits(min, max);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to retrieve digital gain limits: %d", res), (NULL));
-            return FALSE;
-        }
-
-        if (src->_manualDigitalGain > max) {
-            GST_WARNING("Manual digital gain (%d) setting is higher than the maximum limit "
-                        "(%g). "
-                        "Value truncated to %g",
-                        src->_manualDigitalGain, max, max);
-            src->_manualDigitalGain = max;
-        }
-        if (src->_manualDigitalGain < min) {
-            GST_WARNING("Manual digital gain time (%d) setting is lower than the minimum limit "
-                        "(%g). "
-                        "Value truncated to %g",
-                        src->_manualDigitalGain, min, min);
-            src->_manualDigitalGain = min;
-        }
-        res = src->_zed->setManualDigitalGainReal(src->_manualDigitalGain);
-
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Manual Digital Gain: %d", res), (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Manual Digital Gain: %d", src->_manualDigitalGain);
-    }
-
-    // WHITE BALANCE
-    if (src->_autoWb == TRUE) {
-        res = src->_zed->setAutomaticWhiteBalance(TRUE);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Automatic White Balance: %d", res), (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Automatic White Balance: TRUE");
-    } else {
-        res = src->_zed->setAutomaticWhiteBalance(FALSE);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Automatic White Balance: %d", res), (NULL));
-            return FALSE;
-        }
-        res = src->_zed->setManualWhiteBalance(src->_manualWb);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set White Balance value: %d", res), (NULL));
-            return FALSE;
-        }
-        GST_INFO(" * Manual White Balance: %d°", src->_manualWb);
-    }
-
-    // REGION OF INTEREST FOR AEC AND AGC    
-    if (src->aec_agc_roi_x != -1 && src->aec_agc_roi_x != -1 && src->aec_agc_roi_w != -1 &&
-        src->aec_agc_roi_h != -1) {
-        oc::Rect roi;
-        roi.x = src->aec_agc_roi_x;
-        roi.y = src->aec_agc_roi_y;
-        roi.width = src->aec_agc_roi_w;
-        roi.height = src->aec_agc_roi_h;
-        res = src->_zed->setROIforAECAGC(roi);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set ROI for AEC and AGC: %d", res), (NULL));
-
-            if(res==7) {
-                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("ROI size is too small"), (NULL));
-            }
-
-            return FALSE;
-        }
-        GST_INFO(" * AEC/AGC ROI: Origin (%d,%d) - Size %d x %d", src->aec_agc_roi_x,
-                 src->aec_agc_roi_y, src->aec_agc_roi_w, src->aec_agc_roi_h);
-    } else {
-        GST_INFO(" * AEC/AGC ROI: DISABLED");
-    }
     // <---- Camera Controls
 
     if (!gst_zedxonesrc_calculate_caps(src)) {
@@ -1183,8 +937,9 @@ static gboolean gst_zedxonesrc_unlock_stop(GstBaseSrc *bsrc) {
 static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstZedXOneSrc *src = GST_ZED_X_ONE_SRC(psrc);
 
-    GST_TRACE_OBJECT(src, "gst_zedxonesrc_fill");
+    GST_TRACE_OBJECT(src, "gst_zedsrc_fill");
 
+    sl::ERROR_CODE ret;
     GstMapInfo minfo;
     GstClock *clock;
     GstClockTime clock_time;
@@ -1197,17 +952,17 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         src->_isStarted = TRUE;
     }
 
-    // ----> Check if a new frame is available
-    auto start = std::chrono::system_clock::now();
-    while (!src->_zed->isNewFrame()) {
-        auto end = std::chrono::system_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        if (elapsed.count() > src->_camTimeout_msec) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Camera timeout. Disconnected?"), (NULL));
-            return GST_FLOW_ERROR;
-        }
+    // ----> ZED grab
+    ret = src->_zed->grab();
+
+    if (ret != sl::ERROR_CODE::SUCCESS) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                           sl::toVerbose(ret).c_str()),
+                          (NULL));
+        return GST_FLOW_ERROR;
     }
-    // <---- Check if a new frame is available
+    // <---- ZED grab
 
     // ----> Clock update
     clock = gst_element_get_clock(GST_ELEMENT(src));
@@ -1221,164 +976,76 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         return GST_FLOW_ERROR;
     }
 
-    // ----> Check memory size
-    gsize data_size = static_cast<gsize>(src->_zed->getWidth() * src->_zed->getHeight() *
-                                         src->_zed->getNumberOfChannels());
-    if (minfo.size != data_size) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("ZED X One Data size mismatch!"), (NULL));
-        return GST_FLOW_ERROR;
-    }
-    // <---- Check memory size
+    // ZED Mats
+    sl::Mat img;
 
-    // ----> Memory copy
-    memcpy(minfo.data, src->_zed->getPixels(), minfo.size);
-    // <---- Memory copy
-
-    // ----> Camera controls
-    int res;
-
-    // COLOR SATURATION
-    float sat = src->_zed->getColorSaturation();
-    if (fabs(sat - src->_colorSaturation) > 0.5f) {
-        res = src->_zed->setColorSaturation(src->_colorSaturation);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Color saturation: %d", res),
-                              (NULL));
+    // ----> Retrieve images
+    auto check_ret = [src](sl::ERROR_CODE ret) {
+        if (ret != sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                            ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                            sl::toVerbose(ret).c_str()),
+                            (NULL));
+            return false;
         }
-    }
+        return true;
+    };
 
-    // DENOISING
-    float den = src->_zed->getDenoisingValue();
-    if (fabs(den - src->_denoising) > 0.1f) {
-        res = src->_zed->setDenoisingValue(src->_denoising);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Denoising: %d", res),
-                              (NULL));
-        }
-    }
+    ret = src->_zed->retrieveImage(img, sl::VIEW::LEFT, sl::MEM::CPU);
+    if(!check_ret(ret)) return GST_FLOW_ERROR;
+    // <---- Retrieve images
 
-    // EXPOSURE COMPENSATION
-    float exp_comp = src->_zed->getExposureCompensation();
-    if (fabs(exp_comp - src->_exposureCompensation) > 0.1f) {
-        res = src->_zed->setExposureCompensation(src->_exposureCompensation);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set Exposure Compensation: %d", res), (NULL));
-        }
-    }
+    // Memory copy
+    memcpy(minfo.data, img.getPtr<sl::uchar4>(), minfo.size);
 
-    // SHARPNESS
-    float sharp = src->_zed->getSharpness();
-    if (fabs(sharp - src->_sharpness) > 0.1f) {
-        res = src->_zed->setSharpness(src->_sharpness);
-        if (res != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Image Sharpness: %d", res),
-                              (NULL));
-        }
-    }
+    // ----> Info metadata
+    sl::CameraOneInformation cam_info = src->_zed->getCameraInformation();
+    ZedInfo info;
+    info.cam_model = (gint) cam_info.camera_model;
+    info.stream_type = 0; // "Only left image"
+    info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
+    info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
+    // <---- Info metadata
 
-    // EXPOSURE
-    if (src->_autoExposure == FALSE) {
-        gint exp = static_cast<gint>(src->_zed->getFrameExposureTime());
-        if (abs(exp - src->_manualExposure_usec) > 10) {
-            if (src->_zed->setManualTimeExposure((uint64_t) src->_manualExposure_usec) != 0) {
-                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Exposure"),
-                                  (NULL));
-            }
-            GST_INFO("Forced manual exposure value. Expected %d, was %d", src->_manualExposure_usec,
-                     exp);
-        }
-    }
+    // ----> Sensors metadata
+    ZedSensors sens;
+    
+    sens.sens_avail = TRUE;
+    sl::SensorsData sens_data;
+    src->_zed->getSensorsData(sens_data, sl::TIME_REFERENCE::IMAGE);
 
-    // DIGITAL GAIN
-    if (src->_autoDigitalGain == FALSE) {
-        float dig_gain = src->_zed->getDigitalFrameGain();
-        if (fabs(dig_gain - src->_manualDigitalGain) > 5.0) {
-            if (src->_zed->setManualDigitalGainReal(src->_manualDigitalGain) != 0) {
-                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual Digital Gain"),
-                                  (NULL));
-            }
-            GST_INFO("Forced manual digital gain value. Expected %d, was %g",
-                     src->_manualDigitalGain, dig_gain);
-        }
-    }
+    // IMU
+    sens.imu.imu_avail = TRUE;
+    sens.imu.acc[0] = sens_data.imu.linear_acceleration.x;
+    sens.imu.acc[1] = sens_data.imu.linear_acceleration.y;
+    sens.imu.acc[2] = sens_data.imu.linear_acceleration.z;
+    sens.imu.gyro[0] = sens_data.imu.angular_velocity.x;
+    sens.imu.gyro[1] = sens_data.imu.angular_velocity.y;
+    sens.imu.gyro[2] = sens_data.imu.angular_velocity.z;
 
-    // WHITE BALANCE
-    if (src->_autoWb == FALSE) {
-        gint wb = static_cast<int>(src->_zed->getManualWhiteBalance());
-        if (abs(wb - src->_manualWb) > 5.0) {
-            if (src->_zed->setManualWhiteBalance(src->_manualWb) != 0) {
-                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set Manual White Balance"),
-                                  (NULL));
-            }
-            GST_INFO("Forced manual white balance value. Expected %d, was %d", src->_manualWb, wb);
-        }
-    }
-    // <---- Camera controls
+    // TEMPERATURE
+    sens.temp.temp_avail = TRUE;
+    float temp;
+    sens_data.temperature.get(
+    sl::SensorsData::TemperatureData::SENSOR_LOCATION::IMU, temp);
+    sens.temp.temp_cam_left = temp;
+    sens.temp.temp_cam_right = temp;
+    
+    sens.mag.mag_avail = FALSE;
+    sens.env.env_avail = FALSE;
+    // <---- Sensors metadata metadata
 
-    // // ----> Info metadata
-    // sl::CameraInformation cam_info = src->_zed->getCameraInformation();
-    // ZedInfo info;
-    // info.cam_model = (gint) cam_info.camera_model;
-    // info.stream_type = src->stream_type;
-    // info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
-    // info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
-    // if (info.grab_single_frame_height == 752 || info.grab_single_frame_height == 1440 ||
-    //     info.grab_single_frame_height == 2160 || info.grab_single_frame_height == 2484) {
-    //     info.grab_single_frame_height /= 2;   // Only half buffer size if the stream is composite
-    // }
-    // // <---- Info metadata
-
-    // // ----> Sensors metadata
-    // ZedSensors sens;
-    // if (src->_zed->getCameraInformation().camera_model != sl::MODEL::ZED) {
-    //     sens.sens_avail = TRUE;
-    //     sens.imu.imu_avail = TRUE;
-
-    //     sl::SensorsData sens_data;
-    //     src->_zed->getSensorsData(sens_data, sl::TIME_REFERENCE::IMAGE);
-
-    //     sens.imu.acc[0] = sens_data.imu.linear_acceleration.x;
-    //     sens.imu.acc[1] = sens_data.imu.linear_acceleration.y;
-    //     sens.imu.acc[2] = sens_data.imu.linear_acceleration.z;
-    //     sens.imu.gyro[0] = sens_data.imu.angular_velocity.x;
-    //     sens.imu.gyro[1] = sens_data.imu.angular_velocity.y;
-    //     sens.imu.gyro[2] = sens_data.imu.angular_velocity.z;
-
-    //     if (src->_zed->getCameraInformation().camera_model != sl::MODEL::ZED_M) {
-    //         sens.mag.mag_avail = TRUE;
-    //         sens.mag.mag[0] = sens_data.magnetometer.magnetic_field_calibrated.x;
-    //         sens.mag.mag[1] = sens_data.magnetometer.magnetic_field_calibrated.y;
-    //         sens.mag.mag[2] = sens_data.magnetometer.magnetic_field_calibrated.z;
-    //         sens.env.env_avail = TRUE;
-
-    //         float temp;
-    //         sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::BAROMETER,
-    //                                   temp);
-    //         sens.env.temp = temp;
-    //         sens.env.press = sens_data.barometer.pressure * 1e-2;
-
-    //         float tempL, tempR;
-    //         sens_data.temperature.get(
-    //             sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_LEFT, tempL);
-    //         sens_data.temperature.get(
-    //             sl::SensorsData::TemperatureData::SENSOR_LOCATION::ONBOARD_RIGHT, tempR);
-    //         sens.temp.temp_avail = TRUE;
-    //         sens.temp.temp_cam_left = tempL;
-    //         sens.temp.temp_cam_right = tempR;
-    //     } else {
-    //         sens.mag.mag_avail = FALSE;
-    //         sens.env.env_avail = FALSE;
-    //         sens.temp.temp_avail = FALSE;
-    //     }
-    // } else {
-    //     sens.sens_avail = FALSE;
-    //     sens.imu.imu_avail = FALSE;
-    //     sens.mag.mag_avail = FALSE;
-    //     sens.env.env_avail = FALSE;
-    //     sens.temp.temp_avail = FALSE;
-    // }
-    // // <---- Sensors metadata metadata
+    // ----> Positional Tracking metadata
+    ZedPose pose;
+    pose.pose_avail = FALSE;
+    pose.pos_tracking_state = static_cast<int>(sl::POSITIONAL_TRACKING_STATE::OFF);
+    pose.pos[0] = 0.0;
+    pose.pos[1] = 0.0;
+    pose.pos[2] = 0.0;
+    pose.orient[0] = 0.0;
+    pose.orient[1] = 0.0;
+    pose.orient[2] = 0.0;
+    // <---- Positional Tracking metadata
 
     // ----> Timestamp meta-data
     GST_BUFFER_TIMESTAMP(buf) =
@@ -1387,10 +1054,10 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
     // <---- Timestamp meta-data
 
-    // guint64 offset = GST_BUFFER_OFFSET(buf);
-    // GstZedSrcMeta *meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
-    //                                                   src->object_detection | src->body_tracking,
-    //                                                   obj_count, obj_data, offset);
+    guint64 offset = GST_BUFFER_OFFSET(buf);
+    GstZedSrcMeta *meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
+                                                      false,
+                                                      0, NULL, offset);
 
     // Buffer release
     gst_buffer_unmap(buf, &minfo);
