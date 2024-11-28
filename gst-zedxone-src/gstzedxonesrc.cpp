@@ -111,21 +111,21 @@ typedef enum {
 #define DEFAULT_PROP_ENABLE_HDR FALSE
 #define DEFAULT_PROP_OPENCV_CALIB_FILE ""
 #define DEFAULT_PROP_SATURATION 4
-#define DEFAULT_PROP_SHARPNESS 4
-#define DEFAULT_PROP_GAMMA 8
+#define DEFAULT_PROP_SHARPNESS 1
+#define DEFAULT_PROP_GAMMA 2
 #define DEFAULT_PROP_AUTO_WB TRUE
 #define DEFAULT_PROP_WB_TEMP 4200
 #define DEFAULT_PROP_AUTO_EXPOSURE TRUE
 #define DEFAULT_PROP_EXPOSURE 10000
-#define DEFAULT_PROP_EXPOSURE_RANGE_MIN 28
-#define DEFAULT_PROP_EXPOSURE_RANGE_MAX 30000
+#define DEFAULT_PROP_EXPOSURE_RANGE_MIN 1024
+#define DEFAULT_PROP_EXPOSURE_RANGE_MAX 66666
 #define DEFAULT_PROP_EXP_COMPENSATION 50
 #define DEFAULT_PROP_AUTO_ANALOG_GAIN TRUE
-#define DEFAULT_PROP_ANALOG_GAIN 1000
-#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN 1000
-#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX 16000
-#define DEFAULT_PROP_AUTO_DIGITAL_GAIN FALSE
-#define DEFAULT_PROP_DIGITAL_GAIN 1
+#define DEFAULT_PROP_ANALOG_GAIN 30000
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MIN 100
+#define DEFAULT_PROP_ANALOG_GAIN_RANGE_MAX 30000
+#define DEFAULT_PROP_AUTO_DIGITAL_GAIN TRUE
+#define DEFAULT_PROP_DIGITAL_GAIN 3
 #define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN 1
 #define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX 256
 #define DEFAULT_PROP_DENOISING 50
@@ -394,15 +394,15 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
         gobject_class, PROP_EXPOSURE_RANGE_MIN,
         g_param_spec_int("auto-exposure-range-min", "Camera control: Minimum Exposure time [µsec]",
                          "Minimum exposure time in microseconds for the automatic exposure setting",
-                         28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MIN,
-                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                         28, 66666, DEFAULT_PROP_EXPOSURE_RANGE_MIN,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_EXPOSURE_RANGE_MAX,
         g_param_spec_int("auto-exposure-range-max", "Camera control: Maximum Exposure time [µsec]",
                          "Maximum exposure time in microseconds for the automatic exposure setting",
-                         28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MAX,
-                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                         28, 66666, DEFAULT_PROP_EXPOSURE_RANGE_MAX,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_EXP_COMPENSATION,
@@ -827,7 +827,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     GST_INFO("CAMERA INITIALIZATION PARAMETERS");
     init_params.async_grab_camera_recovery = false;
-    
+
     switch(src->_cameraResolution) {
         case GST_ZEDXONESRC_SVGA:
             init_params.camera_resolution = sl::RESOLUTION::SVGA;
@@ -876,7 +876,175 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     }
     // <---- Open camera
 
+    // Check FPS
+    src->_realFps = static_cast<int>(src->_zed->getCameraInformation().camera_configuration.fps);
+    if (src->_realFps != src->_cameraFps) {
+        GST_WARNING("Camera FPS set to %d, but real FPS is %d", src->_cameraFps, src->_realFps);
+    }
+
+    // Lambda to check return values
+    auto check_ret = [src](sl::ERROR_CODE ret) {
+        if (ret != sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed, '%s'", sl::toString(ret).c_str()),
+                              (NULL));
+            return false;
+        }
+        return true;
+    };
+
+    // ----> Get default camera control values for debug
+    GST_INFO("CAMERA CONTROLS");
+    int value;
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::SATURATION, value);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Saturation: %d", value);
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::SHARPNESS, value);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Sharpness: %d", value);
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::GAMMA, value);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Gamma: %d", value);
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, value);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default White balance auto: %s", (value ? "TRUE" : "FALSE"));
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE, value);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default White balance temperature: %d", value);
+
+    int val_min,val_max;
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE_TIME, value);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Exposure time: %d", value);
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::AUTO_EXPOSURE_TIME_RANGE, val_min, val_max);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Auto Exposure range: [%d,%d]", val_min, val_max);
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE_COMPENSATION, value);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Exposure compensation: %d", value);
+
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::ANALOG_GAIN, value);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Analog Gain: %d", value);
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::AUTO_ANALOG_GAIN_RANGE, val_min, val_max);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Auto Analog Gain range: [%d,%d]", val_min, val_max);
+
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::DIGITAL_GAIN, value);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Digital Gain: %d", value);
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::AUTO_DIGITAL_GAIN_RANGE, val_min, val_max);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Auto Digital Gain range: [%d,%d]", val_min, val_max);
+
+    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::DENOISING, value);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_DEBUG(" * Default Denoising: %d", value);
+    // <---- Get default camera control values for debug
+
     // ----> Camera Controls
+    GST_INFO("CAMERA CONTROLS");
+
+    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::SATURATION, src->_saturation);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_INFO(" * Saturation: %d", src->_saturation);
+    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::SHARPNESS, src->_sharpness);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_INFO(" * Sharpness: %d", src->_sharpness);
+    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::GAMMA, src->_gamma);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_INFO(" * Gamma: %d", src->_gamma);
+    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->_autoWb);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_INFO(" * White balance auto: %s", (src->_autoWb ? "TRUE" : "FALSE"));
+    if (!src->_autoWb) {
+        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE,
+                                           src->_manualWb);
+        if (!check_ret(ret))
+            return FALSE;
+        GST_INFO(" * White balance temperature: %d", src->_manualWb);
+    }
+
+    if (src->_autoExposure) {
+        GST_INFO(" * Auto Exposure: TRUE");
+    } else {
+        GST_INFO(" * Auto Exposure: FALSE");
+        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE_TIME, src->_exposure_usec);
+        if (!check_ret(ret))
+            return FALSE;
+        GST_INFO(" * Exposure time: %d", src->_exposure_usec);
+        // Force Exposure range values
+        src->_exposureRange_min = src->_exposure_usec;
+        src->_exposureRange_max = src->_exposure_usec;
+    }
+    src->_exposureRange_max = std::min(src->_exposureRange_max, 1000000 / src->_realFps);
+    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::AUTO_EXPOSURE_TIME_RANGE,
+                                       src->_exposureRange_min, src->_exposureRange_max);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_INFO(" * Auto Exposure range: [%d,%d]", src->_exposureRange_min, src->_exposureRange_max);
+    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE_COMPENSATION,
+                                       src->_exposureCompensation);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_INFO(" * Exposure compensation: %d", src->_exposureCompensation);
+
+    if (src->_autoAnalogGain) {
+        GST_INFO(" * Auto Analog Gain: TRUE");
+    } else {
+        GST_INFO(" * Auto Analog Gain: FALSE");
+        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::ANALOG_GAIN, src->_analogGain);
+        if (!check_ret(ret))
+            return FALSE;
+        GST_INFO(" * Analog Gain: %d", src->_analogGain);
+        // Force Exposure range values
+        src->_analogGainRange_min = src->_analogGain;
+        src->_analogGainRange_max = src->_analogGain;
+    }
+    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::AUTO_ANALOG_GAIN_RANGE,
+                                       src->_analogGainRange_min, src->_analogGainRange_max);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_INFO(" * Auto Analog Gain range: [%d,%d]", src->_analogGainRange_min, src->_analogGainRange_max);
+    
+    if (src->_autoDigitalGain) {
+        GST_INFO(" * Auto Digital Gain: TRUE");
+    } else {
+        GST_INFO(" * Auto Digital Gain: FALSE");
+        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::DIGITAL_GAIN, src->_digitalGain);
+        if (!check_ret(ret))
+            return FALSE;
+        GST_INFO(" * Digital Gain: %d", src->_digitalGain);
+        // Force Exposure range values
+        src->_digitalGainRange_min = src->_digitalGain;
+        src->_digitalGainRange_max = src->_digitalGain;
+    }
+    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::AUTO_DIGITAL_GAIN_RANGE,
+                                       src->_digitalGainRange_min, src->_digitalGainRange_max);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_INFO(" * Auto Digital Gain range: [%d,%d]", src->_digitalGainRange_min, src->_digitalGainRange_max);
+
+    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::DENOISING, src->_denoising);
+    if (!check_ret(ret))
+        return FALSE;
+    GST_INFO(" * Denoising: %d", src->_denoising);
     // <---- Camera Controls
 
     if (!gst_zedxonesrc_calculate_caps(src)) {

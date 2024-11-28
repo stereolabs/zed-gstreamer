@@ -85,6 +85,8 @@ struct _GstZedXOneSrc {
     gint _denoising;    // Image Denoising [0,100]
     // <---- Properties
 
+    int _realFps;   // Real FPS
+
     GstClockTime _acqStartTime;   // Acquisition start time
 
     GstCaps *_caps;         // Stream caps
