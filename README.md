@@ -455,132 +455,117 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
 ### `ZED X One Video Source Element` properties
 
 ```bash
-  analog-gain         : Analog Gain value in dB
-                        flags: readable, writable
-                        Float. Range:             0.1 -              30 Default:               1 
-  anti-banding        : AE Anti Banding
-                        flags: readable, writable
-                        Enum "GstZedXOneSrcAntiBanding" Default: 1, "Automatic"
-                           (0): Disabled         - Anti Banding disabled
-                           (1): Automatic        - Automatic Anti Banding
-                           (2): 50 Hz            - 50 Hz Anti Banding
-                           (3): 60 Hz            - 60 Hz Anti Banding
-  auto-analog-gain    : Enable Automatic Analog Gain
-                        flags: readable, writable
-                        Boolean. Default: true
-  auto-analog-gain-range-max: Maximum Analog Gain in dB for the automatic analog gain setting
-                        flags: readable, writable
-                        Float. Range:             0.1 -              30 Default:              30 
-  auto-analog-gain-range-min: Minimum Analog Gain in dB for the automatic analog gain setting
-                        flags: readable, writable
-                        Float. Range:             0.1 -              30 Default:               0 
-  auto-digital-gain   : Enable Automatic Digital Gain
-                        flags: readable, writable
-                        Boolean. Default: true
-  auto-digital-gain-range-max: Maximum Digital Gain for the automatic digital gain setting
-                        flags: readable, writable
-                        Float. Range:               1 -             256 Default:             256 
-  auto-digital-gain-range-min: Minimum Digital Gain for the automatic digital gain setting
-                        flags: readable, writable
-                        Float. Range:               1 -             256 Default:               1 
-  auto-exposure       : Enable Automatic Exposure
-                        flags: readable, writable
-                        Boolean. Default: true
-  auto-exposure-range-max: Maximum exposure time in microseconds for the automatic exposure setting
-                        flags: readable, writable
-                        Integer. Range: 28 - 66000 Default: 66000 
-  auto-exposure-range-min: Minimum exposure time in microseconds for the automatic exposure setting
-                        flags: readable, writable
-                        Integer. Range: 28 - 66000 Default: 28 
-  auto-wb             : Enable Automatic White Balance
-                        flags: readable, writable
-                        Boolean. Default: true
   blocksize           : Size in bytes to read per buffer (-1 = default)
                         flags: readable, writable
                         Unsigned Integer. Range: 0 - 4294967295 Default: 4096 
+  camera-flip         : Mirror image vertically if camera is flipped
+                        flags: readable, writable
+                        Boolean. Default: false
   camera-fps          : Camera frame rate
                         flags: readable, writable
-                        Enum "GstZedXOneSrcFPS" Default: 15, "15  FPS"
-                           (120): 120 FPS          - Only with SVGA. Not available with 4K mode
+                        Enum "GstZedXOneSrcFPS" Default: 30, "30  FPS"
+                           (120): 120 FPS          - Only with SVGA. Not with ZED X One 4K
                            (60): 60  FPS          - Not available with 4K mode
-                           (30): 30  FPS          - Not available with 4K mode
-                           (15): 15  FPS          - all resolutions (NO GMSL2)
+                           (30): 30  FPS          - Available with all the resolutions
+                           (15): 15  FPS          - Available with all the resolutions
   camera-id           : Select camera from cameraID
                         flags: readable, writable
-                        Integer. Range: 0 - 255 Default: 0 
+                        Integer. Range: -1 - 255 Default: -1 
   camera-resolution   : Camera Resolution
                         flags: readable, writable
                         Enum "GstZedXOneSrcResol" Default: 2, "HD1200"
-                           (3): 4K               - 3840x2160
+                           (4): 4K               - 3840x2160 (only ZED X One 4K)
+                           (3): QHDPLUS          - 3200x1800 (only ZED X One 4K)
                            (2): HD1200           - 1920x1200
                            (1): HD1080           - 1920x1080
-                           (0): SVGA             - 960x600
-  camera-timeout      : Connection timeout in milliseconds
+                           (0): SVGA             - 960x600 (only ZED X One GS)
+  camera-sn           : Select camera from the serial number
                         flags: readable, writable
-                        Integer. Range: 100 - 100000000 Default: 1000 
-  ctrl-aec-agc-roi-h  : Auto gain/exposure ROI height (-1 to not set ROI)
+                        Integer64. Range: 0 - 999999999 Default: 0 
+  camera-timeout      : Connection opening timeout in seconds
                         flags: readable, writable
-                        Integer. Range: -1 - 2160 Default: -1 
-  ctrl-aec-agc-roi-w  : Auto gain/exposure ROI width (-1 to not set ROI)
+                        Float. Range:             0.5 -           86400 Default:               5 
+  ctrl-analog-gain    : Camera control: Analog Gain value
                         flags: readable, writable
-                        Integer. Range: -1 - 3810 Default: -1 
-  ctrl-aec-agc-roi-x  : Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)
+                        Integer. Range: 1000 - 30000 Default: 30000 
+  ctrl-auto-analog-gain: Enable Automatic Analog Gain
                         flags: readable, writable
-                        Integer. Range: -1 - 3810 Default: -1 
-  ctrl-aec-agc-roi-y  : Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)
+                        Boolean. Default: true
+  ctrl-auto-analog-gain-range-max: Maximum Analog Gain for the automatic analog gain setting
                         flags: readable, writable
-                        Integer. Range: -1 - 2160 Default: -1 
-  denoising           : Denoising factor
+                        Integer. Range: 1000 - 30000 Default: 30000 
+  ctrl-auto-analog-gain-range-min: Minimum Analog Gain for the automatic analog gain setting
                         flags: readable, writable
-                        Float. Range:               0 -               1 Default:             0.5 
-  digital-gain        : Digital Gain value
+                        Integer. Range: 1000 - 30000 Default: 1000 
+  ctrl-auto-digital-gain: Enable Automatic Digital Gain
                         flags: readable, writable
-                        Integer. Range: 1 - 256 Default: 128 
+                        Boolean. Default: true
+  ctrl-auto-digital-gain-range-max: Maximum Digital Gain for the automatic digital gain setting
+                        flags: readable, writable
+                        Integer. Range: 1 - 256 Default: 256 
+  ctrl-auto-digital-gain-range-min: Minimum Digital Gain for the automatic digital gain setting
+                        flags: readable, writable
+                        Integer. Range: 1 - 256 Default: 1 
+  ctrl-auto-exposure  : Enable Automatic Exposure
+                        flags: readable, writable
+                        Boolean. Default: true
+  ctrl-auto-exposure-range-max: Maximum exposure time in microseconds for the automatic exposure setting
+                        flags: readable, writable
+                        Integer. Range: 1024 - 66666 Default: 66666 
+  ctrl-auto-exposure-range-min: Minimum exposure time in microseconds for the automatic exposure setting
+                        flags: readable, writable
+                        Integer. Range: 1024 - 66666 Default: 1024 
+  ctrl-denoising      : Denoising factor
+                        flags: readable, writable
+                        Integer. Range: 0 - 100 Default: 50 
+  ctrl-digital-gain   : Digital Gain value
+                        flags: readable, writable
+                        Integer. Range: 1 - 256 Default: 3 
+  ctrl-exposure-compensation: Exposure Compensation
+                        flags: readable, writable
+                        Integer. Range: 0 - 100 Default: 50 
+  ctrl-exposure-time  : Exposure time in microseconds
+                        flags: readable, writable
+                        Integer. Range: 1024 - 66666 Default: 10000 
+  ctrl-gamma          : Image gamma
+                        flags: readable, writable
+                        Integer. Range: 1 - 9 Default: 2 
+  ctrl-saturation     : Image saturation
+                        flags: readable, writable
+                        Integer. Range: 0 - 8 Default: 4 
+  ctrl-sharpness      : Image sharpness
+                        flags: readable, writable
+                        Integer. Range: 0 - 8 Default: 1 
+  ctrl-whitebalance-auto: Image automatic white balance
+                        flags: readable, writable
+                        Boolean. Default: true
+  ctrl-whitebalance-temperature: Image white balance temperature
+                        flags: readable, writable
+                        Integer. Range: 2800 - 6500 Default: 4200 
   do-timestamp        : Apply current stream time to buffers
                         flags: readable, writable
                         Boolean. Default: false
-  exposure-compensation: Exposure Compensation
+  enable-hdr          : Enable HDR if supported by resolution and frame rate.
                         flags: readable, writable
-                        Float. Range:              -2 -               2 Default:               0 
-  exposure-time       : Exposure time in microseconds
-                        flags: readable, writable
-                        Integer. Range: 28 - 66000 Default: 2000 
+                        Boolean. Default: false
   name                : The name of the object
-                        flags: readable, writable
+                        flags: readable, writable, 0x2000
                         String. Default: "zedxonesrc0"
   num-buffers         : Number of buffers to output before sending EOS (-1 = unlimited)
                         flags: readable, writable
                         Integer. Range: -1 - 2147483647 Default: -1 
+  opencv-calibration-file: Optional OpenCV Calibration File
+                        flags: readable, writable
+                        String. Default: ""
   parent              : The parent of the object
-                        flags: readable, writable
+                        flags: readable, writable, 0x2000
                         Object of type "GstObject"
-  saturation          : Color Saturation
-                        flags: readable, writable
-                        Float. Range:               0 -               2 Default:               1 
-  sharpness          : Image Sharpness
-                        flags: readable, writable
-                        Float. Range:               0 -               1 Default:               1 
-  swap-rb             : Swap Red and Blue color channels
-                        flags: readable, writable
-                        Boolean. Default: false
-  tone-map-gamma-b    : Set the tone mapping curve from a gamma value (Channel B)
-                        flags: readable, writable
-                        Float. Range:             1.5 -             3.5 Default:               2 
-  tone-map-gamma-g    : Set the tone mapping curve from a gamma value (Channel G)
-                        flags: readable, writable
-                        Float. Range:             1.5 -             3.5 Default:               2 
-  tone-map-gamma-r    : Set the tone mapping curve from a gamma value (Channel R)
-                        flags: readable, writable
-                        Float. Range:             1.5 -             3.5 Default:               2 
   typefind            : Run typefind before negotiating (deprecated, non-functional)
                         flags: readable, writable, deprecated
                         Boolean. Default: false
-  verbose-level       : Capture Library Verbose level
+  verbose-level       : ZED SDK Verbose level
                         flags: readable, writable
-                        Integer. Range: 0 - 4 Default: 0 
-  white-balance-temp  : White Balance Temperature [°]
-                        flags: readable, writable
-                        Integer. Range: 2800 - 12000 Default: 5000
+                        Integer. Range: 0 - 999 Default: 1 
 ```
 
 ### `ZED Video Demuxer Element` properties
