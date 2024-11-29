@@ -1,0 +1,246 @@
+Factory Details:
+  Rank                     none (0)
+  Long-name                ZED Composite Stream Demuxer
+  Klass                    Demuxer/Video
+  Description              Stereolabs ZED Stream Demuxer
+  Author                   Stereolabs <support@stereolabs.com>
+
+Plugin Details:
+  Name                     zeddemux
+  Description              ZED composite stream demuxer
+  Filename                 /usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgstzeddemux.so
+  Version                  4.1
+  License                  LGPL
+  Source module            gst-plugins-zed package
+  Binary package           gst-plugins-zed
+  Origin URL               https://github.com/stereolabs/zed-gstreamer
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstZedDemux
+
+Pad Templates:
+  SINK template: 'sink'
+    Availability: Always
+    Capabilities:
+      video/x-raw
+                 format: BGRA
+                  width: 672
+                 height: 752
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1, (fraction)100/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1280
+                 height: 1440
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 2160
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 2208
+                 height: 2484
+              framerate: 15/1
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 2400
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 960
+                 height: 1200
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1, (fraction)120/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 3840
+                 height: 2160
+              framerate: { (fraction)15/1, (fraction)30/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 3200
+                 height: 1800
+              framerate: { (fraction)15/1, (fraction)30/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 1200
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 1080
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 960
+                 height: 600
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1, (fraction)120/1 }
+  
+  SRC template: 'src_aux'
+    Availability: Always
+    Capabilities:
+      video/x-raw
+                 format: BGRA
+                  width: 672
+                 height: 376
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1, (fraction)100/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1280
+                 height: 720
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 1080
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 2208
+                 height: 1242
+              framerate: 15/1
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 1200
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 960
+                 height: 600
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1, (fraction)120/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 672
+                 height: 376
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1, (fraction)100/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1280
+                 height: 720
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 1080
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 2208
+                 height: 1242
+              framerate: 15/1
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 1200
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 960
+                 height: 600
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1, (fraction)120/1 }
+  
+  SRC template: 'src_data'
+    Availability: Always
+    Capabilities:
+      application/data
+  
+  SRC template: 'src_left'
+    Availability: Always
+    Capabilities:
+      video/x-raw
+                 format: BGRA
+                  width: 672
+                 height: 376
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1, (fraction)100/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1280
+                 height: 720
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 1080
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 2208
+                 height: 1242
+              framerate: 15/1
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 1200
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 960
+                 height: 600
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1, (fraction)120/1 }
+  
+  SRC template: 'src_mono'
+    Availability: Always
+    Capabilities:
+      video/x-raw
+                 format: BGRA
+                  width: 3840
+                 height: 2160
+              framerate: { (fraction)15/1, (fraction)30/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 3200
+                 height: 1800
+              framerate: { (fraction)15/1, (fraction)30/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 1200
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 1920
+                 height: 1080
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1 }
+      video/x-raw
+                 format: BGRA
+                  width: 960
+                 height: 600
+              framerate: { (fraction)15/1, (fraction)30/1, (fraction)60/1, (fraction)120/1 }
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SINK: 'sink'
+    Pad Template: 'sink'
+  SRC: 'src_left'
+    Pad Template: 'src_left'
+  SRC: 'src_mono'
+    Pad Template: 'src_mono'
+  SRC: 'src_aux'
+    Pad Template: 'src_aux'
+  SRC: 'src_data'
+    Pad Template: 'src_data'
+
+Element Properties:
+  is-depth            : Aux source is GRAY16 depth
+                        flags: readable, writable
+                        Boolean. Default: false
+  is-mono             : Demux is applied to ZED X One monocular stream from zedxonesrc
+                        flags: readable, writable
+                        Boolean. Default: false
+  name                : The name of the object
+                        flags: readable, writable, 0x2000
+                        String. Default: "zeddemux0"
+  parent              : The parent of the object
+                        flags: readable, writable, 0x2000
+                        Object of type "GstObject"
+  stream-data         : Enable binary data streaming on `src_data` pad
+                        flags: readable, writable
+                        Boolean. Default: false

@@ -573,7 +573,16 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
 ```bash
   is-depth            : Aux source is GRAY16 depth
                         flags: readable, writable
-                        Boolean. Default: true
+                        Boolean. Default: false
+  is-mono             : Demux is applied to ZED X One monocular stream from zedxonesrc
+                        flags: readable, writable
+                        Boolean. Default: false
+  name                : The name of the object
+                        flags: readable, writable, 0x2000
+                        String. Default: "zeddemux0"
+  parent              : The parent of the object
+                        flags: readable, writable, 0x2000
+                        Object of type "GstObject"
   stream-data         : Enable binary data streaming on `src_data` pad
                         flags: readable, writable
                         Boolean. Default: false

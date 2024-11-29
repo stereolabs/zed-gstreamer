@@ -1140,6 +1140,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
 
     // ----> ZED grab
+    GST_TRACE(" Data Grabbing");
     ret = src->_zed->grab();
 
     if (ret != sl::ERROR_CODE::SUCCESS) {
@@ -1152,12 +1153,14 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- ZED grab
 
     // ----> Clock update
+    GST_TRACE("Clock update");
     clock = gst_element_get_clock(GST_ELEMENT(src));
     clock_time = gst_clock_get_time(clock);
     gst_object_unref(clock);
     // <---- Clock update
 
     // Memory mapping
+    GST_TRACE("Memory mapping");
     if (FALSE == gst_buffer_map(buf, &minfo, GST_MAP_WRITE)) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"), (NULL));
         return GST_FLOW_ERROR;
@@ -1167,6 +1170,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     sl::Mat img;
 
     // ----> Retrieve images
+    GST_TRACE("Retrieve images");
     auto check_ret = [src](sl::ERROR_CODE ret) {
         if (ret != sl::ERROR_CODE::SUCCESS) {
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
@@ -1183,9 +1187,11 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Retrieve images
 
     // Memory copy
+    GST_TRACE("Memory copy");
     memcpy(minfo.data, img.getPtr<sl::uchar4>(), minfo.size);
 
     // ----> Info metadata
+    GST_TRACE("Info metadata");
     sl::CameraOneInformation cam_info = src->_zed->getCameraInformation();
     ZedInfo info;
     info.cam_model = (gint) cam_info.camera_model;
@@ -1195,6 +1201,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Info metadata
 
     // ----> Sensors metadata
+    GST_TRACE("Sensors metadata");
     ZedSensors sens;
     
     sens.sens_avail = TRUE;
@@ -1202,6 +1209,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     src->_zed->getSensorsData(sens_data, sl::TIME_REFERENCE::IMAGE);
 
     // IMU
+    GST_TRACE("IMU");
     sens.imu.imu_avail = TRUE;
     sens.imu.acc[0] = sens_data.imu.linear_acceleration.x;
     sens.imu.acc[1] = sens_data.imu.linear_acceleration.y;
@@ -1211,6 +1219,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     sens.imu.gyro[2] = sens_data.imu.angular_velocity.z;
 
     // TEMPERATURE
+    GST_TRACE("TEMPERATURE");
     sens.temp.temp_avail = TRUE;
     float temp;
     sens_data.temperature.get(
@@ -1223,6 +1232,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Sensors metadata metadata
 
     // ----> Positional Tracking metadata
+    GST_TRACE("Positional Tracking metadata");
     ZedPose pose;
     pose.pose_avail = FALSE;
     pose.pos_tracking_state = static_cast<int>(sl::POSITIONAL_TRACKING_STATE::OFF);
@@ -1235,18 +1245,21 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Positional Tracking metadata
 
     // ----> Timestamp meta-data
+    GST_TRACE("Timestamp meta-data");
     GST_BUFFER_TIMESTAMP(buf) =
         GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
     GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
     // <---- Timestamp meta-data
 
+    GST_TRACE("PUSH Buffer meta-data");
     guint64 offset = GST_BUFFER_OFFSET(buf);
     GstZedSrcMeta *meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
                                                       false,
                                                       0, NULL, offset);
 
     // Buffer release
+    GST_TRACE("Buffer release");
     gst_buffer_unmap(buf, &minfo);
     // gst_buffer_unref(buf); // NOTE(Walter) do not uncomment to not crash
 
