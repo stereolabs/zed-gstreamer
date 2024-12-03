@@ -1,6 +1,14 @@
 LATEST CHANGES
 ==============
 
+2024-12-03
+----------
+- The `zedxonesrc` element now uses the ZED SDK object `sl::CameraOne` instead of the `zedx-one-capture` library
+  
+ * ZED X One images are now automatically rectified
+ * ZED X One IMU data can be retrieved as image metadata
+ * ZED X One 4K supports HDR mode
+
 2024-04-23
 ----------
 - Add new `zedxonesrc` element to get ZED X One color stream and control the camera
