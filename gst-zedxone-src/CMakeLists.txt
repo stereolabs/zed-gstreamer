@@ -14,9 +14,21 @@ endif()
 
 add_definitions(-Werror=return-type)
 
-set(libname gstzedxonesrc)
+option(LINK_SHARED_ZED "Link with the ZED SDK shared executable" ON)
 
-add_subdirectory(lib)
+if(NOT LINK_SHARED_ZED AND MSVC)
+    message(FATAL_ERROR "LINK_SHARED_ZED OFF : ZED SDK static libraries not available on Windows")
+endif()
+
+include_directories(${CUDA_INCLUDE_DIRS})
+include_directories(${ZED_INCLUDE_DIRS})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+link_directories(${ZED_LIBRARY_DIR})
+link_directories(${CUDA_LIBRARY_DIRS})
+link_directories(${LIBRARY_INSTALL_DIR})
+
+set(libname gstzedxonesrc)
 
 set(SOURCES
   gstzedxonesrc.cpp
@@ -24,10 +36,6 @@ set(SOURCES
   
 set(HEADERS
   gstzedxonesrc.h
-)
-
-link_directories(
-  ${LIBRARY_INSTALL_DIR}
 )
 
 message( " * ${libname} plugin added")
@@ -47,7 +55,14 @@ else()
   add_definitions(-O2)
 endif()
 
-add_dependencies (${libname} zedarguscapture)
+SET(ZED_LIBS
+    ${ZED_LIBRARIES}
+    ${CUDA_CUDA_LIBRARY}
+    ${CUDA_CUDART_LIBRARY}
+    ${CUDA_NPP_LIBRARIES_ZED}
+)
+
+add_dependencies (${libname} gstzedmeta)
 
 target_link_libraries (
   ${libname} LINK_PUBLIC
@@ -56,7 +71,8 @@ target_link_libraries (
   ${GSTREAMER_LIBRARY}
   ${GSTREAMER_BASE_LIBRARY}
   ${GSTREAMER_VIDEO_LIBRARY}
-  ${CMAKE_CURRENT_BINARY_DIR}/lib/libzedarguscapture.so  
+  ${ZED_LIBS}
+  ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
 )
 
 install(TARGETS ${libname} LIBRARY DESTINATION ${PLUGIN_INSTALL_DIR})

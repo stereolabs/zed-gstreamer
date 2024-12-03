@@ -2165,8 +2165,9 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
 }
 
 static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
-#if (ZED_SDK_MAJOR_VERSION < 4)
-    GST_ELEMENT_ERROR(src, LIBRARY, FAILED, ("Wrong ZED SDK version. SDK v4.0.x required "),
+#if (ZED_SDK_MAJOR_VERSION != 4 && ZED_SDK_MINOR_VERSION != 2 && ZED_SDK_SUB_VERSION != 2)
+    GST_ELEMENT_ERROR(src, LIBRARY, FAILED, 
+    ("Wrong ZED SDK version. SDK v4.2.2 required "),
                       (NULL));
 #endif
 
@@ -2724,26 +2725,36 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     sl::Mat depth_data;
 
     // ----> Mats retrieving
+    auto check_ret = [src](sl::ERROR_CODE ret) {
+        if (ret != sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                            ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                            sl::toVerbose(ret).c_str()),
+                            (NULL));
+            return false;
+        }
+        return true;
+    };
+
     if (src->stream_type == GST_ZEDSRC_ONLY_LEFT) {
         ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
+        if(!check_ret(ret)) return GST_FLOW_ERROR;
     } else if (src->stream_type == GST_ZEDSRC_ONLY_RIGHT) {
         ret = src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU);
+        if(!check_ret(ret)) return GST_FLOW_ERROR;
     } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
         ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
+        if(!check_ret(ret)) return GST_FLOW_ERROR;
         ret = src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU);
+        if(!check_ret(ret)) return GST_FLOW_ERROR;
     } else if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU);
+        if(!check_ret(ret)) return GST_FLOW_ERROR;
     } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
+        if(!check_ret(ret)) return GST_FLOW_ERROR;
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU);
-    }
-
-    if (ret != sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
-                           sl::toVerbose(ret).c_str()),
-                          (NULL));
-        return GST_FLOW_ERROR;
+        if(!check_ret(ret)) return GST_FLOW_ERROR;
     }
     // <---- Mats retrieving
 
@@ -2910,7 +2921,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         rt_params.object_class_detection_confidence_threshold = class_det_conf;
 
         sl::Objects det_objs;
-        sl::ERROR_CODE ret = src->zed.retrieveObjects(det_objs, rt_params, OD_INSTANCE_MODULE_ID);
+        ret = src->zed.retrieveObjects(det_objs, rt_params, OD_INSTANCE_MODULE_ID);
 
         if (ret == sl::ERROR_CODE::SUCCESS) {
             if (det_objs.is_new) {
@@ -3004,7 +3015,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         rt_params.skeleton_smoothing = src->bt_rt_skel_smoothing;
 
         sl::Bodies bodies;
-        sl::ERROR_CODE ret = src->zed.retrieveBodies(bodies, rt_params, BT_INSTANCE_MODULE_ID);
+        ret = src->zed.retrieveBodies(bodies, rt_params, BT_INSTANCE_MODULE_ID);
 
         if (ret == sl::ERROR_CODE::SUCCESS) {
             if (bodies.is_new) {

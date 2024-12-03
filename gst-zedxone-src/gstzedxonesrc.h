@@ -24,7 +24,7 @@
 
 #include <gst/base/gstpushsrc.h>
 
-#include "lib/include/ArgusCapture.hpp"
+#include "sl/CameraOne.hpp"
 
 G_BEGIN_DECLS
 
@@ -40,60 +40,57 @@ typedef struct _GstZedXOneSrc GstZedXOneSrc;
 typedef struct _GstZedXOneSrcClass GstZedXOneSrcClass;
 
 struct _GstZedXOneSrc {
-    GstPushSrc base_zedxonesrc;
+    GstPushSrc _base_zedxonesrc;
 
     // ZED X One camera object
-    std::unique_ptr<oc::ArgusBayerCapture> zed;   // ZED X One object
+    std::unique_ptr<sl::CameraOne> _zed;   // ZED X One object
 
-    gboolean is_started;       // grab started flag
-    gboolean stop_requested;   // stop request flagout_framesize
+    gboolean _isStarted;       // grab started flag
+    gboolean _stopRequested;   // stop request flagout_framesize
 
     // ----> Properties
-    gint camera_resolution;   // * Camera resolution [enum]
-    gint camera_fps;          // * Camera FPS
-    gint verbose_level;       // * Capture library verbose level
-    gint cam_timeout_msec;    // * Camera communication timeout
-    gint camera_id;           // * Camera ID
-    gboolean swap_rb;         // * Swap for RGB(A) or BGR(A) output
+    gint _cameraResolution;         // Camera resolution [enum]
+    gint _cameraFps;                // Camera FPS
+    gint _sdkVerboseLevel;          // Capture library verbose level
+    gfloat _camTimeout_sec;         // Camera open timeout
+    gint _cameraId;                 // Camera ID
+    gint64 _cameraSN;               // Camera Serial Number
+    GString _opencvCalibrationFile; // OpenCV calibration file path
+    gboolean _cameraImageFlip;      // Camera flipped
+    gboolean _enableHDR;            // HDR mode
 
-    gboolean auto_exposure;      // * Enable Automatic Exposure
-    gint exposure_range_min;     // * Minimum value for Automatic Exposure
-    gint exposure_range_max;     // * Maximum value for Automatic Exposure
-    gint manual_exposure_usec;   // * Manual Exposure time
+    gint _saturation;   // Image Saturation
+    gint _sharpness;    // Image Sharpness
+    gint _gamma;        // Image Gamma
+    gboolean _autoWb;   // Enable Automatic White Balance
+    gint _manualWb;     // Manual White Balance [2800,6500]
 
-    gboolean auto_analog_gain;          // * Enable Automatic Analog Gain
-    gint analog_frame_gain_range_min;   // * Minimum value for Automatic Analog Gain
-    gint analog_frame_gain_range_max;   // * Maximum value for Automatic Analog Gain
-    gfloat manual_analog_gain_db;       // * Manual Analog Gain
+    gboolean _autoExposure;      // Enable Automatic Exposure
+    gint _exposure_usec;         // Manual Exposure time [28,30000]
+    gint _exposureRange_min;     // Minimum value for Automatic Exposure [28,30000]
+    gint _exposureRange_max;     // Maximum value for Automatic Exposure [28,30000]
+    gint _exposureCompensation;  // Exposure Compensation [0,100]
 
-    gboolean auto_digital_gain;            // * Enable Automatic Digital Gain
-    gfloat digital_frame_gain_range_min;   // * Minimum value for Automatic Digital Gain
-    gfloat digital_frame_gain_range_max;   // * Maximum value for Automatic Digital Gain
-    gint manual_digital_gain_value;        // * Manual Digital Gain [1,256]
+    gboolean _autoAnalogGain;    // Enable Automatic Analog Gain
+    gint _analogGain;            // Manual Analog Gain [1000,16000]
+    gint _analogGainRange_min;   // Minimum value for Automatic Analog Gain [1000,16000]
+    gint _analogGainRange_max;   // Maximum value for Automatic Analog Gain [1000,16000]
+    
 
-    gboolean auto_wb;   // * Enable Automatic White Balance
-    gint manual_wb;     // * Manual White Balance [2800,12000]
-
-    gint ae_anti_banding;           // * Exposure anti banding - OFF, AUTO, 50Hz, 60Hz
-    gfloat color_saturation;        // * Color Saturation [0.0,2.0]
-    gfloat denoising;               // * Image Denoising [0.0,1.0]
-    gfloat exposure_compensation;   // * Exposure Compensation [-2.0,2.0]
-    gfloat sharpening;              // * Image Sharpening [0.0,1.0]
-
-    gint aec_agc_roi_x; // * AEC-AGC ROI top left x coordinate
-    gint aec_agc_roi_y; // * AEC-AGC ROI top left y coordinate
-    gint aec_agc_roi_w; // * AEC-AGC ROI width
-    gint aec_agc_roi_h; // * AEC-AGC ROI height
-
-    gfloat tone_mapping_r_gamma;   // [1.5,3.5]
-    gfloat tone_mapping_g_gamma;   // [1.5,3.5]
-    gfloat tone_mapping_b_gamma;   // [1.5,3.5]
+    gboolean _autoDigitalGain;  // Enable Automatic Digital Gain
+    gint _digitalGain;          // Manual Digital Gain [1,256]
+    gint _digitalGainRange_min; // Minimum value for Automatic Digital Gain [1,256]
+    gint _digitalGainRange_max; // Maximum value for Automatic Digital Gain [1,256]
+    
+    gint _denoising;    // Image Denoising [0,100]
     // <---- Properties
 
-    GstClockTime acq_start_time;   // Acquisition start time
+    int _realFps;   // Real FPS
 
-    GstCaps *caps;         // Stream caps
-    guint out_framesize;   // Output frame size in byte
+    GstClockTime _acqStartTime;   // Acquisition start time
+
+    GstCaps *_caps;         // Stream caps
+    guint _outFramesize;   // Output frame size in byte
 };
 
 struct _GstZedXOneSrcClass {

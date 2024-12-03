@@ -6,13 +6,13 @@
 
 <p align="center">
   <a href="#key-features">Key Features</a> •
-  <a href="#build">Build</a> •
-  <a href="#elements-properties">Elements properties</a> •
-  <a href="#metadata">Metadata</a> •
-  <a href="#pipeline-examples">Example pipelines</a> • 
-  <a href="#rtsp-server">RTSP Server</a> • 
-  <a href="#related">Related</a> •
-  <a href="#license">License</a>
+  <a href="#build-and-install"> Install</a> •
+  <a href="#elements-properties"> Elements properties</a> •
+  <a href="#metadata"> Metadata</a> •
+  <a href="#pipeline-examples"> Example pipelines</a> •
+  <a href="#rtsp-server"> RTSP Server</a> •
+  <a href="#related"> Related</a> •
+  <a href="#license"> License</a>
 </p>
 <br>
 
@@ -30,32 +30,32 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 * [`zedodoverlay`](./gst-zed-od-overlay): example transform filter element that receives ZED combined stream with metadata, extracts Object Detection information and draws the overlays on the oncoming filter
 * [`RTSP Server`](./gst-zed-rtsp-server): application for Linux that instantiates an RTSP server from a text launch pipeline "gst-launch" like.
 
-## Build
+## Build and install
 
 ### Prerequisites
 
- * [ZED SDK v4.1](https://www.stereolabs.com/developers/release/)
- * CMake (v3.6+)
- * GStreamer 1.0
+* [ZED SDK v4.1](https://www.stereolabs.com/developers/release/)
+* CMake (v3.6+)
+* GStreamer 1.0
 
 ### Windows installation
 
- * Install the latest ZED SDK v4 from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
- * Install [Git](https://git-scm.com/) or download a ZIP archive
- * Install [CMake](https://cmake.org/)
- * Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
- * The installer should set the installation path via the `GSTREAMER_1_0_ROOT_X86_64` environment variable.
- * Add the path `%GSTREAMER_1_0_ROOT_X86_64%\bin` to the system variable `PATH`
- * Run the following commands from a terminal or command prompt, assuming CMake and Git are in your `PATH`.
+* Install the latest ZED SDK v4 from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
+* Install [Git](https://git-scm.com/) or download a ZIP archive
+* Install [CMake](https://cmake.org/)
+* Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
+* The installer should set the installation path via the `GSTREAMER_1_0_ROOT_X86_64` environment variable.
+* Add the path `%GSTREAMER_1_0_ROOT_X86_64%\bin` to the system variable `PATH`
+* Run the following commands from a terminal or command prompt, assuming CMake and Git are in your `PATH`.
 
-     ```
+     ```bash
      git clone https://github.com/stereolabs/zed-gstreamer.git
      cd zed-gstreamer
      mkdir build
      cd build
      cmake -G "Visual Studio 16 2019" ..
      cmake --build . --target INSTALL --config Release
-     ```   
+     ```
 
 ### Linux installation
 
@@ -85,42 +85,46 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 #### Clone the repository
 
-    $ git clone https://github.com/stereolabs/zed-gstreamer.git
-    $ cd zed-gstreamer
+```bash
+git clone https://github.com/stereolabs/zed-gstreamer.git
+cd zed-gstreamer
+```
 
 #### Build
 
-    $ mkdir build
-    $ cd build
-    $ cmake -DCMAKE_BUILD_TYPE=Release ..
-    $ make # Note: do not use the `-j` flag because parallel build is not supported
-    $ sudo make install
+```bash
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make # Note: do not use the `-j` flag because parallel build is not supported
+sudo make install
+```
 
 ### Installation test
 
- * Check `ZED Video Source Element` installation inspecting its properties:
+* Check `ZED Video Source Element` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zedsrc`
 
-      `gst-inspect-1.0 zedsrc`
+* Check `ZED X One Video Source Element` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zedxonesrc`
 
- * Check `ZED X One Video Source Element` installation inspecting its properties:
-
-      `gst-inspect-1.0 zedxonesrc`
-
- * Check `ZED Video Demuxer` installation inspecting its properties:
-
-      `gst-inspect-1.0 zeddemux`
+* Check `ZED Video Demuxer` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zeddemux`
 
 * Check `ZED Data Mux Element` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zeddatamux`
 
-     `gst-inspect-1.0 zeddatamux`
+* Check `ZED CSV Sink Element` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zeddatacsvsink`
 
- * Check `ZED CSV Sink Element` installation inspecting its properties:
-
-      `gst-inspect-1.0 zeddatacsvsink`
-
- * Check `ZED Object Detection Overlay Element` installation inspecting its properties:
-
-      `gst-inspect-1.0 zedodoverlay`
+* Check `ZED Object Detection Overlay Element` installation inspecting its properties:
+  
+  `gst-inspect-1.0 zedodoverlay`
 
 ## Elements properties
 
@@ -128,7 +132,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 Most of the properties follow the same name as the C++ API. Except that `_` is replaced by `-` to follow gstreamer common formatting.
 
-```
+```bash
   area-file-path      : Area localization file that describes the surroundings, saved from a previous tracking session.
                         flags: readable, writable
                         String. Default: ""
@@ -450,141 +454,135 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
 
 ### `ZED X One Video Source Element` properties
 
-```
-  analog-gain         : Analog Gain value in dB
-                        flags: readable, writable
-                        Float. Range:             0.1 -              30 Default:               1 
-  anti-banding        : AE Anti Banding
-                        flags: readable, writable
-                        Enum "GstZedXOneSrcAntiBanding" Default: 1, "Automatic"
-                           (0): Disabled         - Anti Banding disabled
-                           (1): Automatic        - Automatic Anti Banding
-                           (2): 50 Hz            - 50 Hz Anti Banding
-                           (3): 60 Hz            - 60 Hz Anti Banding
-  auto-analog-gain    : Enable Automatic Analog Gain
-                        flags: readable, writable
-                        Boolean. Default: true
-  auto-analog-gain-range-max: Maximum Analog Gain in dB for the automatic analog gain setting
-                        flags: readable, writable
-                        Float. Range:             0.1 -              30 Default:              30 
-  auto-analog-gain-range-min: Minimum Analog Gain in dB for the automatic analog gain setting
-                        flags: readable, writable
-                        Float. Range:             0.1 -              30 Default:               0 
-  auto-digital-gain   : Enable Automatic Digital Gain
-                        flags: readable, writable
-                        Boolean. Default: true
-  auto-digital-gain-range-max: Maximum Digital Gain for the automatic digital gain setting
-                        flags: readable, writable
-                        Float. Range:               1 -             256 Default:             256 
-  auto-digital-gain-range-min: Minimum Digital Gain for the automatic digital gain setting
-                        flags: readable, writable
-                        Float. Range:               1 -             256 Default:               1 
-  auto-exposure       : Enable Automatic Exposure
-                        flags: readable, writable
-                        Boolean. Default: true
-  auto-exposure-range-max: Maximum exposure time in microseconds for the automatic exposure setting
-                        flags: readable, writable
-                        Integer. Range: 28 - 66000 Default: 66000 
-  auto-exposure-range-min: Minimum exposure time in microseconds for the automatic exposure setting
-                        flags: readable, writable
-                        Integer. Range: 28 - 66000 Default: 28 
-  auto-wb             : Enable Automatic White Balance
-                        flags: readable, writable
-                        Boolean. Default: true
+```bash
   blocksize           : Size in bytes to read per buffer (-1 = default)
                         flags: readable, writable
                         Unsigned Integer. Range: 0 - 4294967295 Default: 4096 
+  camera-flip         : Mirror image vertically if camera is flipped
+                        flags: readable, writable
+                        Boolean. Default: false
   camera-fps          : Camera frame rate
                         flags: readable, writable
-                        Enum "GstZedXOneSrcFPS" Default: 15, "15  FPS"
-                           (120): 120 FPS          - Only with SVGA. Not available with 4K mode
+                        Enum "GstZedXOneSrcFPS" Default: 30, "30  FPS"
+                           (120): 120 FPS          - Only with SVGA. Not with ZED X One 4K
                            (60): 60  FPS          - Not available with 4K mode
-                           (30): 30  FPS          - Not available with 4K mode
-                           (15): 15  FPS          - all resolutions (NO GMSL2)
+                           (30): 30  FPS          - Available with all the resolutions
+                           (15): 15  FPS          - Available with all the resolutions
   camera-id           : Select camera from cameraID
                         flags: readable, writable
-                        Integer. Range: 0 - 255 Default: 0 
+                        Integer. Range: -1 - 255 Default: -1 
   camera-resolution   : Camera Resolution
                         flags: readable, writable
                         Enum "GstZedXOneSrcResol" Default: 2, "HD1200"
-                           (3): 4K               - 3840x2160
+                           (4): 4K               - 3840x2160 (only ZED X One 4K)
+                           (3): QHDPLUS          - 3200x1800 (only ZED X One 4K)
                            (2): HD1200           - 1920x1200
                            (1): HD1080           - 1920x1080
-                           (0): SVGA             - 960x600
-  camera-timeout      : Connection timeout in milliseconds
+                           (0): SVGA             - 960x600 (only ZED X One GS)
+  camera-sn           : Select camera from the serial number
                         flags: readable, writable
-                        Integer. Range: 100 - 100000000 Default: 1000 
-  ctrl-aec-agc-roi-h  : Auto gain/exposure ROI height (-1 to not set ROI)
+                        Integer64. Range: 0 - 999999999 Default: 0 
+  camera-timeout      : Connection opening timeout in seconds
                         flags: readable, writable
-                        Integer. Range: -1 - 2160 Default: -1 
-  ctrl-aec-agc-roi-w  : Auto gain/exposure ROI width (-1 to not set ROI)
+                        Float. Range:             0.5 -           86400 Default:               5 
+  ctrl-analog-gain    : Camera control: Analog Gain value
                         flags: readable, writable
-                        Integer. Range: -1 - 3810 Default: -1 
-  ctrl-aec-agc-roi-x  : Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)
+                        Integer. Range: 1000 - 30000 Default: 30000 
+  ctrl-auto-analog-gain: Enable Automatic Analog Gain
                         flags: readable, writable
-                        Integer. Range: -1 - 3810 Default: -1 
-  ctrl-aec-agc-roi-y  : Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)
+                        Boolean. Default: true
+  ctrl-auto-analog-gain-range-max: Maximum Analog Gain for the automatic analog gain setting
                         flags: readable, writable
-                        Integer. Range: -1 - 2160 Default: -1 
-  denoising           : Denoising factor
+                        Integer. Range: 1000 - 30000 Default: 30000 
+  ctrl-auto-analog-gain-range-min: Minimum Analog Gain for the automatic analog gain setting
                         flags: readable, writable
-                        Float. Range:               0 -               1 Default:             0.5 
-  digital-gain        : Digital Gain value
+                        Integer. Range: 1000 - 30000 Default: 1000 
+  ctrl-auto-digital-gain: Enable Automatic Digital Gain
                         flags: readable, writable
-                        Integer. Range: 1 - 256 Default: 128 
+                        Boolean. Default: true
+  ctrl-auto-digital-gain-range-max: Maximum Digital Gain for the automatic digital gain setting
+                        flags: readable, writable
+                        Integer. Range: 1 - 256 Default: 256 
+  ctrl-auto-digital-gain-range-min: Minimum Digital Gain for the automatic digital gain setting
+                        flags: readable, writable
+                        Integer. Range: 1 - 256 Default: 1 
+  ctrl-auto-exposure  : Enable Automatic Exposure
+                        flags: readable, writable
+                        Boolean. Default: true
+  ctrl-auto-exposure-range-max: Maximum exposure time in microseconds for the automatic exposure setting
+                        flags: readable, writable
+                        Integer. Range: 1024 - 66666 Default: 66666 
+  ctrl-auto-exposure-range-min: Minimum exposure time in microseconds for the automatic exposure setting
+                        flags: readable, writable
+                        Integer. Range: 1024 - 66666 Default: 1024 
+  ctrl-denoising      : Denoising factor
+                        flags: readable, writable
+                        Integer. Range: 0 - 100 Default: 50 
+  ctrl-digital-gain   : Digital Gain value
+                        flags: readable, writable
+                        Integer. Range: 1 - 256 Default: 3 
+  ctrl-exposure-compensation: Exposure Compensation
+                        flags: readable, writable
+                        Integer. Range: 0 - 100 Default: 50 
+  ctrl-exposure-time  : Exposure time in microseconds
+                        flags: readable, writable
+                        Integer. Range: 1024 - 66666 Default: 10000 
+  ctrl-gamma          : Image gamma
+                        flags: readable, writable
+                        Integer. Range: 1 - 9 Default: 2 
+  ctrl-saturation     : Image saturation
+                        flags: readable, writable
+                        Integer. Range: 0 - 8 Default: 4 
+  ctrl-sharpness      : Image sharpness
+                        flags: readable, writable
+                        Integer. Range: 0 - 8 Default: 1 
+  ctrl-whitebalance-auto: Image automatic white balance
+                        flags: readable, writable
+                        Boolean. Default: true
+  ctrl-whitebalance-temperature: Image white balance temperature
+                        flags: readable, writable
+                        Integer. Range: 2800 - 6500 Default: 4200 
   do-timestamp        : Apply current stream time to buffers
                         flags: readable, writable
                         Boolean. Default: false
-  exposure-compensation: Exposure Compensation
+  enable-hdr          : Enable HDR if supported by resolution and frame rate.
                         flags: readable, writable
-                        Float. Range:              -2 -               2 Default:               0 
-  exposure-time       : Exposure time in microseconds
-                        flags: readable, writable
-                        Integer. Range: 28 - 66000 Default: 2000 
+                        Boolean. Default: false
   name                : The name of the object
-                        flags: readable, writable
+                        flags: readable, writable, 0x2000
                         String. Default: "zedxonesrc0"
   num-buffers         : Number of buffers to output before sending EOS (-1 = unlimited)
                         flags: readable, writable
                         Integer. Range: -1 - 2147483647 Default: -1 
+  opencv-calibration-file: Optional OpenCV Calibration File
+                        flags: readable, writable
+                        String. Default: ""
   parent              : The parent of the object
-                        flags: readable, writable
+                        flags: readable, writable, 0x2000
                         Object of type "GstObject"
-  saturation          : Color Saturation
-                        flags: readable, writable
-                        Float. Range:               0 -               2 Default:               1 
-  sharpening          : Image Sharpening
-                        flags: readable, writable
-                        Float. Range:               0 -               1 Default:               1 
-  swap-rb             : Swap Red and Blue color channels
-                        flags: readable, writable
-                        Boolean. Default: false
-  tone-map-gamma-b    : Set the tone mapping curve from a gamma value (Channel B)
-                        flags: readable, writable
-                        Float. Range:             1.5 -             3.5 Default:               2 
-  tone-map-gamma-g    : Set the tone mapping curve from a gamma value (Channel G)
-                        flags: readable, writable
-                        Float. Range:             1.5 -             3.5 Default:               2 
-  tone-map-gamma-r    : Set the tone mapping curve from a gamma value (Channel R)
-                        flags: readable, writable
-                        Float. Range:             1.5 -             3.5 Default:               2 
   typefind            : Run typefind before negotiating (deprecated, non-functional)
                         flags: readable, writable, deprecated
                         Boolean. Default: false
-  verbose-level       : Capture Library Verbose level
+  verbose-level       : ZED SDK Verbose level
                         flags: readable, writable
-                        Integer. Range: 0 - 4 Default: 0 
-  white-balance-temp  : White Balance Temperature [°]
-                        flags: readable, writable
-                        Integer. Range: 2800 - 12000 Default: 5000
+                        Integer. Range: 0 - 999 Default: 1 
 ```
 
 ### `ZED Video Demuxer Element` properties
 
-```
+```bash
   is-depth            : Aux source is GRAY16 depth
                         flags: readable, writable
-                        Boolean. Default: true
+                        Boolean. Default: false
+  is-mono             : Demux is applied to ZED X One monocular stream from zedxonesrc
+                        flags: readable, writable
+                        Boolean. Default: false
+  name                : The name of the object
+                        flags: readable, writable, 0x2000
+                        String. Default: "zeddemux0"
+  parent              : The parent of the object
+                        flags: readable, writable, 0x2000
+                        Object of type "GstObject"
   stream-data         : Enable binary data streaming on `src_data` pad
                         flags: readable, writable
                         Boolean. Default: false
@@ -592,7 +590,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
 
 ### `ZED Data CSV sink Element` properties
 
-```
+```bash
   append              : Append to an already existing CSV file
                         flags: readable, writable
                         Boolean. Default: false
@@ -653,10 +651,11 @@ The `GstZedSrcMeta` structure is provided to handle the `zedmeta` metadata and i
 ### GstZedSrcMeta structure
 
 The GstZedSrcMeta is subdivided in four sub-structures:
- * `ZedInfo`: info about camera model, stream type and original stream size
- * `ZedPose`: position and orientation of the camera if positional tracking is enabled
- * `ZedSensors`: sensors data (only ZED-Mini and ZED2)
- * `ZedObjectData`: detected object information (only ZED2)
+
+* `ZedInfo`: info about camera model, stream type and original stream size
+* `ZedPose`: position and orientation of the camera if positional tracking is enabled
+* `ZedSensors`: sensors data (only ZED-Mini and ZED2)
+* `ZedObjectData`: detected object information (only ZED2)
 
 More details about the sub-structures are available in the [`gstzedmeta.h` file](./gst-zed-meta/gstzedmeta.h)
 
@@ -667,7 +666,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`simple-fps_rendering.sh`](./scripts/linux/simple-fps_rendering.sh)
 * Windows: [`simple-fps_rendering.bat`](./scripts/windows/simple-fps_rendering.bat)
 
-```
+```bash
     gst-launch-1.0 zedsrc ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
@@ -676,7 +675,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`simple-depth-fps_rendering.sh`](./scripts/linux/simple-depth-fps_rendering.sh)
 * Windows: [`simple-depth-fps_rendering.bat`](./scripts/windows/simple-depth-fps_rendering.bat)
 
-```
+```bash
     gst-launch-1.0 zedsrc stream-type=3 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
@@ -685,7 +684,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb_left_right-fps_rendering.sh`](./scripts/linux/local-rgb_left_right-fps_rendering.sh)
 * Windows: [`local-rgb_left_right-fps_rendering.bat`](./scripts/windows/local-rgb_left_right-fps_rendering.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=2 ! queue ! \
     zeddemux is-depth=false name=demux \
@@ -698,7 +697,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb_left_depth-fps_rendering.sh`](./scripts/linux/local-rgb_left_depth-fps_rendering.sh)
 * Windows: [`local-rgb_left_depth-fps_rendering.bat`](./scripts/windows/local-rgb_left_depth-fps_rendering.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=4 ! queue ! \
     zeddemux name=demux \
@@ -711,7 +710,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb-depth-sens-csv.sh`](./scripts/linux/local-rgb-depth-sens-csv.sh)
 * Windows: [`local-rgb-depth-sens-csv.bat`](./scripts/windows/local-rgb-depth-sens-csv.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=4 ! \
     zeddemux stream-data=TRUE name=demux \
@@ -725,7 +724,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb-od_multi-overlay.sh`](./scripts/linux/local-rgb-od_multi-overlay.sh)
 * Windows: [`local-rgb-od_multi-overlay.bat`](./scripts/windows/local-rgb-od_multi-overlay.bat)
 
-```    
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=0 od-enabled=true od-detection-model=0 ! queue ! \
     zedodoverlay ! queue ! \
@@ -737,7 +736,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb-skel_fast-overlay.sh`](./scripts/linux/local-rgb-skel_fast-overlay.sh)
 * Windows: [`local-rgb-skel_fast-overlay.bat`](./scripts/windows/local-rgb-skel_fast-overlay.bat)
 
-```    
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=2 bt-enabled=true bt-detection-model=0 ! queue ! \
     zedodoverlay ! queue ! \
@@ -749,7 +748,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb-skel_accurate-overlay.sh`](./scripts/linux/local-rgb-skel_accurate-overlay.sh)
 * Windows: [`local-rgb-skel_accurate-overlay.bat`](./scripts/windows/local-rgb-skel_accurate-overlay.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=0 bt-enabled=true bt-detection-model=2 ! queue ! \
     zedodoverlay ! queue ! \
@@ -761,7 +760,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-od-fps_overlay.sh`](./scripts/linux/local-od-fps_overlay.sh)
 * Windows: [`local-od-fps_overlay.bat`](./scripts/windows/local-od-fps_overlay.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zedsrc stream-type=4 bt-enabled=true bt-detection-model=0 ! \
     zeddemux name=demux \
@@ -774,7 +773,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 * Linux: [`local-rgb-rescale-od-overlay.sh`](./scripts/linux/local-rgb-rescale-od-overlay.sh)
 * Windows: [`local-rgb-rescale-od-overlay.bat`](./scripts/windows/local-rgb-rescale-od-overlay.bat)
 
-```
+```bash
     gst-launch-1.0 \
     zeddatamux name=mux \
     zedsrc stream-type=4 bt-enabled=true bt-detection-model=0 ! \
@@ -790,7 +789,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 * Jetson: [`zedxone-simple-fps_rendering.sh`](./scripts/jetson/zedxone-simple-fps_rendering.sh)
 
-```
+```bash
     gst-launch-1.0 zedxonesrc ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
@@ -798,7 +797,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 * Jetson: [`zedxone-4k-simple-fps_rendering.sh`](./scripts/jetson/zedxone-4k-simple-fps_rendering.sh)
 
-```
+```bash
     gst-launch-1.0 zedxonesrc camera-resolution=3 camera-fps=15 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
@@ -806,36 +805,34 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 * Jetson: [`zedxone-simple-60-fps_rendering.sh`](./scripts/jetson/zedxone-simple-60-fps_rendering.sh)
 
-```
+```bash
     gst-launch-1.0 zedxonesrc camera-resolution=2 camera-fps=60 ! queue ! autovideoconvert ! queue ! fpsdisplaysink
 ```
 
-
-
-## RTSP Server
-
-*Available only for Linux*
+## RTSP Server *[Available only for Linux]*
 
 An application to start an RTSP server from a text pipeline (using the same sintax of the CLI command [`gst-launch-1.0`](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html)) is provided.
 
 Usage:
 
-```
+```bash
    gst-zed-rtsp-launch [OPTION?] PIPELINE-DESCRIPTION
 ```
 
 Help Options:
-*  `-h`, `--help` -> Show help options.
-*  `--help-all` -> Show all help options.
-*  `--help-gst` -> Show GStreamer Options.
+
+* `-h`, `--help` -> Show help options.
+* `--help-all` -> Show all help options.
+* `--help-gst` -> Show GStreamer Options.
 
 Application Options:
-*  `-p`, `--port=PORT` -> Port to listen on (default: 8554).
-*  `-a`, `--address=HOST` -> Host address (default: 127.0.0.1).
 
-Example: 
+* `-p`, `--port=PORT` -> Port to listen on (default: 8554).
+* `-a`, `--address=HOST` -> Host address (default: 127.0.0.1).
 
-```
+Example:
+
+```bash
    gst-zed-rtsp-launch zedsrc ! videoconvert ! 'video/x-raw, format=(string)I420' ! x264enc ! rtph264pay pt=96 name=pay0
 ```
 
@@ -845,25 +842,26 @@ It is mandatory to define at least one payload named `pay0`; it is possible to d
 
 Ready to use scripts are available in the `scripts` folder for Windows, Desktop Linux, and Jetson
 
-- local-od-fps_overlay : Left and Depth image rendering with object detection (FAST HUMAN BODY TRACKING) data (overlay).
-- local-rgb-depth-sens-csv : Left and Depth image rendering and sensors data saved in csv file.
-- local-rgb_left_depth-fps_rendering : Left and Depth image rendering.
-- local-rgb_left_right-fps_rendering : Left and Right image rendering.
-- local-rgb-od_multi-overlay : Left image rendering with object detection on overlay (MULTI_CLASS)
-- local-rgb-rescale-od-overlay : Left and Depth image rendering with object detection with rescaling filter
-- local-rgb-skel_accurate-overlay : Left image rendering with human body pose ACCURATE overlay
-- local-rgb-skel_fast-overlay : Left/Right in top/bottom image rendering with human body pose FAST overlay
+* local-od-fps_overlay : Left and Depth image rendering with object detection (FAST HUMAN BODY TRACKING) data (overlay).
+* local-rgb-depth-sens-csv : Left and Depth image rendering and sensors data saved in csv file.
+* local-rgb_left_depth-fps_rendering : Left and Depth image rendering.
+* local-rgb_left_right-fps_rendering : Left and Right image rendering.
+* local-rgb-od_multi-overlay : Left image rendering with object detection on overlay (MULTI_CLASS)
+* local-rgb-rescale-od-overlay : Left and Depth image rendering with object detection with rescaling filter
+* local-rgb-skel_accurate-overlay : Left image rendering with human body pose ACCURATE overlay
+* local-rgb-skel_fast-overlay : Left/Right in top/bottom image rendering with human body pose FAST overlay
 
-- [Linux only] udp and rtsp sender/receiver.
+* [Linux only] udp and rtsp sender/receiver.
 
 ## Related
 
-- [Stereolabs](https://www.stereolabs.com)
-- [ZED SDK](https://www.stereolabs.com/developers/)
+* [Stereolabs](https://www.stereolabs.com)
+* [ZED SDK](https://www.stereolabs.com/developers/)
 
 ## License
 
 This library is licensed under the LGPL License.
 
 ## Support
-If you need assistance go to our Community site at https://community.stereolabs.com/
+
+If you need assistance go to our [Community site](https://community.stereolabs.com/).
