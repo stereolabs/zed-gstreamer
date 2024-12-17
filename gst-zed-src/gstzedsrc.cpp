@@ -2239,7 +2239,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     init_params.camera_disable_self_calib = src->camera_disable_self_calib == TRUE;
     GST_INFO(" * Disable self calibration: %s",
              (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
-		
+    
     sl::String opencv_calibration_file(src->opencv_calibration_file.str);
     init_params.optional_opencv_calibration_file = opencv_calibration_file;
     GST_INFO(" * Calibration File: %s ", init_params.optional_opencv_calibration_file.c_str());
@@ -2369,13 +2369,11 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
                     src->roi_y >= 0 && src->roi_y < resolution.height &&
                     roi_x_end <= resolution.width && roi_y_end <= resolution.height) {
 
-                sl::uchar1 uint0 = 0;
-                sl::uchar1 uint1 = 1;
                 sl::Mat roi_mask(resolution, sl::MAT_TYPE::U8_C1, sl::MEM::CPU);
-                roi_mask.setTo(uint0);
-                for (int row = src->roi_y; row < roi_y_end; row++)
-                    for (int col = src->roi_y; col < roi_x_end; col++)
-                        roi_mask.setValue(col, row, uint1);
+                roi_mask.setTo<sl::uchar1>(0, sl::MEM::CPU);
+                for (unsigned int v = src->roi_y; v < roi_y_end; v++)
+                  for (unsigned int u = src->roi_x; u < roi_x_end; u++)
+                        roi_mask.setValue<sl::uchar1>(u, v, 255, sl::MEM::CPU);
                 
                 GST_INFO(" * ROI mask: (%d,%d)-%dx%d",
                         src->roi_x, src->roi_y, src->roi_w, src->roi_h);
