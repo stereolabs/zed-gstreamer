@@ -147,6 +147,16 @@ enum {
 };
 
 typedef enum {
+    GST_ZEDSRC_HD2K = 0, // 2208x1242
+    GST_ZEDSRC_HD1080 = 1, // 1920x1080
+    GST_ZEDSRC_HD1200 = 2, // 1920x1200
+    GST_ZEDSRC_HD720 = 3, // 1280x720
+    GST_ZEDSRC_SVGA = 4, // 960x600
+    GST_ZEDSRC_VGA = 5, // 672x376
+    GST_ZEDSRC_AUTO_RES = 6, // Default value for the camera model
+} GstZedSrcRes;
+
+typedef enum {
     GST_ZEDSRC_120FPS = 120,
     GST_ZEDSRC_100FPS = 100,
     GST_ZEDSRC_60FPS = 60,
@@ -220,7 +230,7 @@ typedef enum {
 /////////////////////////////////////////////////////////////////////////////
 
 // INITIALIZATION
-#define DEFAULT_PROP_CAM_RES        static_cast<gint>(sl::RESOLUTION::AUTO)
+#define DEFAULT_PROP_CAM_RES        GST_ZEDSRC_AUTO_RES
 #define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_15FPS
 #define DEFAULT_PROP_SDK_VERBOSE    0
 #define DEFAULT_PROP_CAM_FLIP       2
@@ -364,18 +374,18 @@ static GType gst_zedsrc_resol_get_type(void) {
 
     if (!zedsrc_resol_type) {
         static GEnumValue pattern_types[] = {
-            {static_cast<gint>(sl::RESOLUTION::HD2K), "2208x1242", "HD2K (USB3)"},
-            {static_cast<gint>(sl::RESOLUTION::HD1200), "1920x1200", "HD1200 (GMSL2)"},
-            {static_cast<gint>(sl::RESOLUTION::HD1080), "1920x1080", "HD1080 (USB3/GMSL2)"},
-            {static_cast<gint>(sl::RESOLUTION::HD720), "1280x720", "HD720 (USB3)"},
-            {static_cast<gint>(sl::RESOLUTION::SVGA), "960x600", "SVGA (GMSL2)"},
-            {static_cast<gint>(sl::RESOLUTION::VGA), "672x376", "VGA (USB3)"},
-            {static_cast<gint>(sl::RESOLUTION::AUTO), "Automatic",
+            {GST_ZEDSRC_HD2K, "2208x1242", "HD2K (USB3)"},
+            {GST_ZEDSRC_HD1080, "1920x1080", "HD1080 (USB3/GMSL2)"},
+            {GST_ZEDSRC_HD1200, "1920x1200", "HD1200 (GMSL2)"},
+            {GST_ZEDSRC_HD720, "1280x720", "HD720 (USB3)"},
+            {GST_ZEDSRC_SVGA, "960x600", "SVGA (GMSL2)"},
+            {GST_ZEDSRC_VGA, "672x376", "VGA (USB3)"},
+            {GST_ZEDSRC_AUTO_RES, "Automatic",
              "Default value for the camera model"},
             {0, NULL, NULL},
         };
 
-        zedsrc_resol_type = g_enum_register_static("GstZedsrcResolution", pattern_types);
+        zedsrc_resol_type = g_enum_register_static("GstZedSrcRes", pattern_types);
     }
 
     return zedsrc_resol_type;
@@ -2181,7 +2191,33 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
     GST_INFO("CAMERA INITIALIZATION PARAMETERS");
 
-    init_params.camera_resolution = static_cast<sl::RESOLUTION>(src->camera_resolution);
+    switch(src->camera_resolution) {
+        case GST_ZEDSRC_HD2K:
+            init_params.camera_resolution = sl::RESOLUTION::HD2K;
+            break;
+        case GST_ZEDSRC_HD1080:
+            init_params.camera_resolution = sl::RESOLUTION::HD1080;
+            break;
+        case GST_ZEDSRC_HD1200:
+            init_params.camera_resolution = sl::RESOLUTION::HD1200;
+            break;
+        case GST_ZEDSRC_HD720:
+            init_params.camera_resolution = sl::RESOLUTION::HD720;
+            break;
+        case GST_ZEDSRC_SVGA:
+            init_params.camera_resolution = sl::RESOLUTION::SVGA;
+            break;
+        case GST_ZEDSRC_VGA:
+            init_params.camera_resolution = sl::RESOLUTION::SVGA;
+            break;
+        case GST_ZEDSRC_AUTO_RES:
+            init_params.camera_resolution = sl::RESOLUTION::AUTO;
+            break;
+        default:
+            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                              ("Failed to set camera resolution"), (NULL));
+            return FALSE;
+    }
     GST_INFO(" * Camera resolution: %s", sl::toString(init_params.camera_resolution).c_str());
     init_params.camera_fps = src->camera_fps;
     GST_INFO(" * Camera FPS: %d", init_params.camera_fps);
