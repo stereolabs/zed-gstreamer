@@ -136,6 +136,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   area-file-path      : Area localization file that describes the surroundings, saved from a previous tracking session.
                         flags: readable, writable
                         String. Default: ""
+  blocksize           : Size in bytes to read per buffer (-1 = default)
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 4096 
   bt-allow-red-prec   : Set to TRUE to enable Body Tracking reduced inference precision 
                         flags: readable, writable
                         Boolean. Default: false
@@ -197,10 +200,10 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (2): Auto             - Auto mode (ZED2/ZED2i/ZED-M only)
   camera-resolution   : Camera Resolution
                         flags: readable, writable
-                        Enum "GstZedsrcResolution" Default: 6, "Default value for the camera model"
+                        Enum "GstZedSrcRes" Default: 6, "Default value for the camera model"
                            (0): HD2K (USB3)      - 2208x1242
-                           (2): HD1200 (GMSL2)   - 1920x1200
                            (1): HD1080 (USB3/GMSL2) - 1920x1080
+                           (2): HD1200 (GMSL2)   - 1920x1200
                            (3): HD720 (USB3)     - 1280x720
                            (4): SVGA (GMSL2)     - 960x600
                            (5): VGA (USB3)       - 672x376
@@ -398,6 +401,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   od-prediction-timeout-s: Object prediction timeout (sec)
                         flags: readable, writable
                         Float. Range:               0 -               1 Default:             0.2 
+  opencv-calibration-file: Optional OpenCV Calibration File
+                        flags: readable, writable
+                        String. Default: ""
   parent              : The parent of the object
                         flags: readable, writable, 0x2000
                         Object of type "GstObject"
