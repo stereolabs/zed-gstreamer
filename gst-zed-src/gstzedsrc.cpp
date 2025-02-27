@@ -134,6 +134,8 @@ enum {
     PROP_GAMMA,
     PROP_GAIN,
     PROP_EXPOSURE,
+    PROP_EXPOSURE_RANGE_MIN,
+    PROP_EXPOSURE_RANGE_MAX,
     PROP_AEC_AGC,
     PROP_AEC_AGC_ROI_X,
     PROP_AEC_AGC_ROI_Y,
@@ -312,6 +314,8 @@ typedef enum {
 #define DEFAULT_PROP_GAMMA             8
 #define DEFAULT_PROP_GAIN              60
 #define DEFAULT_PROP_EXPOSURE          80
+#define DEFAULT_PROP_EXPOSURE_RANGE_MIN 28
+#define DEFAULT_PROP_EXPOSURE_RANGE_MAX 66000
 #define DEFAULT_PROP_AEG_AGC           1
 #define DEFAULT_PROP_AEG_AGC_ROI_X     -1
 #define DEFAULT_PROP_AEG_AGC_ROI_Y     -1
@@ -1334,6 +1338,18 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                          DEFAULT_PROP_EXPOSURE,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
+        gobject_class, PROP_EXPOSURE_RANGE_MIN,
+        g_param_spec_int("ctrl-exposure-range-min", "Minimum Exposure time [µsec]",
+                         "Minimum exposure time in microseconds for the automatic exposure setting",
+                         28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MIN,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_EXPOSURE_RANGE_MAX,
+        g_param_spec_int("ctrl-exposure-range-max", "Maximum Exposure time [µsec]",
+                         "Maximum exposure time in microseconds for the automatic exposure setting",
+                         28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MAX,
+                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
         gobject_class, PROP_AEC_AGC,
         g_param_spec_boolean("ctrl-aec-agc", "Camera control: automatic gain and exposure",
                              "Camera automatic gain and exposure", DEFAULT_PROP_AEG_AGC,
@@ -1497,6 +1513,8 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->gamma = DEFAULT_PROP_GAMMA;
     src->gain = DEFAULT_PROP_GAIN;
     src->exposure = DEFAULT_PROP_EXPOSURE;
+    src->exposureRange_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
+    src->exposureRange_max = DEFAULT_PROP_EXPOSURE_RANGE_MAX;
     src->aec_agc = DEFAULT_PROP_AEG_AGC;
     src->aec_agc_roi_x = DEFAULT_PROP_AEG_AGC_ROI_X;
     src->aec_agc_roi_y = DEFAULT_PROP_AEG_AGC_ROI_Y;
@@ -1769,6 +1787,12 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
     case PROP_EXPOSURE:
         src->exposure = g_value_get_int(value);
         src->exposure_gain_updated = TRUE;
+        break;
+    case PROP_EXPOSURE_RANGE_MIN:
+        src->exposureRange_min = g_value_get_int(value);
+        break;
+    case PROP_EXPOSURE_RANGE_MAX:
+        src->exposureRange_max = g_value_get_int(value);
         break;
     case PROP_AEC_AGC:
         src->aec_agc = g_value_get_boolean(value);
@@ -2058,6 +2082,12 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     case PROP_EXPOSURE:
         g_value_set_int(value, src->exposure);
         break;
+    case PROP_EXPOSURE_RANGE_MIN:
+        g_value_set_int(value, src->exposureRange_min);
+        break;
+    case PROP_EXPOSURE_RANGE_MAX:
+        g_value_set_int(value, src->exposureRange_max);
+        break;
     case PROP_AEC_AGC:
         g_value_set_boolean(value, src->aec_agc);
         break;
@@ -2320,6 +2350,9 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
             src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side);
         }
+        
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AUTO_EXPOSURE_TIME_RANGE, src->exposureRange_min, src->exposureRange_max);
+        GST_INFO(" * AUTO EXPOSURE TIME RANGE: [%d,%d]", src->exposureRange_min, src->exposureRange_max);
     }
     if (src->whitebalance_temperature_auto == FALSE) {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO,
