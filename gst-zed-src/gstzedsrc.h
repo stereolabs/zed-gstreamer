@@ -139,6 +139,8 @@ struct _GstZedSrc {
     gint gamma;
     gint gain;
     gint exposure;
+    gint exposureRange_min;
+    gint exposureRange_max;
     gboolean aec_agc;
     gint aec_agc_roi_x;
     gint aec_agc_roi_y;

@@ -252,7 +252,13 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Integer. Range: 0 - 8 Default: 4 
   ctrl-exposure       : Camera exposure
                         flags: readable, writable
-                        Integer. Range: 0 - 100 Default: 80 
+                        Integer. Range: 0 - 100 Default: 80
+  ctrl-exposure-range-max: Maximum exposure time in microseconds for the automatic exposure setting
+                        flags: readable, writable
+                        Integer. Range: 28 - 66000 Default: 66000 
+  ctrl-exposure-range-min: Minimum exposure time in microseconds for the automatic exposure setting
+                        flags: readable, writable
+                        Integer. Range: 28 - 66000 Default: 28 
   ctrl-gain           : Camera gain
                         flags: readable, writable
                         Integer. Range: 0 - 100 Default: 60 
