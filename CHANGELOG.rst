@@ -1,24 +1,18 @@
 LATEST CHANGES
 ==============
 
-2024-12-03
-----------
-- The `zedxonesrc` element now uses the ZED SDK object `sl::CameraOne` instead of the `zedx-one-capture` library
-  
- * ZED X One images are now automatically rectified
- * ZED X One IMU data can be retrieved as image metadata
- * ZED X One 4K supports HDR mode
+ZED SDK v4.2.5
+--------------
 
-2024-04-23
-----------
-- Add new `zedxonesrc` element to get ZED X One color stream and control the camera
-
-2024-04-05
-----------
 - Add ZED SDK v4.1 compatibility
 - Add support to `NEURAL_PLUS` depth mode
 - Add runtime update of Gain and Exposure. Thx @ryanppeters
 - Add new property `positional-tracking-mode` to select `GEN_1` and `GEN_2`
+- Add new `zedxonesrc` element to get ZED X One color stream and control the camera
+- The `zedxonesrc` element now uses the ZED SDK object `sl::CameraOne` instead of the `zedx-one-capture` library  
+ * ZED X One images are now automatically rectified
+ * ZED X One IMU data can be retrieved as image metadata
+ * ZED X One 4K supports HDR mode
 
 ZED SDK v4.0.8
 --------------
