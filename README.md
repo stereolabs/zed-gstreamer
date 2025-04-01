@@ -34,7 +34,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 ### Prerequisites
 
-* [ZED SDK v4.1](https://www.stereolabs.com/developers/release/)
+* [ZED SDK v4.2.5](https://www.stereolabs.com/developers/release/4.2)
 * CMake (v3.6+)
 * GStreamer 1.0
 
@@ -63,7 +63,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 * Install the latest ZED SDK v4 from the [official download page](https://www.stereolabs.com/developers/release/)
 
-* Update list of `apt` available packages
+* Update the list of `apt` available packages
 
      `$ sudo apt update`
 
@@ -102,31 +102,31 @@ sudo make install
 
 ### Installation test
 
-* Check `ZED Video Source Element` installation inspecting its properties:
+* Check `ZED Video Source Element` installation, inspecting its properties:
   
   `gst-inspect-1.0 zedsrc`
 
-* Check `ZED X One Video Source Element` installation inspecting its properties:
+* Check `ZED X One Video Source Element` installation, inspecting its properties:
   
   `gst-inspect-1.0 zedxonesrc`
 
-* Check `ZED Video Demuxer` installation inspecting its properties:
+* Check `ZED Video Demuxer` installation, inspecting its properties:
   
   `gst-inspect-1.0 zeddemux`
 
-* Check `ZED Data Mux Element` installation inspecting its properties:
+* Check `ZED Data Mux Element` installation, inspecting its properties:
   
   `gst-inspect-1.0 zeddatamux`
 
-* Check `ZED CSV Sink Element` installation inspecting its properties:
+* Check `ZED CSV Sink Element` installation, inspecting its properties:
   
   `gst-inspect-1.0 zeddatacsvsink`
 
-* Check `ZED Object Detection Overlay Element` installation inspecting its properties:
+* Check `ZED Object Detection Overlay Element` installation, inspecting its properties:
   
   `gst-inspect-1.0 zedodoverlay`
 
-## Elements properties
+## Element properties
 
 ### `ZED Video Source Element` properties
 
