@@ -34,13 +34,13 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 ### Prerequisites
 
-* [ZED SDK v4.2.5](https://www.stereolabs.com/developers/release/4.2)
+* [ZED SDK v5.0-EA](https://www.stereolabs.com/developers/release/5.0)
 * CMake (v3.6+)
 * GStreamer 1.0
 
 ### Windows installation
 
-* Install the latest ZED SDK v4 from the [official download page](https://www.stereolabs.com/developers/release/) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
+* Install the latest ZED SDK v5.0-EA from the [official download page](https://www.stereolabs.com/developers/release/5.0) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
 * Install [Git](https://git-scm.com/) or download a ZIP archive
 * Install [CMake](https://cmake.org/)
 * Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
@@ -61,7 +61,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 #### Install prerequisites
 
-* Install the latest ZED SDK v4 from the [official download page](https://www.stereolabs.com/developers/release/)
+* Install the latest ZED SDK v5.0-EA from the [official download page](https://www.stereolabs.com/developers/release/5.0)
 
 * Update the list of `apt` available packages
 
