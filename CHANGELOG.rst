@@ -1,6 +1,10 @@
 LATEST CHANGES
 ==============
 
+2025-04-18
+----------
+- Add support for ZED SDK v5.0 EA
+
 ZED SDK v4.2.5
 --------------
 
