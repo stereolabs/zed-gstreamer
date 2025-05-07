@@ -83,6 +83,8 @@ struct _GstZedXOneSrc {
     gint _digitalGainRange_max; // Maximum value for Automatic Digital Gain [1,256]
     
     gint _denoising;    // Image Denoising [0,100]
+
+    gboolean _output_rectified_image; // Output rectified image
     // <---- Properties
 
     int _realFps;   // Real FPS
