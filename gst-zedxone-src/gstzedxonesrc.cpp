@@ -1182,7 +1182,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         return true;
     };
 
-    ret = src->_zed->retrieveImage(img, sl::VIEW::LEFT, sl::MEM::CPU);
+    ret = src->_zed->retrieveImage(img, sl::VIEW::LEFT_UNRECTIFIED, sl::MEM::CPU);
     if(!check_ret(ret)) return GST_FLOW_ERROR;
     // <---- Retrieve images
 
