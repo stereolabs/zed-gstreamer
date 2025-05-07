@@ -80,6 +80,7 @@ enum {
     PROP_DIGITAL_GAIN_RANGE_MIN,
     PROP_DIGITAL_GAIN_RANGE_MAX,
     PROP_DENOISING,
+    PROP_OUTPUT_RECTIFIED_IMAGE,
     N_PROPERTIES
 };
 
@@ -129,6 +130,7 @@ typedef enum {
 #define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MIN 1
 #define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX 256
 #define DEFAULT_PROP_DENOISING 50
+#define DEFAULT_PROP_OUTPUT_RECTIFIED_IMAGE TRUE
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define GST_TYPE_ZEDXONE_RESOL (gst_zedxonesrc_resol_get_type())
@@ -458,6 +460,12 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
         g_param_spec_int("ctrl-denoising", "Camera control: Denoising", "Denoising factor", 0, 100,
                          DEFAULT_PROP_DENOISING,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OUTPUT_RECTIFIED_IMAGE,
+        g_param_spec_boolean("output-rectified-image", "Rectify camera image",
+                         "Enable image rectification", DEFAULT_PROP_OUTPUT_RECTIFIED_IMAGE,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
@@ -515,6 +523,8 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_digitalGain = DEFAULT_PROP_DIGITAL_GAIN;
 
     src->_denoising = DEFAULT_PROP_DENOISING;
+
+    src->_output_rectified_image = DEFAULT_PROP_OUTPUT_RECTIFIED_IMAGE;
     // <---- Parameters initialization
 
     src->_stopRequested = FALSE;
@@ -622,6 +632,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     case PROP_DENOISING:
         src->_denoising = g_value_get_int(value);
         break;
+    case PROP_OUTPUT_RECTIFIED_IMAGE:
+        src->_output_rectified_image = g_value_get_boolean(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
@@ -721,6 +734,9 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;    
     case PROP_DENOISING:
         g_value_set_int(value, src->_denoising);
+        break;
+    case PROP_OUTPUT_RECTIFIED_IMAGE:
+        g_value_set_boolean(value, src->_output_rectified_image);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
@@ -1182,7 +1198,8 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         return true;
     };
 
-    ret = src->_zed->retrieveImage(img, sl::VIEW::LEFT_UNRECTIFIED, sl::MEM::CPU);
+    const auto image_type = src->_output_rectified_image ? sl::VIEW::LEFT : sl::VIEW::LEFT_UNRECTIFIED;
+    ret = src->_zed->retrieveImage(img, image_type, sl::MEM::CPU);
     if(!check_ret(ret)) return GST_FLOW_ERROR;
     // <---- Retrieve images
 
