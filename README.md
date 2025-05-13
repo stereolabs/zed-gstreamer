@@ -566,6 +566,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   num-buffers         : Number of buffers to output before sending EOS (-1 = unlimited)
                         flags: readable, writable
                         Integer. Range: -1 - 2147483647 Default: -1 
+  output-rectified-image: Enable image rectification
+                        flags: readable, writable
+                        Boolean. Default: true
   opencv-calibration-file: Optional OpenCV Calibration File
                         flags: readable, writable
                         String. Default: ""
