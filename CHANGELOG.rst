@@ -1,6 +1,10 @@
 LATEST CHANGES
 ==============
 
+2025-04-24
+----------
+- Fix build issues with SDK 5.0 EA on Jetson
+
 2025-04-18
 ----------
 - Add support for ZED SDK v5.0 EA
