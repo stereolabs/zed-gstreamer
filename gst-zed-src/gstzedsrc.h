@@ -54,6 +54,8 @@ struct _GstZedSrc {
     gint camera_id;
     gint64 camera_sn;
     GString svo_file;
+    GString rec_file;
+    gboolean recording_status;
     GString opencv_calibration_file;
     GString stream_ip;
     gint stream_port;

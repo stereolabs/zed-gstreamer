@@ -41,6 +41,8 @@ static void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *
 static void gst_zedsrc_dispose(GObject *object);
 static void gst_zedsrc_finalize(GObject *object);
 
+static void gst_zedsrc_record(GstZedSrc *src, const gboolean record);
+
 static gboolean gst_zedsrc_start(GstBaseSrc *src);
 static gboolean gst_zedsrc_stop(GstBaseSrc *src);
 static GstCaps *gst_zedsrc_get_caps(GstBaseSrc *src, GstCaps *filter);
@@ -145,6 +147,8 @@ enum {
     PROP_WHITEBALANCE,
     PROP_WHITEBALANCE_AUTO,
     PROP_LEDSTATUS,
+    PROP_RECORDINGSTATUS,
+    PROP_RECORDING_FILENAME,
     N_PROPERTIES
 };
 
@@ -155,7 +159,7 @@ typedef enum {
     GST_ZEDSRC_HD720 = 3, // 1280x720
     GST_ZEDSRC_SVGA = 4, // 960x600
     GST_ZEDSRC_VGA = 5, // 672x376
-    GST_ZEDSRC_AUTO_RES = 6, // Default value for the camera model
+    GST_ZEDSRC_AUTO_RES = 6, // Default value for the camera mode
 } GstZedSrcRes;
 
 typedef enum {
@@ -335,6 +339,9 @@ typedef enum {
 #define DEFAULT_PROP_WHITEBALANCE      4600
 #define DEFAULT_PROP_WHITEBALANCE_AUTO 1
 #define DEFAULT_PROP_LEDSTATUS         1
+#define DEFAULT_PROP_RECORDINGSTATUS   FALSE
+#define DEFAULT_PROP_RECORDING_FILENAME ""
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define GST_TYPE_ZED_SIDE (gst_zedsrc_side_get_type())
@@ -1411,6 +1418,16 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
         g_param_spec_boolean("ctrl-led-status", "Camera control: led status", "Camera LED on/off",
                              DEFAULT_PROP_LEDSTATUS,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_RECORDINGSTATUS,
+        g_param_spec_boolean("recording-status", "Record control: record status", "Camera Recording on/off",
+                             DEFAULT_PROP_RECORDINGSTATUS,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_RECORDING_FILENAME,
+        g_param_spec_string("recording-filename", "Recording filename", "Camera Recording Filename",
+                             DEFAULT_PROP_RECORDING_FILENAME,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_zedsrc_reset(GstZedSrc *src) {
@@ -1534,6 +1551,9 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->whitebalance_temperature = DEFAULT_PROP_WHITEBALANCE;
     src->whitebalance_temperature_auto = DEFAULT_PROP_WHITEBALANCE_AUTO;
     src->led_status = DEFAULT_PROP_LEDSTATUS;
+
+    src->recording_status = DEFAULT_PROP_RECORDINGSTATUS;
+    src->rec_file = *g_string_new(DEFAULT_PROP_RECORDING_FILENAME);
     // <---- Parameters initialization
 
     src->stop_requested = FALSE;
@@ -1837,11 +1857,19 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
     case PROP_LEDSTATUS:
         src->led_status = g_value_get_boolean(value);
         break;
+    case PROP_RECORDINGSTATUS:
+        gst_zedsrc_record(src, g_value_get_boolean(value));
+        break;
+    case PROP_RECORDING_FILENAME:
+        str = g_value_get_string(value);
+        src->rec_file = *g_string_new(str);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
     }
 }
+
 
 void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, GParamSpec *pspec) {
     GstZedSrc *src;
@@ -2125,7 +2153,13 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     case PROP_LEDSTATUS:
         g_value_set_boolean(value, src->led_status);
         break;
-
+        // TODO! Add getting the recording properties here
+    case PROP_RECORDINGSTATUS:
+        g_value_set_boolean(value, src->recording_status);
+        break;
+    case PROP_RECORDING_FILENAME:
+        g_value_set_string(value, src->rec_file.str);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
@@ -2202,6 +2236,23 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
     GST_DEBUG_OBJECT(src, "Created caps %" GST_PTR_FORMAT, src->caps);
 
     return TRUE;
+}
+
+static void gst_zedsrc_record(GstZedSrc *src, const gboolean record) {
+    if (record && !src->recording_status) {
+        sl::RecordingParameters recording_parameters;
+        recording_parameters.video_filename.set(src->rec_file.str);
+        recording_parameters.compression_mode = sl::SVO_COMPRESSION_MODE::H265;
+        auto returned_state = src->zed.enableRecording(recording_parameters);
+        if (returned_state != sl::ERROR_CODE::SUCCESS) {
+            g_warning("Failed to enable recording: %s", sl::toString(returned_state).c_str());
+        }
+        src->recording_status = record;
+    }
+    if (!record && src->recording_status) {
+        src->zed.disableRecording();
+        src->recording_status = record;
+    }
 }
 
 static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
