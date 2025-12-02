@@ -2762,6 +2762,17 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
     // <---- Set runtime parameters
 
+    CUcontext zctx = src->zed.getCUDAContext();
+
+    /// Push zed cuda context as current
+    int cu_err = (int)cudaGetLastError();
+    if (cu_err>0)
+    GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                      ("Cuda ERROR trigger before ZED SDK : %d",cu_err),
+                      (NULL));
+
+    cuCtxPushCurrent_v2(zctx);
+
     // ----> ZED grab
     ret = src->zed.grab(zedRtParams);
 
@@ -2770,6 +2781,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                           ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
                            sl::toVerbose(ret).c_str()),
                           (NULL));
+        cuCtxPopCurrent_v2(NULL);
         return GST_FLOW_ERROR;
     }
     // <---- ZED grab
@@ -2783,6 +2795,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // Memory mapping
     if (FALSE == gst_buffer_map(buf, &minfo, GST_MAP_WRITE)) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"), (NULL));
+        cuCtxPopCurrent_v2(NULL);
         return GST_FLOW_ERROR;
     }
 
@@ -2852,6 +2865,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     } else {
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
     }
+    cuCtxPopCurrent_v2(NULL);
     // <---- Memory copy
 
     // ----> Info metadata
