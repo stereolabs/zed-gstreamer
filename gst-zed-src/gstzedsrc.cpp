@@ -69,6 +69,7 @@ enum {
     PROP_DEPTH_MAX,
     PROP_DEPTH_MODE,
     PROP_DIS_SELF_CALIB,
+    PROP_CAP_GRAB_FPS,
     PROP_ROI,
     PROP_ROI_X,
     PROP_ROI_Y,
@@ -252,6 +253,7 @@ typedef enum {
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
 #define DEFAULT_PROP_DEPTH_STAB     1
 //#define DEFAULT_PROP_RIGHT_DEPTH              FALSE
+#define DEFAULT_PROP_CAP_GRAB_FPS 0
 #define DEFAULT_PROP_ROI   FALSE
 #define DEFAULT_PROP_ROI_X -1
 #define DEFAULT_PROP_ROI_Y -1
@@ -823,6 +825,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                           DEFAULT_PROP_CAM_FPS,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+
     g_object_class_install_property(
         gobject_class, PROP_STREAM_TYPE,
         g_param_spec_enum("stream-type", "Image stream type", "Image stream type",
@@ -904,6 +907,12 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                              "Disable the self calibration processing when the camera is opened",
                              DEFAULT_PROP_DIS_SELF_CALIB,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_CAP_GRAB_FPS,
+        g_param_spec_int("grab-cap-fps", "Processing frame rate", "Processing frame rate",
+                          0, 60,DEFAULT_PROP_CAP_GRAB_FPS,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     /*g_object_class_install_property( gobject_class, PROP_RIGHT_DEPTH_ENABLE,
                                      g_param_spec_boolean("enable-right-side-measure", "Enable right
@@ -1449,16 +1458,15 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->svo_file = *g_string_new(DEFAULT_PROP_SVO_FILE);
     src->opencv_calibration_file = *g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
     src->stream_ip = *g_string_new(DEFAULT_PROP_STREAM_IP);
-
     src->stream_port = DEFAULT_PROP_STREAM_PORT;
     src->stream_type = DEFAULT_PROP_STREAM_TYPE;
-
     src->depth_min_dist = DEFAULT_PROP_DEPTH_MIN;
     src->depth_max_dist = DEFAULT_PROP_DEPTH_MAX;
     src->depth_mode = DEFAULT_PROP_DEPTH_MODE;
     src->camera_disable_self_calib = DEFAULT_PROP_DIS_SELF_CALIB;
     src->depth_stabilization = DEFAULT_PROP_DEPTH_STAB;
     src->coord_sys = DEFAULT_PROP_COORD_SYS;
+    src->grab_compute_capping_fps = DEFAULT_PROP_CAP_GRAB_FPS;
     src->confidence_threshold = DEFAULT_PROP_CONFIDENCE_THRESH;
     src->texture_confidence_threshold = DEFAULT_PROP_TEXTURE_CONF_THRESH;
     src->measure3D_reference_frame = DEFAULT_PROP_3D_REF_FRAME;
@@ -1598,6 +1606,9 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_DEPTH_MODE:
         src->depth_mode = g_value_get_enum(value);
+        break;
+    case PROP_CAP_GRAB_FPS:
+        src->grab_compute_capping_fps = g_value_get_int(value);
         break;
     case PROP_DIS_SELF_CALIB:
         src->camera_disable_self_calib = g_value_get_boolean(value);
@@ -1895,6 +1906,9 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         break;
     case PROP_DEPTH_MODE:
         g_value_set_enum(value, src->depth_mode);
+        break;
+    case PROP_CAP_GRAB_FPS:
+        g_value_set_int(value, src->grab_compute_capping_fps);
         break;
     case PROP_COORD_SYS:
         g_value_set_enum(value, src->coord_sys);
@@ -2305,9 +2319,9 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Depth Stabilization: %d", init_params.depth_stabilization);
     init_params.enable_right_side_measure = false;   // src->enable_right_side_measure==TRUE;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib == TRUE;
-    GST_INFO(" * Disable self calibration: %s",
-             (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
-    
+    GST_INFO(" * Disable self calibration: %s",(init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
+    init_params.grab_compute_capping_fps = (float)src->grab_compute_capping_fps;
+    GST_INFO(" * Grab FPS Cap : %d", (int)init_params.grab_compute_capping_fps);
     sl::String opencv_calibration_file(src->opencv_calibration_file.str);
     init_params.optional_opencv_calibration_file = opencv_calibration_file;
     GST_INFO(" * Calibration File: %s ", init_params.optional_opencv_calibration_file.c_str());
