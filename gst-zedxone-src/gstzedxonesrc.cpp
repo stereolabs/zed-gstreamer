@@ -625,17 +625,17 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_camTimeout_sec = DEFAULT_PROP_TIMEOUT_SEC;
     src->_cameraId = DEFAULT_PROP_CAM_ID;
     src->_cameraSN = DEFAULT_PROP_CAM_SN;
-    src->_svoFile = *g_string_new(DEFAULT_PROP_SVO_FILE);
-    src->_streamIp = *g_string_new(DEFAULT_PROP_STREAM_IP);
+    src->_svoFile = g_string_new(DEFAULT_PROP_SVO_FILE);
+    src->_streamIp = g_string_new(DEFAULT_PROP_STREAM_IP);
     src->_streamPort = DEFAULT_PROP_STREAM_PORT;
-    src->_opencvCalibrationFile = *g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
+    src->_opencvCalibrationFile = g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
     src->_cameraImageFlip = DEFAULT_PROP_CAM_FLIP;
     src->_enableHDR = DEFAULT_PROP_ENABLE_HDR;
     src->_svoRealTime = DEFAULT_PROP_SVO_REAL_TIME;
     src->_coordUnit = DEFAULT_PROP_COORD_UNIT;
     src->_coordSys = DEFAULT_PROP_COORD_SYS;
-    src->_sdkLogFile = *g_string_new(DEFAULT_PROP_SDK_LOG_FILE);
-    src->_settingsPath = *g_string_new(DEFAULT_PROP_SETTINGS_PATH);
+    src->_sdkLogFile = g_string_new(DEFAULT_PROP_SDK_LOG_FILE);
+    src->_settingsPath = g_string_new(DEFAULT_PROP_SETTINGS_PATH);
     src->_asyncRecovery = DEFAULT_PROP_ASYNC_RECOVERY;
 
     src->_saturation = DEFAULT_PROP_SATURATION;
@@ -703,18 +703,18 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_SVO_FILE:
         str = g_value_get_string(value);
-        src->_svoFile = *g_string_new(str);
+        g_string_assign(src->_svoFile, str);
         break;
     case PROP_STREAM_IP:
         str = g_value_get_string(value);
-        src->_streamIp = *g_string_new(str);
+        g_string_assign(src->_streamIp, str);
         break;
     case PROP_STREAM_PORT:
         src->_streamPort = g_value_get_int(value);
         break;
     case PROP_OPENCV_CALIB_FILE:
         str = g_value_get_string(value);
-        src->_opencvCalibrationFile = *g_string_new(str);
+        g_string_assign(src->_opencvCalibrationFile, str);
         break;
     case PROP_IMAGE_FLIP:
         src->_cameraImageFlip = g_value_get_boolean(value);
@@ -733,11 +733,11 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_SDK_LOG_FILE:
         str = g_value_get_string(value);
-        src->_sdkLogFile = *g_string_new(str);
+        g_string_assign(src->_sdkLogFile, str);
         break;
     case PROP_SETTINGS_PATH:
         str = g_value_get_string(value);
-        src->_settingsPath = *g_string_new(str);
+        g_string_assign(src->_settingsPath, str);
         break;
     case PROP_ASYNC_RECOVERY:
         src->_asyncRecovery = g_value_get_boolean(value);
@@ -834,16 +834,16 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         g_value_set_int64(value, src->_cameraSN);
         break;
     case PROP_SVO_FILE:
-        g_value_set_string(value, src->_svoFile.str);
+        g_value_set_string(value, src->_svoFile->str);
         break;
     case PROP_STREAM_IP:
-        g_value_set_string(value, src->_streamIp.str);
+        g_value_set_string(value, src->_streamIp->str);
         break;
     case PROP_STREAM_PORT:
         g_value_set_int(value, src->_streamPort);
         break;
     case PROP_OPENCV_CALIB_FILE:
-        g_value_set_string(value, src->_opencvCalibrationFile.str);
+        g_value_set_string(value, src->_opencvCalibrationFile->str);
         break;
     case PROP_IMAGE_FLIP:
         g_value_set_boolean(value, src->_cameraImageFlip);
@@ -861,10 +861,10 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         g_value_set_enum(value, src->_coordSys);
         break;
     case PROP_SDK_LOG_FILE:
-        g_value_set_string(value, src->_sdkLogFile.str);
+        g_value_set_string(value, src->_sdkLogFile->str);
         break;
     case PROP_SETTINGS_PATH:
-        g_value_set_string(value, src->_settingsPath.str);
+        g_value_set_string(value, src->_settingsPath->str);
         break;
     case PROP_ASYNC_RECOVERY:
         g_value_set_boolean(value, src->_asyncRecovery);
@@ -959,6 +959,22 @@ void gst_zedxonesrc_finalize(GObject *object) {
         src->_caps = NULL;
     }
 
+    if (src->_svoFile) {
+        g_string_free(src->_svoFile, TRUE);
+    }
+    if (src->_streamIp) {
+        g_string_free(src->_streamIp, TRUE);
+    }
+    if (src->_opencvCalibrationFile) {
+        g_string_free(src->_opencvCalibrationFile, TRUE);
+    }
+    if (src->_sdkLogFile) {
+        g_string_free(src->_sdkLogFile, TRUE);
+    }
+    if (src->_settingsPath) {
+        g_string_free(src->_settingsPath, TRUE);
+    }
+
     G_OBJECT_CLASS(gst_zedxonesrc_parent_class)->finalize(object);
 }
 
@@ -1012,10 +1028,10 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     GST_INFO("CAMERA INITIALIZATION PARAMETERS");
 
-    if (src->_svoFile.len != 0) {
-        init_params.input.setFromSVOFile(sl::String(src->_svoFile.str));
+    if (src->_svoFile->len != 0) {
+        init_params.input.setFromSVOFile(sl::String(src->_svoFile->str));
         init_params.svo_real_time_mode = src->_svoRealTime;
-        GST_INFO(" * Input SVO file: %s", src->_svoFile.str);
+        GST_INFO(" * Input SVO file: %s", src->_svoFile->str);
         GST_INFO(" * SVO real time mode: %s", (init_params.svo_real_time_mode ? "TRUE" : "FALSE"));
     } else if (src->_cameraSN != 0) {
         init_params.input.setFromSerialNumber(static_cast<unsigned int>(src->_cameraSN));
@@ -1023,9 +1039,9 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     } else if (src->_cameraId != -1) {
         init_params.input.setFromCameraID(src->_cameraId);
         GST_INFO(" * Input Camera ID: %d", src->_cameraId);
-    } else if (src->_streamIp.len != 0) {
-        init_params.input.setFromStream(sl::String(src->_streamIp.str), src->_streamPort);
-        GST_INFO(" * Input Stream: %s:%d", src->_streamIp.str, src->_streamPort);
+    } else if (src->_streamIp->len != 0) {
+        init_params.input.setFromStream(sl::String(src->_streamIp->str), src->_streamPort);
+        GST_INFO(" * Input Stream: %s:%d", src->_streamIp->str, src->_streamPort);
     }
 
     switch(src->_cameraResolution) {
@@ -1057,7 +1073,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     init_params.sdk_verbose = src->_sdkVerboseLevel;
     GST_INFO(" * SDK verbose level: %d", init_params.sdk_verbose);
 
-    init_params.sdk_verbose_log_file = sl::String(src->_sdkLogFile.str);
+    init_params.sdk_verbose_log_file = sl::String(src->_sdkLogFile->str);
     GST_INFO(" * SDK verbose log file: %s", init_params.sdk_verbose_log_file.c_str());
 
     init_params.camera_image_flip = (src->_cameraImageFlip?sl::FLIP_MODE::ON:sl::FLIP_MODE::OFF);
@@ -1066,7 +1082,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     init_params.enable_hdr = src->_enableHDR;
     GST_INFO(" * Enable HDR: %s", (init_params.enable_hdr?"TRUE":"FALSE"));
 
-    sl::String opencv_calibration_file(src->_opencvCalibrationFile.str);
+    sl::String opencv_calibration_file(src->_opencvCalibrationFile->str);
     init_params.optional_opencv_calibration_file = opencv_calibration_file;
     GST_INFO(" * OpenCV calib file: %s", init_params.optional_opencv_calibration_file.c_str());
 
@@ -1076,7 +1092,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     init_params.coordinate_system = static_cast<sl::COORDINATE_SYSTEM>(src->_coordSys);
     GST_INFO(" * Coordinate system: %s", sl::toString(init_params.coordinate_system).c_str());
 
-    init_params.optional_settings_path = sl::String(src->_settingsPath.str);
+    init_params.optional_settings_path = sl::String(src->_settingsPath->str);
     GST_INFO(" * Optional settings path: %s", init_params.optional_settings_path.c_str());
 
     init_params.async_grab_camera_recovery = src->_asyncRecovery;

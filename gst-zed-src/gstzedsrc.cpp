@@ -1594,9 +1594,9 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->camera_image_flip = DEFAULT_PROP_CAM_FLIP;
     src->camera_id = DEFAULT_PROP_CAM_ID;
     src->camera_sn = DEFAULT_PROP_CAM_SN;
-    src->svo_file = *g_string_new(DEFAULT_PROP_SVO_FILE);
-    src->opencv_calibration_file = *g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
-    src->stream_ip = *g_string_new(DEFAULT_PROP_STREAM_IP);
+    src->svo_file = g_string_new(DEFAULT_PROP_SVO_FILE);
+    src->opencv_calibration_file = g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
+    src->stream_ip = g_string_new(DEFAULT_PROP_STREAM_IP);
 
     src->stream_port = DEFAULT_PROP_STREAM_PORT;
     src->stream_type = DEFAULT_PROP_STREAM_TYPE;
@@ -1609,8 +1609,8 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->coord_sys = DEFAULT_PROP_COORD_SYS;
     src->svo_real_time = DEFAULT_PROP_SVO_REAL_TIME;
     src->sdk_gpu_id = DEFAULT_PROP_SDK_GPU_ID;
-    src->sdk_verbose_log_file = *g_string_new(DEFAULT_PROP_SDK_VERBOSE_LOG_FILE);
-    src->optional_settings_path = *g_string_new(DEFAULT_PROP_OPTIONAL_SETTINGS_PATH);
+    src->sdk_verbose_log_file = g_string_new(DEFAULT_PROP_SDK_VERBOSE_LOG_FILE);
+    src->optional_settings_path = g_string_new(DEFAULT_PROP_OPTIONAL_SETTINGS_PATH);
     src->sensors_required = DEFAULT_PROP_SENSORS_REQUIRED;
     src->enable_image_enhancement = DEFAULT_PROP_ENABLE_IMAGE_ENHANCEMENT;
     src->open_timeout_sec = DEFAULT_PROP_OPEN_TIMEOUT_SEC;
@@ -1634,7 +1634,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 
     src->pos_tracking = DEFAULT_PROP_POS_TRACKING;
     src->camera_static = DEFAULT_PROP_CAMERA_STATIC;
-    src->area_file_path = *g_string_new(DEFAULT_PROP_POS_AREA_FILE_PATH);
+    src->area_file_path = g_string_new(DEFAULT_PROP_POS_AREA_FILE_PATH);
     src->enable_area_memory = DEFAULT_PROP_POS_ENABLE_AREA_MEMORY;
     src->enable_imu_fusion = DEFAULT_PROP_POS_ENABLE_IMU_FUSION;
     src->enable_pose_smoothing = DEFAULT_PROP_POS_ENABLE_POSE_SMOOTHING;
@@ -1651,7 +1651,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 
     src->object_detection = DEFAULT_PROP_OD_ENABLE;
     src->od_instance_id = DEFAULT_PROP_OD_INSTANCE_ID;
-    src->od_custom_onnx_file = *g_string_new(DEFAULT_PROP_OD_CUSTOM_ONNX_FILE);
+    src->od_custom_onnx_file = g_string_new(DEFAULT_PROP_OD_CUSTOM_ONNX_FILE);
     src->od_custom_onnx_dynamic_input_shape_w = DEFAULT_PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W;
     src->od_custom_onnx_dynamic_input_shape_h = DEFAULT_PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H;
     src->od_enable_tracking = DEFAULT_PROP_OD_TRACKING;
@@ -1741,15 +1741,15 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_SVO_FILE:
         str = g_value_get_string(value);
-        src->svo_file = *g_string_new(str);
+        g_string_assign(src->svo_file, str);
         break;
     case PROP_OPENCV_CALIB_FILE:
         str = g_value_get_string(value);
-        src->opencv_calibration_file = *g_string_new(str);
+        g_string_assign(src->opencv_calibration_file, str);
         break;
     case PROP_STREAM_IP:
         str = g_value_get_string(value);
-        src->stream_ip = *g_string_new(str);
+        g_string_assign(src->stream_ip, str);
         break;
     case PROP_STREAM_PORT:
         src->stream_port = g_value_get_int(value);
@@ -1816,7 +1816,7 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_POS_AREA_FILE_PATH:
         str = g_value_get_string(value);
-        src->area_file_path = *g_string_new(str);
+        g_string_assign(src->area_file_path, str);
         break;
     case PROP_POS_ENABLE_AREA_MEMORY:
         src->enable_area_memory = g_value_get_boolean(value);
@@ -2014,11 +2014,11 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_SDK_VERBOSE_LOG_FILE:
         str = g_value_get_string(value);
-        src->sdk_verbose_log_file = *g_string_new(str);
+        g_string_assign(src->sdk_verbose_log_file, str);
         break;
     case PROP_OPTIONAL_SETTINGS_PATH:
         str = g_value_get_string(value);
-        src->optional_settings_path = *g_string_new(str);
+        g_string_assign(src->optional_settings_path, str);
         break;
     case PROP_SENSORS_REQUIRED:
         src->sensors_required = g_value_get_boolean(value);
@@ -2055,7 +2055,7 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_OD_CUSTOM_ONNX_FILE:
         str = g_value_get_string(value);
-        src->od_custom_onnx_file = *g_string_new(str);
+        g_string_assign(src->od_custom_onnx_file, str);
         break;
     case PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W:
         src->od_custom_onnx_dynamic_input_shape_w = g_value_get_int(value);
@@ -2097,13 +2097,13 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_int64(value, src->camera_id);
         break;
     case PROP_SVO_FILE:
-        g_value_set_string(value, src->svo_file.str);
+        g_value_set_string(value, src->svo_file->str);
         break;
     case PROP_OPENCV_CALIB_FILE:
-        g_value_set_string(value, src->opencv_calibration_file.str);
+        g_value_set_string(value, src->opencv_calibration_file->str);
         break;
     case PROP_STREAM_IP:
-        g_value_set_string(value, src->stream_ip.str);
+        g_value_set_string(value, src->stream_ip->str);
         break;
     case PROP_STREAM_PORT:
         g_value_set_int(value, src->stream_port);
@@ -2169,7 +2169,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_boolean(value, src->camera_static);
         break;
     case PROP_POS_AREA_FILE_PATH:
-        g_value_set_string(value, src->area_file_path.str);
+        g_value_set_string(value, src->area_file_path->str);
         break;
     case PROP_POS_ENABLE_AREA_MEMORY:
         g_value_set_boolean(value, src->enable_area_memory);
@@ -2358,10 +2358,10 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_int(value, src->sdk_gpu_id);
         break;
     case PROP_SDK_VERBOSE_LOG_FILE:
-        g_value_set_string(value, src->sdk_verbose_log_file.str);
+        g_value_set_string(value, src->sdk_verbose_log_file->str);
         break;
     case PROP_OPTIONAL_SETTINGS_PATH:
-        g_value_set_string(value, src->optional_settings_path.str);
+        g_value_set_string(value, src->optional_settings_path->str);
         break;
     case PROP_SENSORS_REQUIRED:
         g_value_set_boolean(value, src->sensors_required);
@@ -2397,7 +2397,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_uint(value, src->od_instance_id);
         break;
     case PROP_OD_CUSTOM_ONNX_FILE:
-        g_value_set_string(value, src->od_custom_onnx_file.str);
+        g_value_set_string(value, src->od_custom_onnx_file->str);
         break;
     case PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W:
         g_value_set_int(value, src->od_custom_onnx_dynamic_input_shape_w);
@@ -2436,6 +2436,28 @@ void gst_zedsrc_finalize(GObject *object) {
     if (src->caps) {
         gst_caps_unref(src->caps);
         src->caps = NULL;
+    }
+
+    if (src->svo_file) {
+        g_string_free(src->svo_file, TRUE);
+    }
+    if (src->opencv_calibration_file) {
+        g_string_free(src->opencv_calibration_file, TRUE);
+    }
+    if (src->stream_ip) {
+        g_string_free(src->stream_ip, TRUE);
+    }
+    if (src->sdk_verbose_log_file) {
+        g_string_free(src->sdk_verbose_log_file, TRUE);
+    }
+    if (src->optional_settings_path) {
+        g_string_free(src->optional_settings_path, TRUE);
+    }
+    if (src->area_file_path) {
+        g_string_free(src->area_file_path, TRUE);
+    }
+    if (src->od_custom_onnx_file) {
+        g_string_free(src->od_custom_onnx_file, TRUE);
     }
 
     G_OBJECT_CLASS(gst_zedsrc_parent_class)->finalize(object);
@@ -2585,9 +2607,9 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
              (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
     init_params.sdk_gpu_id = src->sdk_gpu_id;
     GST_INFO(" * SDK GPU ID: %d", init_params.sdk_gpu_id);
-    init_params.sdk_verbose_log_file = sl::String(src->sdk_verbose_log_file.str);
+    init_params.sdk_verbose_log_file = sl::String(src->sdk_verbose_log_file->str);
     GST_INFO(" * SDK Verbose Log File: %s", init_params.sdk_verbose_log_file.c_str());
-    init_params.optional_settings_path = sl::String(src->optional_settings_path.str);
+    init_params.optional_settings_path = sl::String(src->optional_settings_path->str);
     GST_INFO(" * Optional Settings Path: %s", init_params.optional_settings_path.c_str());
     init_params.sensors_required = src->sensors_required == TRUE;
     GST_INFO(" * Sensors Required: %s", (init_params.sensors_required ? "TRUE" : "FALSE"));
@@ -2613,19 +2635,19 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
                  src->max_working_res_h);
     }
 
-    sl::String opencv_calibration_file(src->opencv_calibration_file.str);
+    sl::String opencv_calibration_file(src->opencv_calibration_file->str);
     init_params.optional_opencv_calibration_file = opencv_calibration_file;
     GST_INFO(" * OpenCV Calibration File: %s ",
              init_params.optional_opencv_calibration_file.c_str());
 
     std::cout << "Setting depth_mode to " << init_params.depth_mode << std::endl;
 
-    if (src->svo_file.len != 0) {
-        sl::String svo(static_cast<char *>(src->svo_file.str));
+    if (src->svo_file->len != 0) {
+        sl::String svo(static_cast<char *>(src->svo_file->str));
         init_params.input.setFromSVOFile(svo);
         init_params.svo_real_time_mode = src->svo_real_time == TRUE;
 
-        GST_INFO(" * Input SVO filename: %s", src->svo_file.str);
+        GST_INFO(" * Input SVO filename: %s", src->svo_file->str);
         GST_INFO(" * SVO Real Time Mode: %s", (init_params.svo_real_time_mode ? "TRUE" : "FALSE"));
     } else if (src->camera_id != DEFAULT_PROP_CAM_ID) {
         init_params.input.setFromCameraID(src->camera_id);
@@ -2635,11 +2657,11 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         init_params.input.setFromSerialNumber(src->camera_sn);
 
         GST_INFO(" * Input Camera SN: %ld", src->camera_sn);
-    } else if (src->stream_ip.len != 0) {
-        sl::String ip(static_cast<char *>(src->stream_ip.str));
+    } else if (src->stream_ip->len != 0) {
+        sl::String ip(static_cast<char *>(src->stream_ip->str));
         init_params.input.setFromStream(ip, src->stream_port);
 
-        GST_INFO(" * Input Stream: %s:%d", src->stream_ip.str, src->stream_port);
+        GST_INFO(" * Input Stream: %s:%d", src->stream_ip->str, src->stream_port);
     } else {
         GST_INFO(" * Input from default device");
     }
@@ -2776,7 +2798,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Pos. Tracking mode: %s", sl::toString(pos_trk_params.mode).c_str());
         pos_trk_params.set_as_static = (src->camera_static == TRUE);
         GST_INFO(" * Camera static: %s", (pos_trk_params.set_as_static ? "TRUE" : "FALSE"));
-        sl::String area_file_path(static_cast<char *>(src->area_file_path.str));
+        sl::String area_file_path(static_cast<char *>(src->area_file_path->str));
         pos_trk_params.area_file_path = area_file_path;
         GST_INFO(" * Area file path: %s", pos_trk_params.area_file_path.c_str());
         pos_trk_params.enable_area_memory = (src->enable_area_memory == TRUE);
@@ -2857,7 +2879,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         od_params.allow_reduced_precision_inference = src->od_allow_reduced_precision_inference;
         GST_INFO(" * Allow reduced precision inference: %s",
                  (od_params.allow_reduced_precision_inference ? "TRUE" : "FALSE"));
-        od_params.custom_onnx_file = sl::String(src->od_custom_onnx_file.str);
+        od_params.custom_onnx_file = sl::String(src->od_custom_onnx_file->str);
         GST_INFO(" * Custom ONNX file: %s", od_params.custom_onnx_file.c_str());
         od_params.custom_onnx_dynamic_input_shape = sl::Resolution(
             src->od_custom_onnx_dynamic_input_shape_w, src->od_custom_onnx_dynamic_input_shape_h);

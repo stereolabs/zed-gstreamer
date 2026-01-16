@@ -53,9 +53,9 @@ struct _GstZedSrc {
     gint camera_image_flip;
     gint camera_id;
     gint64 camera_sn;
-    GString svo_file;
-    GString opencv_calibration_file;
-    GString stream_ip;
+    GString *svo_file;
+    GString *opencv_calibration_file;
+    GString *stream_ip;
     gint stream_port;
     gint stream_type;
     gfloat depth_min_dist;
@@ -71,8 +71,8 @@ struct _GstZedSrc {
     gint roi_h;
     gboolean svo_real_time;
     gint sdk_gpu_id;
-    GString sdk_verbose_log_file;
-    GString optional_settings_path;
+    GString *sdk_verbose_log_file;
+    GString *optional_settings_path;
     gboolean sensors_required;
     gboolean enable_image_enhancement;
     gfloat open_timeout_sec;
@@ -91,7 +91,7 @@ struct _GstZedSrc {
 
     gboolean pos_tracking;
     gboolean camera_static;
-    GString area_file_path;
+    GString *area_file_path;
     gboolean enable_area_memory;
     gboolean enable_imu_fusion;
     gboolean enable_pose_smoothing;
@@ -108,7 +108,7 @@ struct _GstZedSrc {
 
     gboolean object_detection;
     guint od_instance_id;
-    GString od_custom_onnx_file;
+    GString *od_custom_onnx_file;
     gint od_custom_onnx_dynamic_input_shape_w;
     gint od_custom_onnx_dynamic_input_shape_h;
     gboolean od_enable_tracking;                     // bool enable_tracking

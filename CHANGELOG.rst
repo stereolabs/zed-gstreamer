@@ -1,6 +1,10 @@
 LATEST CHANGES
 ==============
 
+ZED SDK v5.1
+--------------
+- Added missing parameters for zedsrc and zedxonesrc elements:
+
 2025-04-24
 ----------
 - Fix build issues with SDK 5.0 EA on Jetson
