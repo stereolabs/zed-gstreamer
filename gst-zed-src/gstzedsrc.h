@@ -61,6 +61,7 @@ struct _GstZedSrc {
     gfloat depth_min_dist;
     gfloat depth_max_dist;
     gint depth_mode;   // Depth mode [enum]
+    gint grab_compute_capping_fps;
     gboolean camera_disable_self_calib;
     gint depth_stabilization;
     gint coord_sys;

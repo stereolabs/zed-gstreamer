@@ -1,6 +1,11 @@
 LATEST CHANGES
 ==============
 
+2026-01-15
+----------
+- Fix memleak on demux chain
+- Add grab capping fps `grab-cap-fps` property
+
 2025-04-24
 ----------
 - Fix build issues with SDK 5.0 EA on Jetson

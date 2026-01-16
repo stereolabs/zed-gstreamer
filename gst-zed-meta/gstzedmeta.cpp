@@ -137,11 +137,9 @@ const GstMetaInfo *gst_zed_src_meta_get_info(void) {
 GstZedSrcMeta *gst_buffer_add_zed_src_meta(GstBuffer *buffer, ZedInfo &info, ZedPose &pose, ZedSensors &sens, gboolean od_enabled, guint8 obj_count,
                                            ZedObjectData *objects, guint64 frame_id) {
     GST_TRACE("gst_buffer_add_zed_src_meta");
-
     GST_DEBUG("Add GstZedSrcMeta");
 
     GstZedSrcMeta *meta;
-
     g_return_val_if_fail(GST_IS_BUFFER(buffer), NULL);
 
     meta = (GstZedSrcMeta *) gst_buffer_add_meta(buffer, GST_ZED_SRC_META_INFO, NULL);
