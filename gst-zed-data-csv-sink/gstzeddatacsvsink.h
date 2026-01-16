@@ -52,7 +52,7 @@ struct _GstZedDataCsvSink
     std::ofstream* out_file_ptr;
 
     // Properties
-    GString filename;
+    GString *filename;
     gboolean append;
 };
 
