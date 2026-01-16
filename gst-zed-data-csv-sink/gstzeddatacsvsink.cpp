@@ -49,6 +49,7 @@ enum
 };
 
 static void gst_zeddatacsvsink_dispose(GObject * object);
+static void gst_zeddatacsvsink_finalize(GObject *object);
 
 static void gst_zeddatacsvsink_set_property (GObject * object, guint prop_id,
                                              const GValue * value, GParamSpec * pspec);
@@ -73,6 +74,7 @@ static void gst_zeddatacsvsink_class_init (GstZedDataCsvSinkClass * klass)
     GstBaseSinkClass *gstbasesink_class = GST_BASE_SINK_CLASS (klass);
 
     gobject_class->dispose = gst_zeddatacsvsink_dispose;
+    gobject_class->finalize = gst_zeddatacsvsink_finalize;
 
     gobject_class->set_property = gst_zeddatacsvsink_set_property;
     gobject_class->get_property = gst_zeddatacsvsink_get_property;
@@ -104,7 +106,7 @@ static void gst_zeddatacsvsink_init(GstZedDataCsvSink * csvsink)
 {
     GST_TRACE_OBJECT( csvsink, "Init" );
 
-    csvsink->filename = *g_string_new( DEFAULT_PROP_LOCATION );
+    csvsink->filename = g_string_new(DEFAULT_PROP_LOCATION);
     csvsink->append = DEFAULT_PROP_APPEND;
 
     csvsink->out_file_ptr = NULL;
@@ -127,6 +129,18 @@ static void gst_zeddatacsvsink_dispose (GObject * object)
     G_OBJECT_CLASS(gst_zeddatacsvsink_parent_class)->dispose(object);
 }
 
+static void gst_zeddatacsvsink_finalize(GObject *object) {
+    GstZedDataCsvSink *sink = GST_DATA_CSV_SINK(object);
+
+    GST_TRACE_OBJECT(sink, "Finalize");
+
+    if (sink->filename) {
+        g_string_free(sink->filename, TRUE);
+    }
+
+    G_OBJECT_CLASS(gst_zeddatacsvsink_parent_class)->finalize(object);
+}
+
 void gst_zeddatacsvsink_set_property (GObject * object, guint prop_id,
                                       const GValue * value, GParamSpec * pspec)
 {
@@ -139,7 +153,7 @@ void gst_zeddatacsvsink_set_property (GObject * object, guint prop_id,
     switch (prop_id) {
     case PROP_LOCATION:
         str = g_value_get_string(value);
-        sink->filename = *g_string_new( str );
+        g_string_assign(sink->filename, str);
         break;
     case PROP_APPEND:
         sink->append = g_value_get_boolean (value);
@@ -159,7 +173,7 @@ void gst_zeddatacsvsink_get_property (GObject * object, guint prop_id,
 
     switch (prop_id) {
     case PROP_LOCATION:
-        g_value_set_string( value, sink->filename.str );
+        g_value_set_string(value, sink->filename->str);
         break;
     case PROP_APPEND:
         g_value_set_boolean (value, sink->append);
@@ -172,10 +186,9 @@ void gst_zeddatacsvsink_get_property (GObject * object, guint prop_id,
 
 gboolean gst_zeddatacsvsink_open_file(GstZedDataCsvSink* sink)
 {
-    GST_TRACE_OBJECT( sink, "Open file: %s", sink->filename.str );
+    GST_TRACE_OBJECT(sink, "Open file: %s", sink->filename->str);
 
-    if( sink->filename.len == 0 )
-    {
+    if (sink->filename->len == 0) {
         GST_ELEMENT_ERROR (sink, RESOURCE, NOT_FOUND,
                            ("No file name specified for writing"), (NULL));
         return FALSE;
@@ -184,13 +197,14 @@ gboolean gst_zeddatacsvsink_open_file(GstZedDataCsvSink* sink)
     if(sink->append)
     {
         GST_TRACE_OBJECT( sink, "Opening in append mode..." );
-        sink->out_file_ptr = new std::ofstream( sink->filename.str, std::ios::out | std::ios::app );
+        sink->out_file_ptr = new std::ofstream(sink->filename->str, std::ios::out | std::ios::app);
         GST_TRACE_OBJECT( sink, "... open." );
     }
     else
     {
         GST_TRACE_OBJECT( sink, "Opening..." );
-        sink->out_file_ptr = new std::ofstream( sink->filename.str, std::ios::out | std::ios::trunc);
+        sink->out_file_ptr =
+            new std::ofstream(sink->filename->str, std::ios::out | std::ios::trunc);
         GST_TRACE_OBJECT( sink, "... open." );
 
         *sink->out_file_ptr << "TIMESTAMP,STREAM_TYPE,CAM_MODEL,GRAB_W,GRAB_H," <<
@@ -209,8 +223,7 @@ gboolean gst_zeddatacsvsink_open_file(GstZedDataCsvSink* sink)
         return FALSE;
     }
 
-    GST_TRACE_OBJECT( sink, "File opened: %s", sink->filename.str );
-
+    GST_TRACE_OBJECT(sink, "File opened: %s", sink->filename->str);
 
     return TRUE;
 }
