@@ -55,9 +55,18 @@ struct _GstZedXOneSrc {
     gfloat _camTimeout_sec;         // Camera open timeout
     gint _cameraId;                 // Camera ID
     gint64 _cameraSN;               // Camera Serial Number
+    GString _svoFile;               // SVO file path
+    GString _streamIp;              // Input Stream IP
+    gint _streamPort;               // Input Stream Port
     GString _opencvCalibrationFile; // OpenCV calibration file path
     gboolean _cameraImageFlip;      // Camera flipped
     gboolean _enableHDR;            // HDR mode
+    gboolean _svoRealTime;          // SVO Real Time Mode
+    gint _coordUnit;                // Coordinate unit
+    gint _coordSys;                 // Coordinate system
+    GString _sdkLogFile;            // SDK Log file path
+    GString _settingsPath;          // Settings file path
+    gboolean _asyncRecovery;        // Async grab camera recovery
 
     gint _saturation;   // Image Saturation
     gint _sharpness;    // Image Sharpness

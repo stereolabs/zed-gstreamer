@@ -2615,7 +2615,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
     sl::String opencv_calibration_file(src->opencv_calibration_file.str);
     init_params.optional_opencv_calibration_file = opencv_calibration_file;
-    GST_INFO(" * Calibration File: %s ", init_params.optional_opencv_calibration_file.c_str());
+    GST_INFO(" * OpenCV Calibration File: %s ",
+             init_params.optional_opencv_calibration_file.c_str());
 
     std::cout << "Setting depth_mode to " << init_params.depth_mode << std::endl;
 
