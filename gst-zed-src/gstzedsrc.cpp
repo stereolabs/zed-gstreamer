@@ -50,6 +50,8 @@ static gboolean gst_zedsrc_unlock_stop(GstBaseSrc *src);
 
 static GstFlowReturn gst_zedsrc_fill(GstPushSrc *src, GstBuffer *buf);
 
+
+
 enum {
     PROP_0,
     PROP_CAM_RES,
@@ -856,6 +858,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                           DEFAULT_PROP_CAM_FPS,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+
     g_object_class_install_property(
         gobject_class, PROP_STREAM_TYPE,
         g_param_spec_enum("stream-type", "Image stream type", "Image stream type",
@@ -1600,7 +1603,6 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 
     src->stream_port = DEFAULT_PROP_STREAM_PORT;
     src->stream_type = DEFAULT_PROP_STREAM_TYPE;
-
     src->depth_min_dist = DEFAULT_PROP_DEPTH_MIN;
     src->depth_max_dist = DEFAULT_PROP_DEPTH_MAX;
     src->depth_mode = DEFAULT_PROP_DEPTH_MODE;
@@ -3036,27 +3038,59 @@ static gboolean gst_zedsrc_unlock_stop(GstBaseSrc *bsrc) {
     return TRUE;
 }
 
+
 static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstZedSrc *src = GST_ZED_SRC(psrc);
-
     GST_TRACE_OBJECT(src, "gst_zedsrc_fill");
 
+    /// All locals here for goto
     sl::ERROR_CODE ret;
     GstMapInfo minfo;
-    GstClock *clock;
-    GstClockTime clock_time;
+    GstClock *clock = nullptr;
+    GstClockTime clock_time = GST_CLOCK_TIME_NONE;
 
     static int temp_ugly_buf_index = 0;
 
-    if (!src->is_started) {
-        src->acq_start_time = gst_clock_get_time(gst_element_get_clock(GST_ELEMENT(src)));
+    gboolean mapped = FALSE;
+    GstFlowReturn flow_ret = GST_FLOW_OK;
 
+    // objects we use later, but must be declared before any goto
+    ZedObjectData obj_data[256] = {0};
+    guint8 obj_count = 0;
+    guint64 offset = 0;
+    GstZedSrcMeta *meta = nullptr;
+
+    sl::RuntimeParameters zedRtParams;
+    CUcontext zctx;
+
+    sl::Mat left_img;
+    sl::Mat right_img;
+    sl::Mat depth_data;
+
+    sl::CameraInformation cam_info;
+    ZedInfo info;
+    ZedPose pose;
+    ZedSensors sens;
+
+    sl::ObjectDetectionRuntimeParameters od_rt_params;
+    std::vector<sl::OBJECT_CLASS> class_filter;
+    std::map<sl::OBJECT_CLASS, float> class_det_conf;
+    sl::Objects det_objs;
+
+    sl::BodyTrackingRuntimeParameters bt_rt_params;
+    sl::Bodies bodies;
+
+    //// Acquisition start time
+    if (!src->is_started) {
+        GstClock *start_clock = gst_element_get_clock (GST_ELEMENT (src));
+        if (start_clock) {
+            src->acq_start_time = gst_clock_get_time (start_clock);
+            gst_object_unref (start_clock);
+        }
         src->is_started = TRUE;
     }
 
     // ----> Set runtime parameters
-    sl::RuntimeParameters zedRtParams;   // runtime parameters
-
     GST_TRACE_OBJECT(src, "CAMERA RUNTIME PARAMETERS");
     if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
         zedRtParams.enable_depth = false;
@@ -3084,134 +3118,132 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             if (src->aec_agc_roi_x != -1 && src->aec_agc_roi_y &&
                 src->aec_agc_roi_w != -1 && src->aec_agc_roi_h != -1) {
                 sl::Rect roi;
-                roi.x=src->aec_agc_roi_x;
-                roi.y=src->aec_agc_roi_y;
-                roi.width=src->aec_agc_roi_w;
-                roi.height=src->aec_agc_roi_h;
+                roi.x = src->aec_agc_roi_x;
+                roi.y = src->aec_agc_roi_y;
+                roi.width = src->aec_agc_roi_w;
+                roi.height = src->aec_agc_roi_h;
                 sl::SIDE side = static_cast<sl::SIDE>(src->aec_agc_roi_side);
                 GST_INFO(" Runtime AEC_AGC_ROI: (%d,%d)-%dx%d - Side: %d",
-                        src->aec_agc_roi_x, src->aec_agc_roi_y,
-                        src->aec_agc_roi_w, src->aec_agc_roi_h, src->aec_agc_roi_side);
+                         src->aec_agc_roi_x, src->aec_agc_roi_y,
+                         src->aec_agc_roi_w, src->aec_agc_roi_h, src->aec_agc_roi_side);
                 src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc);
                 src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side);
                 src->exposure_gain_updated = FALSE;
-            }       
+            }
         }
     }
     // <---- Set runtime parameters
 
-    CUcontext zctx = src->zed.getCUDAContext();
-
     /// Push zed cuda context as current
     int cu_err = (int)cudaGetLastError();
-    if (cu_err>0)
-    GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                      ("Cuda ERROR trigger before ZED SDK : %d",cu_err),
-                      (NULL));
+    if (cu_err > 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Cuda ERROR trigger before ZED SDK : %d", cu_err),
+                          (NULL));
+        return GST_FLOW_ERROR;
+    }
 
+    zctx = src->zed.getCUDAContext();
     cuCtxPushCurrent_v2(zctx);
+
+
+    /// Utils for check ret value and send to out
+#define CHECK_RET_OR_GOTO(_ret_expr)                                     \
+    do {                                                                 \
+        ret = (_ret_expr);                                               \
+        if (ret != sl::ERROR_CODE::SUCCESS) {                            \
+            GST_ELEMENT_ERROR (src, RESOURCE, FAILED,                    \
+                               ("Grabbing failed with error: '%s' - %s", \
+                                sl::toString (ret).c_str (),             \
+                                sl::toVerbose (ret).c_str ()),           \
+                               (NULL));                                  \
+            flow_ret = GST_FLOW_ERROR;                                   \
+            goto out;                                                    \
+        }                                                                \
+    } while (0)
 
     // ----> ZED grab
     ret = src->zed.grab(zedRtParams);
-
     if (ret > sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                          ("Grabbing failed with error: '%s' - %s",
+                           sl::toString(ret).c_str(),
                            sl::toVerbose(ret).c_str()),
                           (NULL));
-        cuCtxPopCurrent_v2(NULL);
-        return GST_FLOW_ERROR;
+        flow_ret = GST_FLOW_ERROR;
+        goto out;
     }
     // <---- ZED grab
 
     // ----> Clock update
-    clock = gst_element_get_clock(GST_ELEMENT(src));
-    clock_time = gst_clock_get_time(clock);
-    gst_object_unref(clock);
+    clock = gst_element_get_clock (GST_ELEMENT (src));
+    if (clock) {
+        clock_time = gst_clock_get_time (clock);
+        gst_object_unref (clock);
+        clock = nullptr;
+    }
     // <---- Clock update
 
     // Memory mapping
     if (FALSE == gst_buffer_map(buf, &minfo, GST_MAP_WRITE)) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"), (NULL));
-        cuCtxPopCurrent_v2(NULL);
-        return GST_FLOW_ERROR;
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Failed to map buffer for writing"), (NULL));
+        flow_ret = GST_FLOW_ERROR;
+        goto out;
     }
-
-    // ZED Mats
-    sl::Mat left_img;
-    sl::Mat right_img;
-    sl::Mat depth_data;
+    mapped = TRUE;
 
     // ----> Mats retrieving
-    auto check_ret = [src](sl::ERROR_CODE ret) {
-        if (ret != sl::ERROR_CODE::SUCCESS) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                            ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
-                            sl::toVerbose(ret).c_str()),
-                            (NULL));
-            return false;
-        }
-        return true;
-    };
-
     if (src->stream_type == GST_ZEDSRC_ONLY_LEFT) {
-        ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
-        if(!check_ret(ret)) return GST_FLOW_ERROR;
+        CHECK_RET_OR_GOTO (src->zed.retrieveImage (left_img, sl::VIEW::LEFT, sl::MEM::CPU));
     } else if (src->stream_type == GST_ZEDSRC_ONLY_RIGHT) {
-        ret = src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU);
-        if(!check_ret(ret)) return GST_FLOW_ERROR;
+        CHECK_RET_OR_GOTO (src->zed.retrieveImage (left_img, sl::VIEW::RIGHT, sl::MEM::CPU));
     } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
-        ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
-        if(!check_ret(ret)) return GST_FLOW_ERROR;
-        ret = src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU);
-        if(!check_ret(ret)) return GST_FLOW_ERROR;
+        CHECK_RET_OR_GOTO (src->zed.retrieveImage (left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO (src->zed.retrieveImage (right_img, sl::VIEW::RIGHT, sl::MEM::CPU));
     } else if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
-        ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU);
-        if(!check_ret(ret)) return GST_FLOW_ERROR;
+        CHECK_RET_OR_GOTO (src->zed.retrieveMeasure (depth_data,
+                                                     sl::MEASURE::DEPTH_U16_MM,
+                                                     sl::MEM::CPU));
     } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
-        ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU);
-        if(!check_ret(ret)) return GST_FLOW_ERROR;
-        ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU);
-        if(!check_ret(ret)) return GST_FLOW_ERROR;
+        CHECK_RET_OR_GOTO (src->zed.retrieveImage (left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO (src->zed.retrieveMeasure (depth_data,
+                                                     sl::MEASURE::DEPTH,
+                                                     sl::MEM::CPU));
     }
-    // <---- Mats retrieving
 
-    // ----> Memory copy
+    /* --- Memory copy into GstBuffer ------------------------------------ */
     if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
-        memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
+        memcpy (minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
     } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
-        // Left RGB data on half top
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
-
-        // Right RGB data on half bottom
-        memcpy((minfo.data + minfo.size / 2), right_img.getPtr<sl::uchar4>(), minfo.size / 2);
+        /* Left RGB data on half top */
+        memcpy (minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
+        /* Right RGB data on half bottom */
+        memcpy (minfo.data + minfo.size / 2,
+                right_img.getPtr<sl::uchar4>(), minfo.size / 2);
     } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
-        // RGB data on half top
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
+        /* RGB data on half top */
+        memcpy (minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
 
-        // Depth data on half bottom
-        uint32_t *gst_data = (uint32_t *) (minfo.data + minfo.size / 2);
+        /* Depth data on half bottom */
+        {
+            uint32_t *gst_data = (uint32_t *) (minfo.data + minfo.size / 2);
+            sl::float1 *depthDataPtr = depth_data.getPtr<sl::float1>();
 
-        sl::float1 *depthDataPtr = depth_data.getPtr<sl::float1>();
-
-        for (unsigned long i = 0; i < minfo.size / 8; i++) {
-            *(gst_data++) = static_cast<uint32_t>(*(depthDataPtr++));
-
-            // printf( "#%lu: %u / %g %u \n", i, *(gst_data-1), *(depthDataPtr-1),
-            // static_cast<uint32_t>(*(depthDataPtr-1)));
+            for (unsigned long i = 0; i < minfo.size / 8; i++) {
+                *(gst_data++) = static_cast<uint32_t> (*(depthDataPtr++));
+            }
         }
     } else {
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
+        memcpy (minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
     }
-    cuCtxPopCurrent_v2(NULL);
     // <---- Memory copy
 
     // ----> Info metadata
-    sl::CameraInformation cam_info = src->zed.getCameraInformation();
-    ZedInfo info;
+    cam_info = src->zed.getCameraInformation();
     info.cam_model = (gint) cam_info.camera_model;
     info.stream_type = src->stream_type;
-    info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
+    info.grab_single_frame_width  = cam_info.camera_configuration.resolution.width;
     info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
     if (info.grab_single_frame_height == 752 || info.grab_single_frame_height == 1440 ||
         info.grab_single_frame_height == 2160 || info.grab_single_frame_height == 2484) {
@@ -3220,13 +3252,12 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Info metadata
 
     // ----> Positional Tracking metadata
-    ZedPose pose;
     if (src->pos_tracking) {
         sl::Pose cam_pose;
         sl::POSITIONAL_TRACKING_STATE state = src->zed.getPosition(cam_pose);
 
         sl::Translation pos = cam_pose.getTranslation();
-        pose.pose_avail = true;
+        pose.pose_avail = TRUE;
         pose.pos_tracking_state = static_cast<int>(state);
         pose.pos[0] = pos(0);
         pose.pos[1] = pos(1);
@@ -3250,7 +3281,6 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Positional Tracking
 
     // ----> Sensors metadata
-    ZedSensors sens;
     if (src->zed.getCameraInformation().camera_model != sl::MODEL::ZED) {
         sens.sens_avail = TRUE;
         sens.imu.imu_avail = TRUE;
@@ -3273,8 +3303,9 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             sens.env.env_avail = TRUE;
 
             float temp;
-            sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::BAROMETER,
-                                      temp);
+            sens_data.temperature.get(
+                sl::SensorsData::TemperatureData::SENSOR_LOCATION::BAROMETER,
+                temp);
             sens.env.temp = temp;
             sens.env.press = sens_data.barometer.pressure * 1e-2;
 
@@ -3298,20 +3329,15 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         sens.env.env_avail = FALSE;
         sens.temp.temp_avail = FALSE;
     }
-    // <---- Sensors metadata metadata
-
-    ZedObjectData
-        obj_data[256];   // Common Array for Detected Object and Tracked Skeletons metadata
-    guint8 obj_count = 0;
+    // <---- Sensors metadata
 
     // ----> Object detection metadata
     if (src->object_detection) {
         GST_LOG_OBJECT(src, "Object Detection enabled");
 
-        sl::ObjectDetectionRuntimeParameters rt_params;
-        rt_params.detection_confidence_threshold = src->od_det_conf;
+        od_rt_params.detection_confidence_threshold = src->od_det_conf;
 
-        std::vector<sl::OBJECT_CLASS> class_filter;
+        class_filter.clear();
         if (src->od_person_conf > 0.0f)
             class_filter.push_back(sl::OBJECT_CLASS::PERSON);
         if (src->od_vehicle_conf > 0.0f)
@@ -3326,91 +3352,70 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             class_filter.push_back(sl::OBJECT_CLASS::FRUIT_VEGETABLE);
         if (src->od_sport_conf > 0.0f)
             class_filter.push_back(sl::OBJECT_CLASS::SPORT);
-        rt_params.object_class_filter = class_filter;
+        od_rt_params.object_class_filter = class_filter;
 
-        std::map<sl::OBJECT_CLASS, float> class_det_conf;
-        class_det_conf[sl::OBJECT_CLASS::PERSON] = src->od_person_conf;
-        class_det_conf[sl::OBJECT_CLASS::VEHICLE] = src->od_vehicle_conf;
-        class_det_conf[sl::OBJECT_CLASS::ANIMAL] = src->od_animal_conf;
-        class_det_conf[sl::OBJECT_CLASS::ELECTRONICS] = src->od_electronics_conf;
-        class_det_conf[sl::OBJECT_CLASS::BAG] = src->od_bag_conf;
+        class_det_conf.clear();
+        class_det_conf[sl::OBJECT_CLASS::PERSON]          = src->od_person_conf;
+        class_det_conf[sl::OBJECT_CLASS::VEHICLE]         = src->od_vehicle_conf;
+        class_det_conf[sl::OBJECT_CLASS::ANIMAL]          = src->od_animal_conf;
+        class_det_conf[sl::OBJECT_CLASS::ELECTRONICS]     = src->od_electronics_conf;
+        class_det_conf[sl::OBJECT_CLASS::BAG]             = src->od_bag_conf;
         class_det_conf[sl::OBJECT_CLASS::FRUIT_VEGETABLE] = src->od_fruit_vegetable_conf;
-        class_det_conf[sl::OBJECT_CLASS::SPORT] = src->od_sport_conf;
+        class_det_conf[sl::OBJECT_CLASS::SPORT]           = src->od_sport_conf;
+        od_rt_params.object_class_detection_confidence_threshold = class_det_conf;
 
-        rt_params.object_class_detection_confidence_threshold = class_det_conf;
-
-        sl::Objects det_objs;
-        ret = src->zed.retrieveObjects(det_objs, rt_params, OD_INSTANCE_MODULE_ID);
+        ret = src->zed.retrieveObjects(det_objs, od_rt_params, OD_INSTANCE_MODULE_ID);
 
         if (ret == sl::ERROR_CODE::SUCCESS) {
             if (det_objs.is_new) {
                 GST_LOG_OBJECT(src, "OD new data");
 
                 obj_count = det_objs.object_list.size();
+                if (obj_count >= (uint)256)
+                    obj_count = (uint)256;
 
-                GST_LOG_OBJECT(src, "Number of detected objects: %d", obj_count);
+                GST_LOG_OBJECT(src, "Number of detected objects (clamped): %d", obj_count);
 
                 uint8_t idx = 0;
-                for (auto i = det_objs.object_list.begin(); i != det_objs.object_list.end(); ++i) {
+                for (auto i = det_objs.object_list.begin();
+                     i != det_objs.object_list.end() && idx < obj_count; ++i, ++idx) {
                     sl::ObjectData obj = *i;
 
-                    obj_data[idx].skeletons_avail =
-                        FALSE;   // No Skeleton info for Object Detection
-
+                    obj_data[idx].skeletons_avail = FALSE;
                     obj_data[idx].id = obj.id;
-                    GST_LOG_OBJECT(src, " * [%d] Object id: %d", idx, obj.id);
 
-                    obj_data[idx].label = static_cast<OBJECT_CLASS>(obj.label);
-                    GST_LOG_OBJECT(src, " * [%d] Label: %s", idx, sl::toString(obj.label).c_str());
-
-                    obj_data[idx].sublabel = static_cast<OBJECT_SUBCLASS>(obj.sublabel);
-                    GST_LOG_OBJECT(src, " * [%d] Sublabel: %s", idx,
-                                   sl::toString(obj.sublabel).c_str());
+                    obj_data[idx].label =
+                        static_cast<OBJECT_CLASS>(obj.label);
+                    obj_data[idx].sublabel =
+                        static_cast<OBJECT_SUBCLASS>(obj.sublabel);
 
                     obj_data[idx].tracking_state =
                         static_cast<OBJECT_TRACKING_STATE>(obj.tracking_state);
-                    GST_LOG_OBJECT(src, " * [%d] Tracking state: %s", idx,
-                                   sl::toString(obj.tracking_state).c_str());
-
-                    obj_data[idx].action_state = static_cast<OBJECT_ACTION_STATE>(obj.action_state);
-                    GST_LOG_OBJECT(src, " * [%d] Action state: %s", idx,
-                                   sl::toString(obj.action_state).c_str());
+                    obj_data[idx].action_state =
+                        static_cast<OBJECT_ACTION_STATE>(obj.action_state);
 
                     obj_data[idx].confidence = obj.confidence;
-                    GST_LOG_OBJECT(src, " * [%d] Object confidence: %g", idx, obj.confidence);
 
-                    memcpy(obj_data[idx].position, (void *) obj.position.ptr(), 3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied position", idx);
-                    memcpy(obj_data[idx].position_covariance, (void *) obj.position_covariance,
-                           6 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied covariance", idx);
-                    memcpy(obj_data[idx].velocity, (void *) obj.velocity.ptr(), 3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied velocity", idx);
+                    memcpy(obj_data[idx].position,
+                           (void *)obj.position.ptr(), 3 * sizeof(float));
+                    memcpy(obj_data[idx].position_covariance,
+                           (void *)obj.position_covariance, 6 * sizeof(float));
+                    memcpy(obj_data[idx].velocity,
+                           (void *)obj.velocity.ptr(), 3 * sizeof(float));
 
                     if (obj.bounding_box_2d.size() > 0) {
-                        memcpy((uint8_t *) obj_data[idx].bounding_box_2d,
-                               (uint8_t *) obj.bounding_box_2d.data(),
+                        memcpy((uint8_t *)obj_data[idx].bounding_box_2d,
+                               (uint8_t *)obj.bounding_box_2d.data(),
                                obj.bounding_box_2d.size() * 2 * sizeof(unsigned int));
-                        GST_LOG_OBJECT(src, " * [%d] Copied bbox 2D - %lu", idx,
-                                       8 * sizeof(unsigned int));
-                    } else {
-                        GST_LOG_OBJECT(src, " * [%d] bounding_box_2d empty", idx);
                     }
-
                     if (obj.bounding_box.size() > 0) {
-                        memcpy(obj_data[idx].bounding_box_3d, (void *) obj.bounding_box.data(),
+                        memcpy(obj_data[idx].bounding_box_3d,
+                               (void *)obj.bounding_box.data(),
                                24 * sizeof(float));
-                        GST_LOG_OBJECT(src, " * [%d] Copied bbox 3D - %lu", idx,
-                                       24 * sizeof(float));
-                    } else {
-                        GST_LOG_OBJECT(src, " * [%d] bounding_box empty", idx);
                     }
 
-                    memcpy(obj_data[idx].dimensions, (void *) obj.dimensions.ptr(),
-                           3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied dimensions", idx);
-
-                    idx++;
+                    memcpy(obj_data[idx].dimensions,
+                           (void *)obj.dimensions.ptr(), 3 * sizeof(float));
                 }
             } else {
                 obj_count = 0;
@@ -3428,90 +3433,56 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
         GST_LOG_OBJECT(src, "Body Tracking enabled");
 
-        sl::BodyTrackingRuntimeParameters rt_params;
-        rt_params.detection_confidence_threshold = src->bt_rt_det_conf;
-        rt_params.minimum_keypoints_threshold = src->bt_rt_min_kp_thresh;
-        rt_params.skeleton_smoothing = src->bt_rt_skel_smoothing;
+        bt_rt_params.detection_confidence_threshold = src->bt_rt_det_conf;
+        bt_rt_params.minimum_keypoints_threshold    = src->bt_rt_min_kp_thresh;
+        bt_rt_params.skeleton_smoothing             = src->bt_rt_skel_smoothing;
 
-        sl::Bodies bodies;
-        ret = src->zed.retrieveBodies(bodies, rt_params, BT_INSTANCE_MODULE_ID);
+        ret = src->zed.retrieveBodies(bodies, bt_rt_params, BT_INSTANCE_MODULE_ID);
 
         if (ret == sl::ERROR_CODE::SUCCESS) {
             if (bodies.is_new) {
                 GST_LOG_OBJECT(src, "BT new data");
 
                 int bodies_count = bodies.body_list.size();
-
                 GST_LOG_OBJECT(src, "Number of detected bodies: %d", bodies_count);
-                obj_count += bodies_count;
 
-                for (auto i = bodies.body_list.begin(); i != bodies.body_list.end(); ++i) {
+                for (auto i = bodies.body_list.begin();
+                     i != bodies.body_list.end() && b_idx < 256; ++i, ++b_idx) {
                     sl::BodyData obj = *i;
 
-                    // ----> General Info
-                    obj_data[b_idx].skeletons_avail = TRUE;   // Skeleton info is available
-
+                    obj_data[b_idx].skeletons_avail = TRUE;
                     obj_data[b_idx].id = obj.id;
-                    GST_LOG_OBJECT(src, " * [%d] Object id: %d", b_idx, obj.id);
-
-                    obj_data[b_idx].label = OBJECT_CLASS::PERSON;
-                    GST_LOG_OBJECT(src, " * [%d] Label: %s", b_idx,
-                                   sl::toString(sl::OBJECT_CLASS::PERSON).c_str());
-
+                    obj_data[b_idx].label    = OBJECT_CLASS::PERSON;
                     obj_data[b_idx].sublabel = OBJECT_SUBCLASS::PERSON;
-                    GST_LOG_OBJECT(src, " * [%d] Sublabel: %s", b_idx,
-                                   sl::toString(sl::OBJECT_SUBCLASS::PERSON).c_str());
 
                     obj_data[b_idx].tracking_state =
                         static_cast<OBJECT_TRACKING_STATE>(obj.tracking_state);
-                    GST_LOG_OBJECT(src, " * [%d] Tracking state: %s", b_idx,
-                                   sl::toString(obj.tracking_state).c_str());
-
                     obj_data[b_idx].action_state =
                         static_cast<OBJECT_ACTION_STATE>(obj.action_state);
-                    GST_LOG_OBJECT(src, " * [%d] Action state: %s", b_idx,
-                                   sl::toString(obj.action_state).c_str());
 
                     obj_data[b_idx].confidence = obj.confidence;
-                    GST_LOG_OBJECT(src, " * [%d] Object confidence: %g", b_idx, obj.confidence);
 
-                    memcpy(obj_data[b_idx].position, (void *) obj.position.ptr(),
-                           3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied position", b_idx);
-                    memcpy(obj_data[b_idx].position_covariance, (void *) obj.position_covariance,
-                           6 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied covariance", b_idx);
-                    memcpy(obj_data[b_idx].velocity, (void *) obj.velocity.ptr(),
-                           3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied velocity", b_idx);
-                    // <---- General Info
+                    memcpy(obj_data[b_idx].position,
+                           (void *)obj.position.ptr(), 3 * sizeof(float));
+                    memcpy(obj_data[b_idx].position_covariance,
+                           (void *)obj.position_covariance, 6 * sizeof(float));
+                    memcpy(obj_data[b_idx].velocity,
+                           (void *)obj.velocity.ptr(), 3 * sizeof(float));
 
-                    // ----> Bounding Box
                     if (obj.bounding_box_2d.size() > 0) {
-                        memcpy((uint8_t *) obj_data[b_idx].bounding_box_2d,
-                               (uint8_t *) obj.bounding_box_2d.data(),
+                        memcpy((uint8_t *)obj_data[b_idx].bounding_box_2d,
+                               (uint8_t *)obj.bounding_box_2d.data(),
                                obj.bounding_box_2d.size() * 2 * sizeof(unsigned int));
-                        GST_LOG_OBJECT(src, " * [%d] Copied bbox 2D - %lu", b_idx,
-                                       8 * sizeof(unsigned int));
-                    } else {
-                        GST_LOG_OBJECT(src, " * [%d] bounding_box_2d empty", b_idx);
                     }
-
                     if (obj.bounding_box.size() > 0) {
-                        memcpy(obj_data[b_idx].bounding_box_3d, (void *) obj.bounding_box.data(),
+                        memcpy(obj_data[b_idx].bounding_box_3d,
+                               (void *)obj.bounding_box.data(),
                                24 * sizeof(float));
-                        GST_LOG_OBJECT(src, " * [%d] Copied bbox 3D - %lu", b_idx,
-                                       24 * sizeof(float));
-                    } else {
-                        GST_LOG_OBJECT(src, " * [%d] bounding_box empty", b_idx);
                     }
 
-                    memcpy(obj_data[b_idx].dimensions, (void *) obj.dimensions.ptr(),
-                           3 * sizeof(float));
-                    GST_LOG_OBJECT(src, " * [%d] Copied dimensions", b_idx);
-                    // <---- Bounding Box
+                    memcpy(obj_data[b_idx].dimensions,
+                           (void *)obj.dimensions.ptr(), 3 * sizeof(float));
 
-                    // ----> Skeleton
                     switch (static_cast<sl::BODY_FORMAT>(src->bt_format)) {
                     case sl::BODY_FORMAT::BODY_18:
                         obj_data[b_idx].skel_format = 18;
@@ -3522,55 +3493,41 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                     case sl::BODY_FORMAT::BODY_38:
                         obj_data[b_idx].skel_format = 38;
                         break;
-                        // case sl::BODY_FORMAT::BODY_70:
-                        //     obj_data[b_idx].skel_format = 70;
-                        //     break;
+                    default:
+                        obj_data[b_idx].skel_format = 0;
+                        break;
                     }
 
-                    if (obj.keypoint_2d.size() > 0) {
-                        memcpy(obj_data[b_idx].keypoint_2d, (void *) obj.keypoint_2d.data(),
+                    if (obj.keypoint_2d.size() > 0 && obj_data[b_idx].skel_format > 0) {
+                        memcpy(obj_data[b_idx].keypoint_2d,
+                               (void *)obj.keypoint_2d.data(),
                                2 * obj_data[b_idx].skel_format * sizeof(float));
-                        GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 2d - %lu", b_idx,
-                                         obj.keypoint_2d.size());
-                    } else {
-                        GST_TRACE_OBJECT(src, " * [%d] keypoint_2d empty", b_idx);
                     }
-                    if (obj.keypoint.size() > 0) {
-                        memcpy(obj_data[b_idx].keypoint_3d, (void *) obj.keypoint.data(),
+                    if (obj.keypoint.size() > 0 && obj_data[b_idx].skel_format > 0) {
+                        memcpy(obj_data[b_idx].keypoint_3d,
+                               (void *)obj.keypoint.data(),
                                3 * obj_data[b_idx].skel_format * sizeof(float));
-                        GST_TRACE_OBJECT(src, " * [%d] Copied skeleton 3d - %lu", b_idx,
-                                         obj.keypoint.size());
-                    } else {
-                        GST_TRACE_OBJECT(src, " * [%d] keypoint empty", b_idx);
                     }
 
                     if (obj.head_bounding_box_2d.size() > 0) {
                         memcpy(obj_data[b_idx].head_bounding_box_2d,
-                               (void *) obj.head_bounding_box_2d.data(), 8 * sizeof(unsigned int));
-                        GST_TRACE_OBJECT(src, " * [%d] Copied head bbox 2d - %lu", b_idx,
-                                         obj.head_bounding_box_2d.size());
-                    } else {
-                        GST_TRACE_OBJECT(src, " * [%d] head_bounding_box_2d empty", b_idx);
+                               (void *)obj.head_bounding_box_2d.data(),
+                               8 * sizeof(unsigned int));
                     }
                     if (obj.head_bounding_box.size() > 0) {
                         memcpy(obj_data[b_idx].head_bounding_box_3d,
-                               (void *) obj.head_bounding_box.data(), 24 * sizeof(float));
-                        GST_TRACE_OBJECT(src, " * [%d] Copied head bbox 3d - %lu", b_idx,
-                                         obj.head_bounding_box.size());
-                    } else {
-                        GST_TRACE_OBJECT(src, " * [%d] head_bounding_box empty", b_idx);
+                               (void *)obj.head_bounding_box.data(),
+                               24 * sizeof(float));
                     }
-                    memcpy(obj_data[b_idx].head_position, (void *) obj.head_position.ptr(),
-                           3 * sizeof(float));
-                    GST_TRACE_OBJECT(src, " * [%d] Copied head position", b_idx);
-                    // <---- Skeleton
-
-                    b_idx++;
+                    memcpy(obj_data[b_idx].head_position,
+                           (void *)obj.head_position.ptr(), 3 * sizeof(float));
                 }
+
+                obj_count = b_idx;
             }
         } else {
-            GST_WARNING_OBJECT(src, "Body Tracking problem: '%s' - %s", sl::toString(ret).c_str(),
-                               sl::toVerbose(ret).c_str());
+            GST_WARNING_OBJECT(src, "Body Tracking problem: '%s' - %s",
+                               sl::toString(ret).c_str(), sl::toVerbose(ret).c_str());
         }
     }
     // <---- Body Tracking metadata
@@ -3582,18 +3539,21 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
     // <---- Timestamp meta-data
 
-    guint64 offset = GST_BUFFER_OFFSET(buf);
-    GstZedSrcMeta *meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
-                                                      src->object_detection | src->body_tracking,
-                                                      obj_count, obj_data, offset);
+    offset = GST_BUFFER_OFFSET(buf);
+    meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
+                                       src->object_detection | src->body_tracking,
+                                       obj_count, obj_data, offset);
 
-    // Buffer release
-    gst_buffer_unmap(buf, &minfo);
-    // gst_buffer_unref(buf); // NOTE(Walter) do not uncomment to not crash
+out:
+    if (mapped)
+        gst_buffer_unmap(buf, &minfo);
+    cuCtxPopCurrent_v2(NULL);
 
-    if (src->stop_requested) {
+    if (flow_ret != GST_FLOW_OK)
+        return flow_ret;
+
+    if (src->stop_requested)
         return GST_FLOW_FLUSHING;
-    }
 
     return GST_FLOW_OK;
 }

@@ -3,6 +3,7 @@ LATEST CHANGES
 
 ZED SDK v5.1
 --------------
+- Fix memleak on demux chain
 - Added missing parameters for zedsrc and zedxonesrc elements:
 - Fixed memory leaks from parameter parsing in zedsrc and zedxonesrc elements
 
