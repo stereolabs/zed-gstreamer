@@ -69,13 +69,11 @@ enum {
     PROP_DEPTH_MAX,
     PROP_DEPTH_MODE,
     PROP_DIS_SELF_CALIB,
-    PROP_CAP_GRAB_FPS,
     PROP_ROI,
     PROP_ROI_X,
     PROP_ROI_Y,
     PROP_ROI_W,
     PROP_ROI_H,
-    // PROP_RIGHT_DEPTH_ENABLE,
     PROP_DEPTH_STAB,
     PROP_CONFIDENCE_THRESH,
     PROP_TEXTURE_CONF_THRESH,
@@ -148,6 +146,24 @@ enum {
     PROP_WHITEBALANCE,
     PROP_WHITEBALANCE_AUTO,
     PROP_LEDSTATUS,
+    PROP_SVO_REAL_TIME,
+    PROP_SDK_GPU_ID,
+    PROP_SDK_VERBOSE_LOG_FILE,
+    PROP_OPTIONAL_SETTINGS_PATH,
+    PROP_SENSORS_REQUIRED,
+    PROP_ENABLE_IMAGE_ENHANCEMENT,
+    PROP_OPEN_TIMEOUT_SEC,
+    PROP_ASYNC_GRAB_CAMERA_RECOVERY,
+    PROP_GRAB_COMPUTE_CAPPING_FPS,
+    PROP_ENABLE_IMAGE_VALIDITY_CHECK,
+    PROP_ASYNC_IMAGE_RETRIEVAL,
+    PROP_MAX_WORKING_RES_W,
+    PROP_MAX_WORKING_RES_H,
+    PROP_REMOVE_SATURATED_AREAS,
+    PROP_OD_INSTANCE_ID,
+    PROP_OD_CUSTOM_ONNX_FILE,
+    PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W,
+    PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H,
     N_PROPERTIES
 };
 
@@ -252,8 +268,20 @@ typedef enum {
 #define DEFAULT_PROP_COORD_SYS      static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
 #define DEFAULT_PROP_DEPTH_STAB     1
-//#define DEFAULT_PROP_RIGHT_DEPTH              FALSE
-#define DEFAULT_PROP_CAP_GRAB_FPS 0
+#define DEFAULT_PROP_RIGHT_DEPTH FALSE
+#define DEFAULT_PROP_SVO_REAL_TIME FALSE
+#define DEFAULT_PROP_SDK_GPU_ID -1
+#define DEFAULT_PROP_SDK_VERBOSE_LOG_FILE ""
+#define DEFAULT_PROP_OPTIONAL_SETTINGS_PATH ""
+#define DEFAULT_PROP_SENSORS_REQUIRED FALSE
+#define DEFAULT_PROP_ENABLE_IMAGE_ENHANCEMENT TRUE
+#define DEFAULT_PROP_OPEN_TIMEOUT_SEC 5.0f
+#define DEFAULT_PROP_ASYNC_GRAB_CAMERA_RECOVERY FALSE
+#define DEFAULT_PROP_GRAB_COMPUTE_CAPPING_FPS 0.0f
+#define DEFAULT_PROP_ENABLE_IMAGE_VALIDITY_CHECK TRUE
+#define DEFAULT_PROP_ASYNC_IMAGE_RETRIEVAL FALSE
+#define DEFAULT_PROP_MAX_WORKING_RES_W 0
+#define DEFAULT_PROP_MAX_WORKING_RES_H 0
 #define DEFAULT_PROP_ROI   FALSE
 #define DEFAULT_PROP_ROI_X -1
 #define DEFAULT_PROP_ROI_Y -1
@@ -265,6 +293,7 @@ typedef enum {
 #define DEFAULT_PROP_TEXTURE_CONF_THRESH 100
 #define DEFAULT_PROP_3D_REF_FRAME        static_cast<gint>(sl::REFERENCE_FRAME::WORLD)
 #define DEFAULT_PROP_FILL_MODE           FALSE
+#define DEFAULT_PROP_REMOVE_SATURATED_AREAS FALSE
 
 // POSITIONAL TRACKING
 #define DEFAULT_PROP_POS_TRACKING              FALSE
@@ -295,6 +324,10 @@ typedef enum {
 #define DEFAULT_PROP_OD_MAX_RANGE                         DEFAULT_PROP_DEPTH_MAX
 #define DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S              0.2
 #define DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE FALSE
+#define DEFAULT_PROP_OD_INSTANCE_ID OD_INSTANCE_MODULE_ID
+#define DEFAULT_PROP_OD_CUSTOM_ONNX_FILE ""
+#define DEFAULT_PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W 512
+#define DEFAULT_PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H 512
 #define DEFAULT_PROP_OD_PEOPLE_CONF                       35.0
 #define DEFAULT_PROP_OD_VEHICLE_CONF                      35.0
 #define DEFAULT_PROP_OD_BAG_CONF                          35.0
@@ -873,7 +906,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_STREAM_IP,
         g_param_spec_string("input-stream-ip", "Input Stream IP",
-                            "Specify IP adress when using streaming input", DEFAULT_PROP_SVO_FILE,
+                            "Specify IP address when using streaming input", DEFAULT_PROP_SVO_FILE,
                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -907,12 +940,6 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                              "Disable the self calibration processing when the camera is opened",
                              DEFAULT_PROP_DIS_SELF_CALIB,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(
-        gobject_class, PROP_CAP_GRAB_FPS,
-        g_param_spec_int("grab-cap-fps", "Processing frame rate", "Processing frame rate",
-                          0, 60,DEFAULT_PROP_CAP_GRAB_FPS,
-                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     /*g_object_class_install_property( gobject_class, PROP_RIGHT_DEPTH_ENABLE,
                                      g_param_spec_boolean("enable-right-side-measure", "Enable right
@@ -1422,6 +1449,121 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
         g_param_spec_boolean("ctrl-led-status", "Camera control: led status", "Camera LED on/off",
                              DEFAULT_PROP_LEDSTATUS,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_REAL_TIME,
+        g_param_spec_boolean("svo-real-time-mode", "SVO Real Time Mode", "SVO Real Time Mode",
+                             DEFAULT_PROP_SVO_REAL_TIME,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_SDK_GPU_ID,
+        g_param_spec_int("sdk-gpu-id", "SDK GPU ID", "SDK GPU ID", -1, 128, DEFAULT_PROP_SDK_GPU_ID,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_SDK_VERBOSE_LOG_FILE,
+        g_param_spec_string("sdk-verbose-log-file", "SDK Verbose Log File", "SDK Verbose Log File",
+                            DEFAULT_PROP_SDK_VERBOSE_LOG_FILE,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OPTIONAL_SETTINGS_PATH,
+        g_param_spec_string("optional-settings-path", "Optional Settings Path",
+                            "Optional Settings Path", DEFAULT_PROP_OPTIONAL_SETTINGS_PATH,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_SENSORS_REQUIRED,
+        g_param_spec_boolean("sensors-required", "Sensors Required", "Sensors Required",
+                             DEFAULT_PROP_SENSORS_REQUIRED,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_ENABLE_IMAGE_ENHANCEMENT,
+        g_param_spec_boolean("enable-image-enhancement", "Enable Image Enhancement",
+                             "Enable Image Enhancement", DEFAULT_PROP_ENABLE_IMAGE_ENHANCEMENT,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OPEN_TIMEOUT_SEC,
+        g_param_spec_float("open-timeout-sec", "Open Timeout Seconds", "Open Timeout Seconds", 0.0f,
+                           600.0f, DEFAULT_PROP_OPEN_TIMEOUT_SEC,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_ASYNC_GRAB_CAMERA_RECOVERY,
+        g_param_spec_boolean("async-grab-camera-recovery", "Async Grab Camera Recovery",
+                             "Async Grab Camera Recovery", DEFAULT_PROP_ASYNC_GRAB_CAMERA_RECOVERY,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_GRAB_COMPUTE_CAPPING_FPS,
+        g_param_spec_float("grab-compute-capping-fps", "Grab Compute Capping FPS",
+                           "Grab Compute Capping FPS", 0.0f, 1000.0f,
+                           DEFAULT_PROP_GRAB_COMPUTE_CAPPING_FPS,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_ENABLE_IMAGE_VALIDITY_CHECK,
+        g_param_spec_boolean("enable-image-validity-check", "Enable Image Validity Check",
+                             "Enable Image Validity Check",
+                             DEFAULT_PROP_ENABLE_IMAGE_VALIDITY_CHECK,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_ASYNC_IMAGE_RETRIEVAL,
+        g_param_spec_boolean("async-image-retrieval", "Async Image Retrieval",
+                             "Async Image Retrieval", DEFAULT_PROP_ASYNC_IMAGE_RETRIEVAL,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_MAX_WORKING_RES_W,
+        g_param_spec_int("max-working-res-w", "Maximum Working Resolution Width",
+                         "Maximum Working Resolution Width", 0, 10000,
+                         DEFAULT_PROP_MAX_WORKING_RES_W,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_MAX_WORKING_RES_H,
+        g_param_spec_int("max-working-res-h", "Maximum Working Resolution Height",
+                         "Maximum Working Resolution Height", 0, 10000,
+                         DEFAULT_PROP_MAX_WORKING_RES_H,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_REMOVE_SATURATED_AREAS,
+        g_param_spec_boolean("remove-saturated-areas", "Remove Saturated Areas",
+                             "Remove Saturated Areas", DEFAULT_PROP_REMOVE_SATURATED_AREAS,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_INSTANCE_ID,
+        g_param_spec_uint("od-instance-id", "Object Detection Instance ID",
+                          "Object Detection Instance ID", 0, G_MAXUINT, DEFAULT_PROP_OD_INSTANCE_ID,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_CUSTOM_ONNX_FILE,
+        g_param_spec_string("od-custom-onnx-file", "Object Detection Custom ONNX File",
+                            "Object Detection Custom ONNX File", DEFAULT_PROP_OD_CUSTOM_ONNX_FILE,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W,
+        g_param_spec_int("od-custom-onnx-dynamic-input-shape-w",
+                         "Object Detection Custom ONNX Dynamic Input Shape Width",
+                         "Object Detection Custom ONNX Dynamic Input Shape Width", 0, 10000,
+                         DEFAULT_PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H,
+        g_param_spec_int("od-custom-onnx-dynamic-input-shape-h",
+                         "Object Detection Custom ONNX Dynamic Input Shape Height",
+                         "Object Detection Custom ONNX Dynamic Input Shape Height", 0, 10000,
+                         DEFAULT_PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H,
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 }
 
 static void gst_zedsrc_reset(GstZedSrc *src) {
@@ -1455,9 +1597,10 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->camera_image_flip = DEFAULT_PROP_CAM_FLIP;
     src->camera_id = DEFAULT_PROP_CAM_ID;
     src->camera_sn = DEFAULT_PROP_CAM_SN;
-    src->svo_file = *g_string_new(DEFAULT_PROP_SVO_FILE);
-    src->opencv_calibration_file = *g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
-    src->stream_ip = *g_string_new(DEFAULT_PROP_STREAM_IP);
+    src->svo_file = g_string_new(DEFAULT_PROP_SVO_FILE);
+    src->opencv_calibration_file = g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
+    src->stream_ip = g_string_new(DEFAULT_PROP_STREAM_IP);
+
     src->stream_port = DEFAULT_PROP_STREAM_PORT;
     src->stream_type = DEFAULT_PROP_STREAM_TYPE;
     src->depth_min_dist = DEFAULT_PROP_DEPTH_MIN;
@@ -1466,11 +1609,25 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->camera_disable_self_calib = DEFAULT_PROP_DIS_SELF_CALIB;
     src->depth_stabilization = DEFAULT_PROP_DEPTH_STAB;
     src->coord_sys = DEFAULT_PROP_COORD_SYS;
-    src->grab_compute_capping_fps = DEFAULT_PROP_CAP_GRAB_FPS;
+    src->svo_real_time = DEFAULT_PROP_SVO_REAL_TIME;
+    src->sdk_gpu_id = DEFAULT_PROP_SDK_GPU_ID;
+    src->sdk_verbose_log_file = g_string_new(DEFAULT_PROP_SDK_VERBOSE_LOG_FILE);
+    src->optional_settings_path = g_string_new(DEFAULT_PROP_OPTIONAL_SETTINGS_PATH);
+    src->sensors_required = DEFAULT_PROP_SENSORS_REQUIRED;
+    src->enable_image_enhancement = DEFAULT_PROP_ENABLE_IMAGE_ENHANCEMENT;
+    src->open_timeout_sec = DEFAULT_PROP_OPEN_TIMEOUT_SEC;
+    src->async_grab_camera_recovery = DEFAULT_PROP_ASYNC_GRAB_CAMERA_RECOVERY;
+    src->grab_compute_capping_fps = DEFAULT_PROP_GRAB_COMPUTE_CAPPING_FPS;
+    src->enable_image_validity_check = DEFAULT_PROP_ENABLE_IMAGE_VALIDITY_CHECK;
+    src->async_image_retrieval = DEFAULT_PROP_ASYNC_IMAGE_RETRIEVAL;
+    src->max_working_res_w = DEFAULT_PROP_MAX_WORKING_RES_W;
+    src->max_working_res_h = DEFAULT_PROP_MAX_WORKING_RES_H;
+
     src->confidence_threshold = DEFAULT_PROP_CONFIDENCE_THRESH;
     src->texture_confidence_threshold = DEFAULT_PROP_TEXTURE_CONF_THRESH;
     src->measure3D_reference_frame = DEFAULT_PROP_3D_REF_FRAME;
     src->fill_mode = DEFAULT_PROP_FILL_MODE;
+    src->remove_saturated_areas = DEFAULT_PROP_REMOVE_SATURATED_AREAS;
     src->roi = DEFAULT_PROP_ROI;
     src->roi_x = DEFAULT_PROP_ROI_X;
     src->roi_y = DEFAULT_PROP_ROI_Y;
@@ -1479,7 +1636,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 
     src->pos_tracking = DEFAULT_PROP_POS_TRACKING;
     src->camera_static = DEFAULT_PROP_CAMERA_STATIC;
-    src->area_file_path = *g_string_new(DEFAULT_PROP_POS_AREA_FILE_PATH);
+    src->area_file_path = g_string_new(DEFAULT_PROP_POS_AREA_FILE_PATH);
     src->enable_area_memory = DEFAULT_PROP_POS_ENABLE_AREA_MEMORY;
     src->enable_imu_fusion = DEFAULT_PROP_POS_ENABLE_IMU_FUSION;
     src->enable_pose_smoothing = DEFAULT_PROP_POS_ENABLE_POSE_SMOOTHING;
@@ -1495,6 +1652,10 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->pos_trk_mode = DEFAULT_PROP_PT_MODE;
 
     src->object_detection = DEFAULT_PROP_OD_ENABLE;
+    src->od_instance_id = DEFAULT_PROP_OD_INSTANCE_ID;
+    src->od_custom_onnx_file = g_string_new(DEFAULT_PROP_OD_CUSTOM_ONNX_FILE);
+    src->od_custom_onnx_dynamic_input_shape_w = DEFAULT_PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W;
+    src->od_custom_onnx_dynamic_input_shape_h = DEFAULT_PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H;
     src->od_enable_tracking = DEFAULT_PROP_OD_TRACKING;
     src->od_enable_segm_output = DEFAULT_PROP_OD_SEGM;
     src->od_detection_model = DEFAULT_PROP_OD_MODEL;
@@ -1582,15 +1743,15 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_SVO_FILE:
         str = g_value_get_string(value);
-        src->svo_file = *g_string_new(str);
+        g_string_assign(src->svo_file, str);
         break;
     case PROP_OPENCV_CALIB_FILE:
         str = g_value_get_string(value);
-        src->opencv_calibration_file = *g_string_new(str);
+        g_string_assign(src->opencv_calibration_file, str);
         break;
     case PROP_STREAM_IP:
         str = g_value_get_string(value);
-        src->stream_ip = *g_string_new(str);
+        g_string_assign(src->stream_ip, str);
         break;
     case PROP_STREAM_PORT:
         src->stream_port = g_value_get_int(value);
@@ -1606,9 +1767,6 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_DEPTH_MODE:
         src->depth_mode = g_value_get_enum(value);
-        break;
-    case PROP_CAP_GRAB_FPS:
-        src->grab_compute_capping_fps = g_value_get_int(value);
         break;
     case PROP_DIS_SELF_CALIB:
         src->camera_disable_self_calib = g_value_get_boolean(value);
@@ -1660,7 +1818,7 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_POS_AREA_FILE_PATH:
         str = g_value_get_string(value);
-        src->area_file_path = *g_string_new(str);
+        g_string_assign(src->area_file_path, str);
         break;
     case PROP_POS_ENABLE_AREA_MEMORY:
         src->enable_area_memory = g_value_get_boolean(value);
@@ -1850,6 +2008,63 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
     case PROP_LEDSTATUS:
         src->led_status = g_value_get_boolean(value);
         break;
+    case PROP_SVO_REAL_TIME:
+        src->svo_real_time = g_value_get_boolean(value);
+        break;
+    case PROP_SDK_GPU_ID:
+        src->sdk_gpu_id = g_value_get_int(value);
+        break;
+    case PROP_SDK_VERBOSE_LOG_FILE:
+        str = g_value_get_string(value);
+        g_string_assign(src->sdk_verbose_log_file, str);
+        break;
+    case PROP_OPTIONAL_SETTINGS_PATH:
+        str = g_value_get_string(value);
+        g_string_assign(src->optional_settings_path, str);
+        break;
+    case PROP_SENSORS_REQUIRED:
+        src->sensors_required = g_value_get_boolean(value);
+        break;
+    case PROP_ENABLE_IMAGE_ENHANCEMENT:
+        src->enable_image_enhancement = g_value_get_boolean(value);
+        break;
+    case PROP_OPEN_TIMEOUT_SEC:
+        src->open_timeout_sec = g_value_get_float(value);
+        break;
+    case PROP_ASYNC_GRAB_CAMERA_RECOVERY:
+        src->async_grab_camera_recovery = g_value_get_boolean(value);
+        break;
+    case PROP_GRAB_COMPUTE_CAPPING_FPS:
+        src->grab_compute_capping_fps = g_value_get_float(value);
+        break;
+    case PROP_ENABLE_IMAGE_VALIDITY_CHECK:
+        src->enable_image_validity_check = g_value_get_boolean(value);
+        break;
+    case PROP_ASYNC_IMAGE_RETRIEVAL:
+        src->async_image_retrieval = g_value_get_boolean(value);
+        break;
+    case PROP_MAX_WORKING_RES_W:
+        src->max_working_res_w = g_value_get_int(value);
+        break;
+    case PROP_MAX_WORKING_RES_H:
+        src->max_working_res_h = g_value_get_int(value);
+        break;
+    case PROP_REMOVE_SATURATED_AREAS:
+        src->remove_saturated_areas = g_value_get_boolean(value);
+        break;
+    case PROP_OD_INSTANCE_ID:
+        src->od_instance_id = g_value_get_uint(value);
+        break;
+    case PROP_OD_CUSTOM_ONNX_FILE:
+        str = g_value_get_string(value);
+        g_string_assign(src->od_custom_onnx_file, str);
+        break;
+    case PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W:
+        src->od_custom_onnx_dynamic_input_shape_w = g_value_get_int(value);
+        break;
+    case PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H:
+        src->od_custom_onnx_dynamic_input_shape_h = g_value_get_int(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
@@ -1884,13 +2099,13 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_int64(value, src->camera_id);
         break;
     case PROP_SVO_FILE:
-        g_value_set_string(value, src->svo_file.str);
+        g_value_set_string(value, src->svo_file->str);
         break;
     case PROP_OPENCV_CALIB_FILE:
-        g_value_set_string(value, src->opencv_calibration_file.str);
+        g_value_set_string(value, src->opencv_calibration_file->str);
         break;
     case PROP_STREAM_IP:
-        g_value_set_string(value, src->stream_ip.str);
+        g_value_set_string(value, src->stream_ip->str);
         break;
     case PROP_STREAM_PORT:
         g_value_set_int(value, src->stream_port);
@@ -1906,9 +2121,6 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         break;
     case PROP_DEPTH_MODE:
         g_value_set_enum(value, src->depth_mode);
-        break;
-    case PROP_CAP_GRAB_FPS:
-        g_value_set_int(value, src->grab_compute_capping_fps);
         break;
     case PROP_COORD_SYS:
         g_value_set_enum(value, src->coord_sys);
@@ -1959,7 +2171,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_boolean(value, src->camera_static);
         break;
     case PROP_POS_AREA_FILE_PATH:
-        g_value_set_string(value, src->area_file_path.str);
+        g_value_set_string(value, src->area_file_path->str);
         break;
     case PROP_POS_ENABLE_AREA_MEMORY:
         g_value_set_boolean(value, src->enable_area_memory);
@@ -2141,7 +2353,60 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     case PROP_LEDSTATUS:
         g_value_set_boolean(value, src->led_status);
         break;
-
+    case PROP_SVO_REAL_TIME:
+        g_value_set_boolean(value, src->svo_real_time);
+        break;
+    case PROP_SDK_GPU_ID:
+        g_value_set_int(value, src->sdk_gpu_id);
+        break;
+    case PROP_SDK_VERBOSE_LOG_FILE:
+        g_value_set_string(value, src->sdk_verbose_log_file->str);
+        break;
+    case PROP_OPTIONAL_SETTINGS_PATH:
+        g_value_set_string(value, src->optional_settings_path->str);
+        break;
+    case PROP_SENSORS_REQUIRED:
+        g_value_set_boolean(value, src->sensors_required);
+        break;
+    case PROP_ENABLE_IMAGE_ENHANCEMENT:
+        g_value_set_boolean(value, src->enable_image_enhancement);
+        break;
+    case PROP_OPEN_TIMEOUT_SEC:
+        g_value_set_float(value, src->open_timeout_sec);
+        break;
+    case PROP_ASYNC_GRAB_CAMERA_RECOVERY:
+        g_value_set_boolean(value, src->async_grab_camera_recovery);
+        break;
+    case PROP_GRAB_COMPUTE_CAPPING_FPS:
+        g_value_set_float(value, src->grab_compute_capping_fps);
+        break;
+    case PROP_ENABLE_IMAGE_VALIDITY_CHECK:
+        g_value_set_boolean(value, src->enable_image_validity_check);
+        break;
+    case PROP_ASYNC_IMAGE_RETRIEVAL:
+        g_value_set_boolean(value, src->async_image_retrieval);
+        break;
+    case PROP_MAX_WORKING_RES_W:
+        g_value_set_int(value, src->max_working_res_w);
+        break;
+    case PROP_MAX_WORKING_RES_H:
+        g_value_set_int(value, src->max_working_res_h);
+        break;
+    case PROP_REMOVE_SATURATED_AREAS:
+        g_value_set_boolean(value, src->remove_saturated_areas);
+        break;
+    case PROP_OD_INSTANCE_ID:
+        g_value_set_uint(value, src->od_instance_id);
+        break;
+    case PROP_OD_CUSTOM_ONNX_FILE:
+        g_value_set_string(value, src->od_custom_onnx_file->str);
+        break;
+    case PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W:
+        g_value_set_int(value, src->od_custom_onnx_dynamic_input_shape_w);
+        break;
+    case PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H:
+        g_value_set_int(value, src->od_custom_onnx_dynamic_input_shape_h);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
@@ -2173,6 +2438,28 @@ void gst_zedsrc_finalize(GObject *object) {
     if (src->caps) {
         gst_caps_unref(src->caps);
         src->caps = NULL;
+    }
+
+    if (src->svo_file) {
+        g_string_free(src->svo_file, TRUE);
+    }
+    if (src->opencv_calibration_file) {
+        g_string_free(src->opencv_calibration_file, TRUE);
+    }
+    if (src->stream_ip) {
+        g_string_free(src->stream_ip, TRUE);
+    }
+    if (src->sdk_verbose_log_file) {
+        g_string_free(src->sdk_verbose_log_file, TRUE);
+    }
+    if (src->optional_settings_path) {
+        g_string_free(src->optional_settings_path, TRUE);
+    }
+    if (src->area_file_path) {
+        g_string_free(src->area_file_path, TRUE);
+    }
+    if (src->od_custom_onnx_file) {
+        g_string_free(src->od_custom_onnx_file, TRUE);
     }
 
     G_OBJECT_CLASS(gst_zedsrc_parent_class)->finalize(object);
@@ -2267,8 +2554,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Camera resolution: %s", sl::toString(init_params.camera_resolution).c_str());
     init_params.camera_fps = src->camera_fps;
     GST_INFO(" * Camera FPS: %d", init_params.camera_fps);
-    init_params.sdk_verbose = src->sdk_verbose == TRUE;
-    GST_INFO(" * SDK verbose: %s", (init_params.sdk_verbose ? "TRUE" : "FALSE"));
+    init_params.sdk_verbose = src->sdk_verbose;
+    GST_INFO(" * SDK verbose: %d", init_params.sdk_verbose);
     init_params.camera_image_flip = src->camera_image_flip;
     GST_INFO(" * Camera flipped: %s",
              sl::toString(static_cast<sl::FLIP_MODE>(init_params.camera_image_flip)).c_str());
@@ -2317,21 +2604,53 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * MAX depth: %g", init_params.depth_maximum_distance);
     init_params.depth_stabilization = src->depth_stabilization;
     GST_INFO(" * Depth Stabilization: %d", init_params.depth_stabilization);
-    init_params.enable_right_side_measure = false;   // src->enable_right_side_measure==TRUE;
     init_params.camera_disable_self_calib = src->camera_disable_self_calib == TRUE;
-    GST_INFO(" * Disable self calibration: %s",(init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
-    init_params.grab_compute_capping_fps = (float)src->grab_compute_capping_fps;
-    GST_INFO(" * Grab FPS Cap : %d", (int)init_params.grab_compute_capping_fps);
-    sl::String opencv_calibration_file(src->opencv_calibration_file.str);
+    GST_INFO(" * Disable self calibration: %s",
+             (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
+    init_params.sdk_gpu_id = src->sdk_gpu_id;
+    GST_INFO(" * SDK GPU ID: %d", init_params.sdk_gpu_id);
+    init_params.sdk_verbose_log_file = sl::String(src->sdk_verbose_log_file->str);
+    GST_INFO(" * SDK Verbose Log File: %s", init_params.sdk_verbose_log_file.c_str());
+    init_params.optional_settings_path = sl::String(src->optional_settings_path->str);
+    GST_INFO(" * Optional Settings Path: %s", init_params.optional_settings_path.c_str());
+    init_params.sensors_required = src->sensors_required == TRUE;
+    GST_INFO(" * Sensors Required: %s", (init_params.sensors_required ? "TRUE" : "FALSE"));
+    init_params.enable_image_enhancement = src->enable_image_enhancement == TRUE;
+    GST_INFO(" * Enable Image Enhancement: %s",
+             (init_params.enable_image_enhancement ? "TRUE" : "FALSE"));
+    init_params.open_timeout_sec = src->open_timeout_sec;
+    GST_INFO(" * Open Timeout Seconds: %g", init_params.open_timeout_sec);
+    init_params.async_grab_camera_recovery = src->async_grab_camera_recovery == TRUE;
+    GST_INFO(" * Async Grab Camera Recovery: %s",
+             (init_params.async_grab_camera_recovery ? "TRUE" : "FALSE"));
+    init_params.grab_compute_capping_fps = src->grab_compute_capping_fps;
+    GST_INFO(" * Grab Compute Capping FPS: %g", init_params.grab_compute_capping_fps);
+    init_params.enable_image_validity_check = src->enable_image_validity_check;
+    GST_INFO(" * Enable Image Validity Check: %d", init_params.enable_image_validity_check);
+    init_params.async_image_retrieval = src->async_image_retrieval == TRUE;
+    GST_INFO(" * Async Image Retrieval: %s",
+             (init_params.async_image_retrieval ? "TRUE" : "FALSE"));
+    if (src->max_working_res_w > 0 && src->max_working_res_h > 0) {
+        init_params.maximum_working_resolution =
+            sl::Resolution(src->max_working_res_w, src->max_working_res_h);
+        GST_INFO(" * Maximum Working Resolution: %dx%d", src->max_working_res_w,
+                 src->max_working_res_h);
+    }
+
+    sl::String opencv_calibration_file(src->opencv_calibration_file->str);
     init_params.optional_opencv_calibration_file = opencv_calibration_file;
-    GST_INFO(" * Calibration File: %s ", init_params.optional_opencv_calibration_file.c_str());
+    GST_INFO(" * OpenCV Calibration File: %s ",
+             init_params.optional_opencv_calibration_file.c_str());
 
-    if (src->svo_file.len != 0) {
-        sl::String svo(static_cast<char *>(src->svo_file.str));
+    std::cout << "Setting depth_mode to " << init_params.depth_mode << std::endl;
+
+    if (src->svo_file->len != 0) {
+        sl::String svo(static_cast<char *>(src->svo_file->str));
         init_params.input.setFromSVOFile(svo);
-        init_params.svo_real_time_mode = true;
+        init_params.svo_real_time_mode = src->svo_real_time == TRUE;
 
-        GST_INFO(" * Input SVO filename: %s", src->svo_file.str);
+        GST_INFO(" * Input SVO filename: %s", src->svo_file->str);
+        GST_INFO(" * SVO Real Time Mode: %s", (init_params.svo_real_time_mode ? "TRUE" : "FALSE"));
     } else if (src->camera_id != DEFAULT_PROP_CAM_ID) {
         init_params.input.setFromCameraID(src->camera_id);
 
@@ -2340,11 +2659,11 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         init_params.input.setFromSerialNumber(src->camera_sn);
 
         GST_INFO(" * Input Camera SN: %ld", src->camera_sn);
-    } else if (src->stream_ip.len != 0) {
-        sl::String ip(static_cast<char *>(src->stream_ip.str));
+    } else if (src->stream_ip->len != 0) {
+        sl::String ip(static_cast<char *>(src->stream_ip->str));
         init_params.input.setFromStream(ip, src->stream_port);
 
-        GST_INFO(" * Input Stream: %s:%d", src->stream_ip.str, src->stream_port);
+        GST_INFO(" * Input Stream: %s:%d", src->stream_ip->str, src->stream_port);
     } else {
         GST_INFO(" * Input from default device");
     }
@@ -2481,7 +2800,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Pos. Tracking mode: %s", sl::toString(pos_trk_params.mode).c_str());
         pos_trk_params.set_as_static = (src->camera_static == TRUE);
         GST_INFO(" * Camera static: %s", (pos_trk_params.set_as_static ? "TRUE" : "FALSE"));
-        sl::String area_file_path(static_cast<char *>(src->area_file_path.str));
+        sl::String area_file_path(static_cast<char *>(src->area_file_path->str));
         pos_trk_params.area_file_path = area_file_path;
         GST_INFO(" * Area file path: %s", pos_trk_params.area_file_path.c_str());
         pos_trk_params.enable_area_memory = (src->enable_area_memory == TRUE);
@@ -2544,7 +2863,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Object Detection status: %s", (src->object_detection ? "ON" : "OFF"));
     if (src->object_detection) {
         sl::ObjectDetectionParameters od_params;
-        od_params.instance_module_id = OD_INSTANCE_MODULE_ID;
+        od_params.instance_module_id = src->od_instance_id;
         od_params.enable_tracking = (src->od_enable_tracking == TRUE);
         GST_INFO(" * Object tracking: %s", (od_params.enable_tracking ? "TRUE" : "FALSE"));
         od_params.enable_segmentation = (src->od_enable_segm_output == TRUE);
@@ -2562,6 +2881,13 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         od_params.allow_reduced_precision_inference = src->od_allow_reduced_precision_inference;
         GST_INFO(" * Allow reduced precision inference: %s",
                  (od_params.allow_reduced_precision_inference ? "TRUE" : "FALSE"));
+        od_params.custom_onnx_file = sl::String(src->od_custom_onnx_file->str);
+        GST_INFO(" * Custom ONNX file: %s", od_params.custom_onnx_file.c_str());
+        od_params.custom_onnx_dynamic_input_shape = sl::Resolution(
+            src->od_custom_onnx_dynamic_input_shape_w, src->od_custom_onnx_dynamic_input_shape_h);
+        GST_INFO(" * Custom ONNX dynamic input shape: %dx%d",
+                 od_params.custom_onnx_dynamic_input_shape.width,
+                 od_params.custom_onnx_dynamic_input_shape.height);
 
         GST_INFO(" * Confidence thresh.: %g", src->od_det_conf);
 
@@ -2776,7 +3102,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     zedRtParams.measure3D_reference_frame =
         static_cast<sl::REFERENCE_FRAME>(src->measure3D_reference_frame);
     zedRtParams.enable_fill_mode = src->fill_mode;
-    zedRtParams.remove_saturated_areas = true;
+    zedRtParams.remove_saturated_areas = src->remove_saturated_areas == TRUE;
 
     // Runtime exposure control
     if (src->exposure_gain_updated) {

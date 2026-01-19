@@ -53,15 +53,14 @@ struct _GstZedSrc {
     gint camera_image_flip;
     gint camera_id;
     gint64 camera_sn;
-    GString svo_file;
-    GString opencv_calibration_file;
-    GString stream_ip;
+    GString *svo_file;
+    GString *opencv_calibration_file;
+    GString *stream_ip;
     gint stream_port;
     gint stream_type;
     gfloat depth_min_dist;
     gfloat depth_max_dist;
     gint depth_mode;   // Depth mode [enum]
-    gint grab_compute_capping_fps;
     gboolean camera_disable_self_calib;
     gint depth_stabilization;
     gint coord_sys;
@@ -70,16 +69,29 @@ struct _GstZedSrc {
     gint roi_y;
     gint roi_w;
     gint roi_h;
-    // gboolean enable_right_side_measure;
+    gboolean svo_real_time;
+    gint sdk_gpu_id;
+    GString *sdk_verbose_log_file;
+    GString *optional_settings_path;
+    gboolean sensors_required;
+    gboolean enable_image_enhancement;
+    gfloat open_timeout_sec;
+    gboolean async_grab_camera_recovery;
+    gfloat grab_compute_capping_fps;
+    gboolean enable_image_validity_check;
+    gboolean async_image_retrieval;
+    gint max_working_res_w;
+    gint max_working_res_h;
 
     gint confidence_threshold;
     gint texture_confidence_threshold;
     gint measure3D_reference_frame;
     gboolean fill_mode;
+    gboolean remove_saturated_areas;
 
     gboolean pos_tracking;
     gboolean camera_static;
-    GString area_file_path;
+    GString *area_file_path;
     gboolean enable_area_memory;
     gboolean enable_imu_fusion;
     gboolean enable_pose_smoothing;
@@ -95,6 +107,10 @@ struct _GstZedSrc {
     gint pos_trk_mode;
 
     gboolean object_detection;
+    guint od_instance_id;
+    GString *od_custom_onnx_file;
+    gint od_custom_onnx_dynamic_input_shape_w;
+    gint od_custom_onnx_dynamic_input_shape_h;
     gboolean od_enable_tracking;                     // bool enable_tracking
     gboolean od_enable_segm_output;                  // bool enable_segmentation TODO
     gint od_detection_model;                         // sl::OBJECT_DETECTION_MODEL detection_model

@@ -1,10 +1,11 @@
 LATEST CHANGES
 ==============
 
-2026-01-15
-----------
+ZED SDK v5.1
+--------------
 - Fix memleak on demux chain
-- Add grab capping fps `grab-cap-fps` property
+- Added missing parameters for zedsrc and zedxonesrc elements:
+- Fixed memory leaks from parameter parsing in zedsrc and zedxonesrc elements
 
 2025-04-24
 ----------

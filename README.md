@@ -34,13 +34,13 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 ### Prerequisites
 
-* [ZED SDK v5.0-EA](https://www.stereolabs.com/developers/release/5.0)
+* [ZED SDK v5.1](https://www.stereolabs.com/developers/release/5.1)
 * CMake (v3.6+)
 * GStreamer 1.0
 
 ### Windows installation
 
-* Install the latest ZED SDK v5.0-EA from the [official download page](https://www.stereolabs.com/developers/release/5.0) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
+* Install the latest ZED SDK v5.1 from the [official download page](https://www.stereolabs.com/developers/release/5.1) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
 * Install [Git](https://git-scm.com/) or download a ZIP archive
 * Install [CMake](https://cmake.org/)
 * Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
@@ -337,7 +337,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   initial-world-transform-z: Z position of the camera in the world frame when the camera is started
                         flags: readable, writable
                         Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
-  input-stream-ip     : Specify IP adress when using streaming input
+  input-stream-ip     : Specify IP address when using streaming input
                         flags: readable, writable
                         String. Default: ""
   input-stream-port   : Specify port when using streaming input
