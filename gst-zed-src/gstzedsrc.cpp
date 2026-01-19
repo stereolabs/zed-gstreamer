@@ -903,7 +903,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_STREAM_IP,
         g_param_spec_string("input-stream-ip", "Input Stream IP",
-                            "Specify IP adress when using streaming input", DEFAULT_PROP_SVO_FILE,
+                            "Specify IP address when using streaming input", DEFAULT_PROP_SVO_FILE,
                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(

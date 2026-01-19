@@ -337,7 +337,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   initial-world-transform-z: Z position of the camera in the world frame when the camera is started
                         flags: readable, writable
                         Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
-  input-stream-ip     : Specify IP adress when using streaming input
+  input-stream-ip     : Specify IP address when using streaming input
                         flags: readable, writable
                         String. Default: ""
   input-stream-port   : Specify port when using streaming input

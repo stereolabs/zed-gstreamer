@@ -398,7 +398,7 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_STREAM_IP,
         g_param_spec_string("input-stream-ip", "Input Stream IP",
-                            "Specify IP adress when using streaming input", DEFAULT_PROP_STREAM_IP,
+                            "Specify IP address when using streaming input", DEFAULT_PROP_STREAM_IP,
                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
