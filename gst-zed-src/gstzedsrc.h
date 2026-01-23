@@ -173,6 +173,7 @@ struct _GstZedSrc {
     GstClockTime acq_start_time;
     guint32 last_frame_count;
     guint32 total_dropped_frames;
+    guint64 buffer_index;  // Frame counter for buffer offset
 
     GstCaps *caps;
     guint out_framesize;

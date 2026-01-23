@@ -40,7 +40,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 ### Windows installation
 
-* Install the latest ZED SDK v5.1 from the [official download page](https://www.stereolabs.com/developers/release/5.1) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
+* Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/5.1) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
 * Install [Git](https://git-scm.com/) or download a ZIP archive
 * Install [CMake](https://cmake.org/)
 * Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
@@ -61,7 +61,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 #### Install prerequisites
 
-* Install the latest ZED SDK v5.0-EA from the [official download page](https://www.stereolabs.com/developers/release/5.0)
+* Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/5.1)
 
 * Update the list of `apt` available packages
 
@@ -79,7 +79,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
      `$ sudo apt install libgstreamer1.0-0 gstreamer1.0-libav libgstrtspserver-1.0-0 gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio libgstreamer1.0-dev libgstrtspserver-1.0-dev libgstreamer-plugins-base1.0-0 libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1.0-0 libgstreamer-plugins-good1.0-dev libgstreamer-plugins-bad1.0-0 libgstreamer-plugins-bad1.0-dev`
 
-* [Optional] Install OpenCV to build the `zedodverlay` filter
+* [Optional] Install OpenCV to build the `zedodoverlay` filter
 
      `$ sudo apt install libopencv-dev libopencv-contrib-dev`
 
@@ -294,10 +294,11 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Enum "GstZedsrcDepthMode" Default: 0, "NONE"
                            (5): NEURAL_PLUS      - More accurate Neural disparity estimation, Requires AI module.
                            (4): NEURAL           - End to End Neural disparity estimation, requires AI module
-                           (3): ULTRA            - Computation mode favorising edges and sharpness. Requires more GPU memory and computation power.
-                           (2): QUALITY          - Computation mode designed for challenging areas with untextured surfaces.
-                           (1): PERFORMANCE      - Computation mode optimized for speed.
-                           (0): NONE             - This mode does not compute any depth map. Only rectified stereo images will be available.
+                           (3): NEURAL_LIGHT     - End to End Neural disparity estimation (light), requires AI module
+                           (2): ULTRA            - Computation mode favorising edges and sharpness. Requires more GPU memory and computation power.
+                           (1): QUALITY          - Computation mode designed for challenging areas with untextured surfaces.
+                           (0): PERFORMANCE      - Computation mode optimized for speed.
+                           (-1): NONE            - This mode does not compute any depth map. Only rectified stereo images will be available.
   depth-stabilization : Enable depth stabilization
                         flags: readable, writable
                         Integer. Range: 0 - 100 Default: 1 
@@ -383,10 +384,10 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Float. Range:               0 -             100 Default:              50 
   od-detection-filter-mode: Object Detection Filter Mode
                         flags: readable, writable
-                        Enum "GstZedSrcOdFilterMode" Default: 2, "(null)"
-                           (1): (null)           - SDK will not apply any preprocessing to the detected objects
-                           (1): (null)           - SDK will remove objects that are in the same 3D position as an already tracked object (independant of class ID)
-                           (2): (null)           - SDK will remove objects that are in the same 3D position as an already tracked object of the same class ID.
+                        Enum "GstZedSrcOdFilterMode" Default: 2, "NMS3D_PER_CLASS"
+                           (0): NONE             - SDK will not apply any preprocessing to the detected objects
+                           (1): NMS3D            - SDK will remove objects that are in the same 3D position as an already tracked object (independant of class ID)
+                           (2): NMS3D_PER_CLASS  - SDK will remove objects that are in the same 3D position as an already tracked object of the same class ID.
   od-detection-model  : Object Detection Model
                         flags: readable, writable
                         Enum "GstZedSrcOdModel" Default: 1, "Object Detection Multi class MEDIUM"
@@ -395,6 +396,16 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (2): Object Detection Multi class ACCURATE - Any objects, bounding box based, more accurate but slower than the base model
                            (3): Person Head FAST - Bounding Box detector specialized in person heads, particularly well suited for crowded environments, the person localization is also improved
                            (4): Person Head ACCURATE - Bounding Box detector specialized in person heads, particularly well suited for crowded environments, the person localization is also improved, more accurate but slower than the base model
+                           (6): Custom YOLO-like Box Objects - For internal inference using your own custom YOLO-like model. Requires od-custom-onnx-file property to be set.
+  od-custom-onnx-file : Path to custom ONNX file for Custom YOLO-like detection model
+                        flags: readable, writable
+                        String. Default: ""
+  od-custom-onnx-dynamic-input-shape-w: Dynamic input shape width for custom ONNX model
+                        flags: readable, writable
+                        Integer. Range: 128 - 4096 Default: 512
+  od-custom-onnx-dynamic-input-shape-h: Dynamic input shape height for custom ONNX model
+                        flags: readable, writable
+                        Integer. Range: 128 - 4096 Default: 512
   od-enable-tracking  : Set to TRUE to enable tracking for the detected objects
                         flags: readable, writable
                         Boolean. Default: true
@@ -418,16 +429,17 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Float. Range:              -1 -           65535 Default:              -1 
   positional-tracking-mode: Positional tracking mode
                         flags: readable, writable
-                        Enum "GstZedsrcPtMode" Default: 1, "GEN_2"
-                           (0): GEN_1            - Generation 1
-                           (1): GEN_2            - Generation 2
+                        Enum "GstZedsrcPtMode" Default: 0, "GEN_1"
+                           (0): GEN_1            - Generation 1 (default, fast and stable, requires depth)
+                           (1): GEN_2            - Generation 2 (deprecated)
+                           (2): GEN_3            - Generation 3 (fast and accurate, works even without depth)
   roi                 : Enable region of interest filtering
                         flags: readable, writable
                         Boolean. Default: false
   roi-h               : Region of interest height (-1 to not set ROI)
                         flags: readable, writable
                         Integer. Range: -1 - 1242 Default: -1 
-  roi-w               : Region of intererst width (-1 to not set ROI)
+  roi-w               : Region of interest width (-1 to not set ROI)
                         flags: readable, writable
                         Integer. Range: -1 - 2208 Default: -1 
   roi-x               : Region of interest top left 'X' coordinate (-1 to not set ROI)
@@ -654,7 +666,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
 ## Metadata
 
 The `zedsrc` element add metadata to the video stream containing information about the original frame size,
-the camera position and orientatio, the sensors data and the object and skeleton detected by the Object Detection
+the camera position and orientation, the sensors data and the object and skeleton detected by the Object Detection
 module.
 The `zeddatacsvsink` and `zedodoverlay` elements demonstrate how to handle, respectively, the sensors data and the
 detected object data.
@@ -666,8 +678,8 @@ The GstZedSrcMeta is subdivided in four sub-structures:
 
 * `ZedInfo`: info about camera model, stream type and original stream size
 * `ZedPose`: position and orientation of the camera if positional tracking is enabled
-* `ZedSensors`: sensors data (only ZED-Mini and ZED2)
-* `ZedObjectData`: detected object information (only ZED2)
+* `ZedSensors`: sensors data (all camera models with IMU support, i.e. all except the original ZED)
+* `ZedObjectData`: detected object information (requires AI module, i.e. ZED 2 or newer)
 
 More details about the sub-structures are available in the [`gstzedmeta.h` file](./gst-zed-meta/gstzedmeta.h)
 
@@ -823,7 +835,7 @@ More details about the sub-structures are available in the [`gstzedmeta.h` file]
 
 ## RTSP Server *[Available only for Linux]*
 
-An application to start an RTSP server from a text pipeline (using the same sintax of the CLI command [`gst-launch-1.0`](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html)) is provided.
+An application to start an RTSP server from a text pipeline (using the same syntax of the CLI command [`gst-launch-1.0`](https://gstreamer.freedesktop.org/documentation/tools/gst-launch.html)) is provided.
 
 Usage:
 

@@ -33,6 +33,14 @@
 GST_DEBUG_CATEGORY_STATIC(gst_zedsrc_debug);
 #define GST_CAT_DEFAULT gst_zedsrc_debug
 
+// Additional debug categories for subsystems
+GST_DEBUG_CATEGORY_STATIC(gst_zedsrc_tracking_debug);
+GST_DEBUG_CATEGORY_STATIC(gst_zedsrc_od_debug);
+GST_DEBUG_CATEGORY_STATIC(gst_zedsrc_controls_debug);
+
+// Magic number constants
+#define GST_ZEDSRC_MAX_OBJECTS 256
+
 /* prototypes */
 static void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value,
                                     GParamSpec *pspec);
@@ -49,6 +57,8 @@ static gboolean gst_zedsrc_unlock(GstBaseSrc *src);
 static gboolean gst_zedsrc_unlock_stop(GstBaseSrc *src);
 
 static GstFlowReturn gst_zedsrc_fill(GstPushSrc *src, GstBuffer *buf);
+
+static gboolean gst_zedsrc_query(GstBaseSrc *src, GstQuery *query);
 
 
 
@@ -213,7 +223,8 @@ typedef enum {
     GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM = 1,
     GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE = 2,
     GST_ZEDSRC_OD_PERSON_HEAD_BOX_FAST = 3,
-    GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE = 4
+    GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE = 4,
+    GST_ZEDSRC_OD_CUSTOM_YOLOLIKE_BOX_OBJECTS = 6
 } GstZedSrcOdModel;
 
 typedef enum {
@@ -244,7 +255,8 @@ typedef enum {
 
 typedef enum {
     GST_ZEDSRC_PT_GEN_1 = 0,
-    GST_ZEDSRC_PT_GEN_2 = 1
+    GST_ZEDSRC_PT_GEN_2 = 1,
+    GST_ZEDSRC_PT_GEN_3 = 2
 } GstZedSrcPtMode;
 
 //////////////// DEFAULT PARAMETERS
@@ -297,7 +309,7 @@ typedef enum {
 
 // POSITIONAL TRACKING
 #define DEFAULT_PROP_POS_TRACKING              FALSE
-#define DEFAULT_PROP_PT_MODE                   GST_ZEDSRC_PT_GEN_2
+#define DEFAULT_PROP_PT_MODE                   GST_ZEDSRC_PT_GEN_1
 #define DEFAULT_PROP_CAMERA_STATIC             FALSE
 #define DEFAULT_PROP_POS_AREA_FILE_PATH        ""
 #define DEFAULT_PROP_POS_ENABLE_AREA_MEMORY    TRUE
@@ -363,12 +375,12 @@ typedef enum {
 #define DEFAULT_PROP_EXPOSURE          80
 #define DEFAULT_PROP_EXPOSURE_RANGE_MIN 28
 #define DEFAULT_PROP_EXPOSURE_RANGE_MAX 66000
-#define DEFAULT_PROP_AEG_AGC           1
-#define DEFAULT_PROP_AEG_AGC_ROI_X     -1
-#define DEFAULT_PROP_AEG_AGC_ROI_Y     -1
-#define DEFAULT_PROP_AEG_AGC_ROI_W     -1
-#define DEFAULT_PROP_AEG_AGC_ROI_H     -1
-#define DEFAULT_PROP_AEG_AGC_ROI_SIDE  GST_ZEDSRC_SIDE_BOTH
+#define DEFAULT_PROP_AEC_AGC           1
+#define DEFAULT_PROP_AEC_AGC_ROI_X     -1
+#define DEFAULT_PROP_AEC_AGC_ROI_Y     -1
+#define DEFAULT_PROP_AEC_AGC_ROI_W     -1
+#define DEFAULT_PROP_AEC_AGC_ROI_H     -1
+#define DEFAULT_PROP_AEC_AGC_ROI_SIDE  GST_ZEDSRC_SIDE_BOTH
 #define DEFAULT_PROP_WHITEBALANCE      4600
 #define DEFAULT_PROP_WHITEBALANCE_AUTO 1
 #define DEFAULT_PROP_LEDSTATUS         1
@@ -400,6 +412,7 @@ static GType gst_zedsrc_pt_mode_get_type(void) {
         static GEnumValue pattern_types[] = {
             {static_cast<gint>(sl::POSITIONAL_TRACKING_MODE::GEN_1), "Generation 1", "GEN_1"},
             {static_cast<gint>(sl::POSITIONAL_TRACKING_MODE::GEN_2), "Generation 2", "GEN_2"},
+            {static_cast<gint>(sl::POSITIONAL_TRACKING_MODE::GEN_3), "Generation 3", "GEN_3"},
             {0, NULL, NULL},
         };
 
@@ -549,6 +562,10 @@ static GType gst_zedsrc_od_model_get_type(void) {
              "crowded environments, the person localization is also improved, "
              "more accurate but slower than the base model",
              "Person Head ACCURATE"},
+            {GST_ZEDSRC_OD_CUSTOM_YOLOLIKE_BOX_OBJECTS,
+             "For internal inference using your own custom YOLO-like model. "
+             "Requires od-custom-onnx-file property to be set.",
+             "Custom YOLO-like Box Objects"},
             {0, NULL, NULL},
         };
 
@@ -564,14 +581,17 @@ static GType gst_zedsrc_od_filter_mode_get_type(void) {
 
     if (!zedsrc_od_filter_mode_type) {
         static GEnumValue pattern_types[] = {
-            {GST_ZEDSRC_OD_FILTER_MODE_NMS3D,
-             "SDK will not apply any preprocessing to the detected objects"},
+            {GST_ZEDSRC_OD_FILTER_MODE_NONE,
+             "SDK will not apply any preprocessing to the detected objects",
+             "NONE"},
             {GST_ZEDSRC_OD_FILTER_MODE_NMS3D,
              "SDK will remove objects that are in the same 3D position as an already tracked "
-             "object (independant of class ID)"},
+             "object (independant of class ID)",
+             "NMS3D"},
             {GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS,
              "SDK will remove objects that are in the same 3D position as an already tracked "
-             "object of the same class ID."},
+             "object of the same class ID.",
+             "NMS3D_PER_CLASS"},
             {0, NULL, NULL},
         };
 
@@ -658,6 +678,8 @@ static GType gst_zedsrc_depth_mode_get_type(void) {
              "More accurate Neural disparity estimation, Requires AI module.", "NEURAL_PLUS"},
             {static_cast<gint>(sl::DEPTH_MODE::NEURAL),
              "End to End Neural disparity estimation, requires AI module", "NEURAL"},
+            {static_cast<gint>(sl::DEPTH_MODE::NEURAL_LIGHT),
+             "End to End Neural disparity estimation (light), requires AI module", "NEURAL_LIGHT"},
             {static_cast<gint>(sl::DEPTH_MODE::ULTRA),
              "Computation mode favorising edges and sharpness. Requires more GPU memory and "
              "computation power.",
@@ -842,6 +864,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     gstbasesrc_class->set_caps = GST_DEBUG_FUNCPTR(gst_zedsrc_set_caps);
     gstbasesrc_class->unlock = GST_DEBUG_FUNCPTR(gst_zedsrc_unlock);
     gstbasesrc_class->unlock_stop = GST_DEBUG_FUNCPTR(gst_zedsrc_unlock_stop);
+    gstbasesrc_class->query = GST_DEBUG_FUNCPTR(gst_zedsrc_query);
 
     gstpushsrc_class->fill = GST_DEBUG_FUNCPTR(gst_zedsrc_fill);
 
@@ -982,7 +1005,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_ROI_W,
         g_param_spec_int("roi-w", "Region of interest width",
-                         "Region of intererst width (-1 to not set ROI)", -1, 2208,
+                         "Region of interest width (-1 to not set ROI)", -1, 2208,
                          DEFAULT_PROP_ROI_W,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
@@ -1400,39 +1423,39 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC,
         g_param_spec_boolean("ctrl-aec-agc", "Camera control: automatic gain and exposure",
-                             "Camera automatic gain and exposure", DEFAULT_PROP_AEG_AGC,
+                             "Camera automatic gain and exposure", DEFAULT_PROP_AEC_AGC,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_X,
         g_param_spec_int("ctrl-aec-agc-roi-x",
                          "Camera control: auto gain/exposure ROI top left 'X' coordinate",
                          "Auto gain/exposure ROI top left 'X' coordinate (-1 to not set ROI)", -1,
-                         2208, DEFAULT_PROP_AEG_AGC_ROI_X,
+                         2208, DEFAULT_PROP_AEC_AGC_ROI_X,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_Y,
         g_param_spec_int("ctrl-aec-agc-roi-y",
                          "Camera control: auto gain/exposure ROI top left 'Y' coordinate",
                          "Auto gain/exposure ROI top left 'Y' coordinate (-1 to not set ROI)", -1,
-                         1242, DEFAULT_PROP_AEG_AGC_ROI_Y,
+                         1242, DEFAULT_PROP_AEC_AGC_ROI_Y,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_W,
         g_param_spec_int("ctrl-aec-agc-roi-w", "Camera control: auto gain/exposure ROI width",
                          "Auto gain/exposure ROI width (-1 to not set ROI)", -1, 2208,
-                         DEFAULT_PROP_AEG_AGC_ROI_W,
+                         DEFAULT_PROP_AEC_AGC_ROI_W,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_H,
         g_param_spec_int("ctrl-aec-agc-roi-h", "Camera control: auto gain/exposure ROI height",
                          "Auto gain/exposure ROI height (-1 to not set ROI)", -1, 1242,
-                         DEFAULT_PROP_AEG_AGC_ROI_H,
+                         DEFAULT_PROP_AEC_AGC_ROI_H,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC_ROI_SIDE,
         g_param_spec_enum("ctrl-aec-agc-roi-side", "Camera control: auto gain/exposure ROI side",
                           "Auto gain/exposure ROI side", GST_TYPE_ZED_SIDE,
-                          DEFAULT_PROP_AEG_AGC_ROI_SIDE,
+                          DEFAULT_PROP_AEC_AGC_ROI_SIDE,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_WHITEBALANCE,
@@ -1576,6 +1599,7 @@ static void gst_zedsrc_reset(GstZedSrc *src) {
 
     src->last_frame_count = 0;
     src->total_dropped_frames = 0;
+    src->buffer_index = 0;
 
     if (src->caps) {
         gst_caps_unref(src->caps);
@@ -1696,12 +1720,12 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->exposure = DEFAULT_PROP_EXPOSURE;
     src->exposureRange_min = DEFAULT_PROP_EXPOSURE_RANGE_MIN;
     src->exposureRange_max = DEFAULT_PROP_EXPOSURE_RANGE_MAX;
-    src->aec_agc = DEFAULT_PROP_AEG_AGC;
-    src->aec_agc_roi_x = DEFAULT_PROP_AEG_AGC_ROI_X;
-    src->aec_agc_roi_y = DEFAULT_PROP_AEG_AGC_ROI_Y;
-    src->aec_agc_roi_w = DEFAULT_PROP_AEG_AGC_ROI_W;
-    src->aec_agc_roi_h = DEFAULT_PROP_AEG_AGC_ROI_H;
-    src->aec_agc_roi_side = DEFAULT_PROP_AEG_AGC_ROI_SIDE;
+    src->aec_agc = DEFAULT_PROP_AEC_AGC;
+    src->aec_agc_roi_x = DEFAULT_PROP_AEC_AGC_ROI_X;
+    src->aec_agc_roi_y = DEFAULT_PROP_AEC_AGC_ROI_Y;
+    src->aec_agc_roi_w = DEFAULT_PROP_AEC_AGC_ROI_W;
+    src->aec_agc_roi_h = DEFAULT_PROP_AEC_AGC_ROI_H;
+    src->aec_agc_roi_side = DEFAULT_PROP_AEC_AGC_ROI_SIDE;
     src->whitebalance_temperature = DEFAULT_PROP_WHITEBALANCE;
     src->whitebalance_temperature_auto = DEFAULT_PROP_WHITEBALANCE_AUTO;
     src->led_status = DEFAULT_PROP_LEDSTATUS;
@@ -2508,14 +2532,15 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
 }
 
 static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
+    GstZedSrc *src = GST_ZED_SRC(bsrc);
+    sl::ERROR_CODE ret;
+
 #if (ZED_SDK_MAJOR_VERSION != 5)
     GST_ELEMENT_ERROR(src, LIBRARY, FAILED, 
     ("Wrong ZED SDK version. SDK v5.0 EA or newer required "),
                       (NULL));
+    return FALSE;
 #endif
-
-    GstZedSrc *src = GST_ZED_SRC(bsrc);
-    sl::ERROR_CODE ret;
 
     GST_TRACE_OBJECT(src, "gst_zedsrc_calculate_caps");
 
@@ -2541,7 +2566,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
             init_params.camera_resolution = sl::RESOLUTION::SVGA;
             break;
         case GST_ZEDSRC_VGA:
-            init_params.camera_resolution = sl::RESOLUTION::SVGA;
+            init_params.camera_resolution = sl::RESOLUTION::VGA;
             break;
         case GST_ZEDSRC_AUTO_RES:
             init_params.camera_resolution = sl::RESOLUTION::AUTO;
@@ -2748,9 +2773,9 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     // ----> Runtime parameters
     GST_TRACE_OBJECT(src, "CAMERA RUNTIME PARAMETERS");
     if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
-        GST_INFO(" * Depth calculation: ON");
-    } else {
         GST_INFO(" * Depth calculation: OFF");
+    } else {
+        GST_INFO(" * Depth calculation: ON");
     }
 
     GST_INFO(" * Depth Confidence threshold: %d", src->confidence_threshold);
@@ -3038,6 +3063,46 @@ static gboolean gst_zedsrc_unlock_stop(GstBaseSrc *bsrc) {
     return TRUE;
 }
 
+static gboolean gst_zedsrc_query(GstBaseSrc *bsrc, GstQuery *query) {
+    GstZedSrc *src = GST_ZED_SRC(bsrc);
+    gboolean ret;
+
+    switch (GST_QUERY_TYPE(query)) {
+        case GST_QUERY_LATENCY: {
+            GstClockTime min_latency, max_latency;
+
+            if (!src->is_started) {
+                GST_DEBUG_OBJECT(src, "Latency query before started, returning FALSE");
+                return FALSE;
+            }
+
+            // Calculate latency based on configured FPS
+            // Latency is approximately one frame duration
+            if (src->camera_fps > 0) {
+                min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, src->camera_fps);
+                max_latency = min_latency * 2;  // Allow some buffer for processing
+            } else {
+                // Fallback to 30 FPS assumption
+                min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, 30);
+                max_latency = min_latency * 2;
+            }
+
+            GST_DEBUG_OBJECT(src, "Latency query: min=%.3f ms, max=%.3f ms",
+                             (gdouble)min_latency / GST_MSECOND,
+                             (gdouble)max_latency / GST_MSECOND);
+
+            gst_query_set_latency(query, TRUE, min_latency, max_latency);
+            ret = TRUE;
+            break;
+        }
+        default:
+            ret = GST_BASE_SRC_CLASS(gst_zedsrc_parent_class)->query(bsrc, query);
+            break;
+    }
+
+    return ret;
+}
+
 
 static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstZedSrc *src = GST_ZED_SRC(psrc);
@@ -3049,13 +3114,11 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstClock *clock = nullptr;
     GstClockTime clock_time = GST_CLOCK_TIME_NONE;
 
-    static int temp_ugly_buf_index = 0;
-
     gboolean mapped = FALSE;
     GstFlowReturn flow_ret = GST_FLOW_OK;
 
     // objects we use later, but must be declared before any goto
-    ZedObjectData obj_data[256] = {0};
+    ZedObjectData obj_data[GST_ZEDSRC_MAX_OBJECTS] = {0};
     guint8 obj_count = 0;
     guint64 offset = 0;
     GstZedSrcMeta *meta = nullptr;
@@ -3115,7 +3178,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             src->exposure_gain_updated = FALSE;
         } else {
             // Auto exposure control
-            if (src->aec_agc_roi_x != -1 && src->aec_agc_roi_y &&
+            if (src->aec_agc_roi_x != -1 && src->aec_agc_roi_y != -1 &&
                 src->aec_agc_roi_w != -1 && src->aec_agc_roi_h != -1) {
                 sl::Rect roi;
                 roi.x = src->aec_agc_roi_x;
@@ -3536,7 +3599,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GST_BUFFER_TIMESTAMP(buf) =
         GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
     GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
-    GST_BUFFER_OFFSET(buf) = temp_ugly_buf_index++;
+    GST_BUFFER_OFFSET(buf) = src->buffer_index++;
     // <---- Timestamp meta-data
 
     offset = GST_BUFFER_OFFSET(buf);
@@ -3560,6 +3623,12 @@ out:
 
 static gboolean plugin_init(GstPlugin *plugin) {
     GST_DEBUG_CATEGORY_INIT(gst_zedsrc_debug, "zedsrc", 0, "debug category for zedsrc element");
+    GST_DEBUG_CATEGORY_INIT(gst_zedsrc_tracking_debug, "zedsrc-tracking", 0, 
+                            "zedsrc positional tracking debug");
+    GST_DEBUG_CATEGORY_INIT(gst_zedsrc_od_debug, "zedsrc-od", 0, 
+                            "zedsrc object detection debug");
+    GST_DEBUG_CATEGORY_INIT(gst_zedsrc_controls_debug, "zedsrc-controls", 0, 
+                            "zedsrc camera controls debug");
     gst_element_register(plugin, "zedsrc", GST_RANK_NONE, gst_zedsrc_get_type());
 
     return TRUE;
