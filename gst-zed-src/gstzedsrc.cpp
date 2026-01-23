@@ -172,6 +172,9 @@ enum {
     PROP_OD_CUSTOM_ONNX_FILE,
     PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W,
     PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H,
+    PROP_SVO_REC_ENABLE,
+    PROP_SVO_REC_FILENAME,
+    PROP_SVO_REC_COMPRESSION,
     N_PROPERTIES
 };
 
@@ -382,7 +385,41 @@ typedef enum {
 #define DEFAULT_PROP_WHITEBALANCE 4600
 #define DEFAULT_PROP_WHITEBALANCE_AUTO 1
 #define DEFAULT_PROP_LEDSTATUS 1
+
+// SVO RECORDING
+#define DEFAULT_PROP_SVO_REC_ENABLE FALSE
+#define DEFAULT_PROP_SVO_REC_FILENAME ""
+#define DEFAULT_PROP_SVO_REC_COMPRESSION GST_ZEDSRC_SVO_COMPRESSION_H265
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+typedef enum {
+    GST_ZEDSRC_SVO_COMPRESSION_LOSSLESS = 0,
+    GST_ZEDSRC_SVO_COMPRESSION_H264 = 1,
+    GST_ZEDSRC_SVO_COMPRESSION_H265 = 2,
+    GST_ZEDSRC_SVO_COMPRESSION_H264_LOSSLESS = 3,
+    GST_ZEDSRC_SVO_COMPRESSION_H265_LOSSLESS = 4,
+} GstZedSrcSvoCompression;
+
+#define GST_TYPE_ZED_SVO_COMPRESSION (gst_zedsrc_svo_compression_get_type())
+static GType gst_zedsrc_svo_compression_get_type(void) {
+    static GType zedsrc_svo_compression_type = 0;
+
+    if (!zedsrc_svo_compression_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDSRC_SVO_COMPRESSION_LOSSLESS, "Lossless (PNG/ZSTD, CPU)", "LOSSLESS"},
+            {GST_ZEDSRC_SVO_COMPRESSION_H264, "H264 (GPU)", "H264"},
+            {GST_ZEDSRC_SVO_COMPRESSION_H265, "H265/HEVC (GPU)", "H265"},
+            {GST_ZEDSRC_SVO_COMPRESSION_H264_LOSSLESS, "H264 Lossless (GPU)", "H264_LOSSLESS"},
+            {GST_ZEDSRC_SVO_COMPRESSION_H265_LOSSLESS, "H265 Lossless (GPU)", "H265_LOSSLESS"},
+            {0, NULL, NULL},
+        };
+
+        zedsrc_svo_compression_type =
+            g_enum_register_static("GstZedsrcSvoCompression", pattern_types);
+    }
+
+    return zedsrc_svo_compression_type;
+}
 
 #define GST_TYPE_ZED_SIDE (gst_zedsrc_side_get_type())
 static GType gst_zedsrc_side_get_type(void) {
@@ -1469,6 +1506,27 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                              DEFAULT_PROP_LEDSTATUS,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    // SVO Recording properties
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_REC_ENABLE,
+        g_param_spec_boolean(
+            "svo-recording-enable", "SVO Recording: Enable",
+            "Start/stop SVO recording at runtime (requires svo-recording-filename to be set)",
+            DEFAULT_PROP_SVO_REC_ENABLE,
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_REC_FILENAME,
+        g_param_spec_string("svo-recording-filename", "SVO Recording: Filename",
+                            "Output filename for SVO recording (.svo2 extension recommended)",
+                            DEFAULT_PROP_SVO_REC_FILENAME,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_REC_COMPRESSION,
+        g_param_spec_enum("svo-recording-compression", "SVO Recording: Compression Mode",
+                          "Compression mode for SVO recording", GST_TYPE_ZED_SVO_COMPRESSION,
+                          DEFAULT_PROP_SVO_REC_COMPRESSION,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property(
         gobject_class, PROP_SVO_REAL_TIME,
         g_param_spec_boolean("svo-real-time-mode", "SVO Real Time Mode", "SVO Real Time Mode",
@@ -1725,6 +1783,12 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->whitebalance_temperature = DEFAULT_PROP_WHITEBALANCE;
     src->whitebalance_temperature_auto = DEFAULT_PROP_WHITEBALANCE_AUTO;
     src->led_status = DEFAULT_PROP_LEDSTATUS;
+
+    // SVO Recording
+    src->svo_rec_enable = DEFAULT_PROP_SVO_REC_ENABLE;
+    src->svo_rec_filename = g_string_new(DEFAULT_PROP_SVO_REC_FILENAME);
+    src->svo_rec_compression = DEFAULT_PROP_SVO_REC_COMPRESSION;
+    src->svo_rec_active = FALSE;
     // <---- Parameters initialization
 
     src->stop_requested = FALSE;
@@ -2027,6 +2091,46 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
         break;
     case PROP_LEDSTATUS:
         src->led_status = g_value_get_boolean(value);
+        break;
+    case PROP_SVO_REC_ENABLE:
+        src->svo_rec_enable = g_value_get_boolean(value);
+        // Handle runtime recording toggle
+        if (src->is_started) {
+            if (src->svo_rec_enable && !src->svo_rec_active) {
+                // Start recording
+                if (src->svo_rec_filename && src->svo_rec_filename->len > 0) {
+                    sl::RecordingParameters rec_params;
+                    rec_params.video_filename.set(src->svo_rec_filename->str);
+                    rec_params.compression_mode =
+                        static_cast<sl::SVO_COMPRESSION_MODE>(src->svo_rec_compression);
+                    sl::ERROR_CODE err = src->zed.enableRecording(rec_params);
+                    if (err == sl::ERROR_CODE::SUCCESS) {
+                        src->svo_rec_active = TRUE;
+                        GST_INFO_OBJECT(src, "SVO recording started: %s",
+                                        src->svo_rec_filename->str);
+                    } else {
+                        GST_WARNING_OBJECT(src, "Failed to start SVO recording: %s",
+                                           sl::toString(err).c_str());
+                        src->svo_rec_enable = FALSE;
+                    }
+                } else {
+                    GST_WARNING_OBJECT(src, "Cannot start SVO recording: filename not set");
+                    src->svo_rec_enable = FALSE;
+                }
+            } else if (!src->svo_rec_enable && src->svo_rec_active) {
+                // Stop recording
+                src->zed.disableRecording();
+                src->svo_rec_active = FALSE;
+                GST_INFO_OBJECT(src, "SVO recording stopped");
+            }
+        }
+        break;
+    case PROP_SVO_REC_FILENAME:
+        str = g_value_get_string(value);
+        g_string_assign(src->svo_rec_filename, str);
+        break;
+    case PROP_SVO_REC_COMPRESSION:
+        src->svo_rec_compression = g_value_get_enum(value);
         break;
     case PROP_SVO_REAL_TIME:
         src->svo_real_time = g_value_get_boolean(value);
@@ -2373,6 +2477,15 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     case PROP_LEDSTATUS:
         g_value_set_boolean(value, src->led_status);
         break;
+    case PROP_SVO_REC_ENABLE:
+        g_value_set_boolean(value, src->svo_rec_active);   // Return actual state
+        break;
+    case PROP_SVO_REC_FILENAME:
+        g_value_set_string(value, src->svo_rec_filename ? src->svo_rec_filename->str : "");
+        break;
+    case PROP_SVO_REC_COMPRESSION:
+        g_value_set_enum(value, src->svo_rec_compression);
+        break;
     case PROP_SVO_REAL_TIME:
         g_value_set_boolean(value, src->svo_real_time);
         break;
@@ -2480,6 +2593,9 @@ void gst_zedsrc_finalize(GObject *object) {
     }
     if (src->od_custom_onnx_file) {
         g_string_free(src->od_custom_onnx_file, TRUE);
+    }
+    if (src->svo_rec_filename) {
+        g_string_free(src->svo_rec_filename, TRUE);
     }
 
     G_OBJECT_CLASS(gst_zedsrc_parent_class)->finalize(object);
@@ -2986,6 +3102,13 @@ static gboolean gst_zedsrc_stop(GstBaseSrc *bsrc) {
     GstZedSrc *src = GST_ZED_SRC(bsrc);
 
     GST_TRACE_OBJECT(src, "gst_zedsrc_stop");
+
+    // Stop SVO recording if active
+    if (src->svo_rec_active) {
+        src->zed.disableRecording();
+        src->svo_rec_active = FALSE;
+        GST_INFO_OBJECT(src, "SVO recording stopped on pipeline stop");
+    }
 
     gst_zedsrc_reset(src);
 

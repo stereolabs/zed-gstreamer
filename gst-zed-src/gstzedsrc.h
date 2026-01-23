@@ -168,6 +168,12 @@ struct _GstZedSrc {
     gint whitebalance_temperature;
     gboolean whitebalance_temperature_auto;
     gboolean led_status;
+
+    // SVO Recording (runtime)
+    gboolean svo_rec_enable;
+    GString *svo_rec_filename;
+    gint svo_rec_compression;
+    gboolean svo_rec_active;   // Internal state: is recording currently active
     // <---- Properties
 
     GstClockTime acq_start_time;

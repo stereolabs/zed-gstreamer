@@ -40,6 +40,8 @@ NC='\033[0m' # No Color
 # Test configuration
 FAST_MODE=true
 EXTENSIVE_MODE=false
+BENCHMARK_MODE=false
+BENCHMARK_BASELINE=""  # Path to baseline JSON for comparison
 VERBOSE=false
 HARDWARE_AVAILABLE=false
 HARDWARE_CHECK_DONE=false
@@ -66,7 +68,13 @@ FAST_PIPELINE_TIMEOUT=15
 EXTENSIVE_PIPELINE_TIMEOUT=60
 
 # Delay between hardware tests to allow camera reset (seconds)
-CAMERA_RESET_DELAY=3
+CAMERA_RESET_DELAY=5
+
+# Benchmark configuration (will be adjusted based on mode)
+BENCHMARK_DURATION=10      # Duration in seconds for each benchmark (extensive)
+BENCHMARK_DURATION_FAST=5  # Duration for fast benchmark mode
+BENCHMARK_WARMUP=2         # Warmup period before measuring
+BENCHMARK_SAMPLE_RATE=500  # Tegrastats sample rate in ms
 
 # =============================================================================
 # Helper Functions
@@ -1303,6 +1311,598 @@ test_error_handling() {
 }
 
 # =============================================================================
+# Benchmark Functions
+# =============================================================================
+
+# Global benchmark results storage
+declare -A BENCHMARK_RESULTS
+
+benchmark_print_header() {
+    echo ""
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║                        ZED GStreamer Benchmark Suite                         ║${NC}"
+    echo -e "${CYAN}╠══════════════════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${CYAN}║  Measuring: Latency, CPU Usage, RAM Usage, GPU Usage                        ║${NC}"
+    echo -e "${CYAN}║  Platform:  $(printf '%-66s' "$(detect_platform)")║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+benchmark_print_section() {
+    echo ""
+    echo -e "${BLUE}┌──────────────────────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${BLUE}│  $1$(printf '%*s' $((76 - ${#1})) '')│${NC}"
+    echo -e "${BLUE}└──────────────────────────────────────────────────────────────────────────────┘${NC}"
+}
+
+# Get baseline system stats (idle state)
+get_baseline_stats() {
+    local duration=3
+    local stats_file="/tmp/zed_baseline_stats_$$.log"
+    
+    echo -n "  Measuring baseline (idle system)... "
+    
+    if command -v tegrastats &> /dev/null; then
+        # Jetson platform
+        timeout $duration tegrastats --interval $BENCHMARK_SAMPLE_RATE > "$stats_file" 2>&1 &
+        local pid=$!
+        sleep $duration
+        kill $pid 2>/dev/null
+        wait $pid 2>/dev/null
+        
+        # Parse tegrastats output
+        local ram_vals cpu_vals gpu_vals
+        ram_vals=$(grep -oP 'RAM \K[0-9]+' "$stats_file" | awk '{sum+=$1; count++} END {if(count>0) print sum/count; else print 0}')
+        cpu_vals=$(grep -oP 'CPU \[\K[^\]]+' "$stats_file" | tr ',' '\n' | grep -oP '^[0-9]+' | awk '{sum+=$1; count++} END {if(count>0) print sum/count; else print 0}')
+        gpu_vals=$(grep -oP 'GR3D_FREQ \K[0-9]+' "$stats_file" | awk '{sum+=$1; count++} END {if(count>0) print sum/count; else print 0}')
+        
+        BASELINE_RAM="${ram_vals:-0}"
+        BASELINE_CPU="${cpu_vals:-0}"
+        BASELINE_GPU="${gpu_vals:-0}"
+    else
+        # Generic Linux - use /proc
+        BASELINE_RAM=$(free -m | awk '/Mem:/ {print $3}')
+        BASELINE_CPU=$(top -bn2 -d0.5 | grep "Cpu(s)" | tail -1 | awk '{print $2}' | cut -d'%' -f1)
+        BASELINE_GPU="N/A"
+    fi
+    
+    rm -f "$stats_file"
+    echo "done"
+    echo -e "    Baseline: RAM=${BASELINE_RAM}MB, CPU=${BASELINE_CPU}%, GPU=${BASELINE_GPU}%"
+}
+
+# Monitor system resources during a pipeline run
+# Usage: monitor_pipeline "pipeline_description" "gst-launch-1.0 ..." duration
+run_benchmark_pipeline() {
+    local description="$1"
+    local pipeline="$2"
+    local duration="${3:-$BENCHMARK_DURATION}"
+    local stats_file="/tmp/zed_bench_stats_$$.log"
+    local latency_file="/tmp/zed_bench_latency_$$.log"
+    local pipeline_log="/tmp/zed_bench_pipeline_$$.log"
+    
+    echo ""
+    echo -e "  ${YELLOW}▶ $description${NC}"
+    echo "    Duration: ${duration}s (+ ${BENCHMARK_WARMUP}s warmup)"
+    
+    # Start resource monitoring
+    if command -v tegrastats &> /dev/null; then
+        tegrastats --interval $BENCHMARK_SAMPLE_RATE > "$stats_file" 2>&1 &
+        local monitor_pid=$!
+    else
+        # Fallback: sample with vmstat
+        vmstat 1 $((duration + BENCHMARK_WARMUP + 2)) > "$stats_file" 2>&1 &
+        local monitor_pid=$!
+    fi
+    
+    # Calculate total buffers needed (assuming 30fps)
+    local total_buffers=$(( (duration + BENCHMARK_WARMUP) * 30 ))
+    
+    # Run pipeline with identity element to capture timestamps
+    # The identity element logs buffer timestamps for latency calculation
+    local start_time
+    start_time=$(date +%s.%N)
+    
+    # Run pipeline - add num-buffers to the zedsrc element
+    # Pipeline format: "zedsrc <props>" -> "zedsrc <props> num-buffers=N ! identity ! fakesink"
+    local full_pipeline="$pipeline num-buffers=$total_buffers ! identity silent=false ! fakesink sync=false"
+    
+    # Timeout needs to account for: camera open (~6s) + warmup + duration + buffer
+    local timeout_val=$((duration + BENCHMARK_WARMUP + 20))
+    
+    timeout $timeout_val gst-launch-1.0 -v $full_pipeline > "$pipeline_log" 2>&1
+    local pipeline_status=$?
+    
+    local end_time
+    end_time=$(date +%s.%N)
+    
+    # Stop monitoring
+    kill $monitor_pid 2>/dev/null
+    wait $monitor_pid 2>/dev/null
+    
+    if [ $pipeline_status -ne 0 ]; then
+        echo -e "    ${RED}Pipeline failed!${NC}"
+        [ "$VERBOSE" = true ] && cat "$pipeline_log" | tail -10
+        rm -f "$stats_file" "$latency_file" "$pipeline_log"
+        return 1
+    fi
+    
+    # Calculate actual FPS from pipeline output
+    local actual_fps
+    actual_fps=$(echo "$end_time $start_time $total_buffers" | awk '{printf "%.1f", $3/($1-$2)}')
+    
+    # Parse resource usage
+    local avg_ram avg_cpu avg_gpu peak_ram peak_cpu peak_gpu
+    
+    if command -v tegrastats &> /dev/null; then
+        # Parse tegrastats
+        avg_ram=$(grep -oP 'RAM \K[0-9]+' "$stats_file" | awk '{sum+=$1; count++} END {if(count>0) printf "%.0f", sum/count; else print 0}')
+        peak_ram=$(grep -oP 'RAM \K[0-9]+' "$stats_file" | sort -n | tail -1)
+        
+        avg_cpu=$(grep -oP 'CPU \[\K[^\]]+' "$stats_file" | tr ',' '\n' | grep -oP '^[0-9]+' | awk '{sum+=$1; count++} END {if(count>0) printf "%.1f", sum/count; else print 0}')
+        peak_cpu=$(grep -oP 'CPU \[\K[^\]]+' "$stats_file" | tr ',' '\n' | grep -oP '^[0-9]+' | sort -n | tail -1)
+        
+        avg_gpu=$(grep -oP 'GR3D_FREQ \K[0-9]+' "$stats_file" | awk '{sum+=$1; count++} END {if(count>0) printf "%.1f", sum/count; else print 0}')
+        peak_gpu=$(grep -oP 'GR3D_FREQ \K[0-9]+' "$stats_file" | sort -n | tail -1)
+    else
+        avg_ram=$(awk 'NR>2 {sum+=$(NF-1); count++} END {if(count>0) printf "%.0f", sum/count; else print 0}' "$stats_file")
+        peak_ram=$(awk 'NR>2 {print $(NF-1)}' "$stats_file" | sort -n | tail -1)
+        avg_cpu=$(awk 'NR>2 {sum+=$13; count++} END {if(count>0) printf "%.1f", 100-sum/count; else print 0}' "$stats_file")
+        peak_cpu="N/A"
+        avg_gpu="N/A"
+        peak_gpu="N/A"
+    fi
+    
+    # Calculate latency from buffer timestamps in identity output
+    # Look for "pts" (presentation timestamp) values - format is "pts: H:MM:SS.nnnnnnnnn"
+    local latency_samples latency_avg latency_min latency_max latency_stddev
+    
+    # Extract PTS values and calculate jitter/latency metrics
+    grep -oP 'pts: \K[0-9:]+\.[0-9]+' "$pipeline_log" | head -100 > "$latency_file" 2>/dev/null
+    
+    if [ -s "$latency_file" ]; then
+        # Calculate inter-frame timing (jitter)
+        local frame_times
+        frame_times=$(awk -F: '{
+            if (NF==3) {
+                t = $1*3600 + $2*60 + $3
+            } else if (NF==2) {
+                t = $1*60 + $2
+            } else {
+                t = $1
+            }
+            if (NR>1) print t - prev
+            prev = t
+        }' "$latency_file")
+        
+        if [ -n "$frame_times" ]; then
+            latency_avg=$(echo "$frame_times" | awk '{sum+=$1; count++} END {if(count>0) printf "%.2f", sum/count*1000; else print "N/A"}')
+            latency_min=$(echo "$frame_times" | sort -n | head -1 | awk '{printf "%.2f", $1*1000}')
+            latency_max=$(echo "$frame_times" | sort -n | tail -1 | awk '{printf "%.2f", $1*1000}')
+            latency_stddev=$(echo "$frame_times" | awk '{sum+=$1; sumsq+=$1*$1; count++} END {if(count>1) printf "%.2f", sqrt(sumsq/count - (sum/count)^2)*1000; else print "N/A"}')
+        else
+            latency_avg="N/A"
+            latency_min="N/A"
+            latency_max="N/A"
+            latency_stddev="N/A"
+        fi
+    else
+        latency_avg="N/A"
+        latency_min="N/A"
+        latency_max="N/A"
+        latency_stddev="N/A"
+    fi
+    
+    # Calculate delta from baseline
+    local ram_delta cpu_delta gpu_delta
+    ram_delta=$(echo "$avg_ram $BASELINE_RAM" | awk '{printf "%.0f", $1-$2}')
+    cpu_delta=$(echo "$avg_cpu $BASELINE_CPU" | awk '{printf "%.1f", $1-$2}')
+    if [ "$avg_gpu" != "N/A" ] && [ "$BASELINE_GPU" != "N/A" ]; then
+        gpu_delta=$(echo "$avg_gpu $BASELINE_GPU" | awk '{printf "%.1f", $1-$2}')
+    else
+        gpu_delta="N/A"
+    fi
+    
+    # Display results
+    echo ""
+    echo "    ┌─────────────────────────────────────────────────────────────────────┐"
+    printf "    │ %-69s │\n" "RESULTS"
+    echo "    ├─────────────────────────────────────────────────────────────────────┤"
+    printf "    │ %-20s │ %-22s │ %-20s │\n" "Metric" "Average" "Peak"
+    echo "    ├─────────────────────────────────────────────────────────────────────┤"
+    printf "    │ %-20s │ %14s MB     │ %12s MB     │\n" "RAM Usage" "$avg_ram" "${peak_ram:-N/A}"
+    printf "    │ %-20s │ %14s %%      │ %12s %%      │\n" "CPU Usage" "$avg_cpu" "${peak_cpu:-N/A}"
+    printf "    │ %-20s │ %14s %%      │ %12s %%      │\n" "GPU Usage (GR3D)" "$avg_gpu" "${peak_gpu:-N/A}"
+    echo "    ├─────────────────────────────────────────────────────────────────────┤"
+    printf "    │ %-20s │ %14s MB     │ (delta from idle)   │\n" "RAM Delta" "+$ram_delta"
+    printf "    │ %-20s │ %14s %%      │                     │\n" "CPU Delta" "+$cpu_delta"
+    printf "    │ %-20s │ %14s %%      │                     │\n" "GPU Delta" "+$gpu_delta"
+    echo "    ├─────────────────────────────────────────────────────────────────────┤"
+    printf "    │ %-20s │ %14s fps    │                     │\n" "Actual FPS" "$actual_fps"
+    printf "    │ %-20s │ %14s ms     │ (frame interval)    │\n" "Avg Frame Time" "$latency_avg"
+    printf "    │ %-20s │ %14s ms     │                     │\n" "Min Frame Time" "$latency_min"
+    printf "    │ %-20s │ %14s ms     │                     │\n" "Max Frame Time" "$latency_max"
+    printf "    │ %-20s │ %14s ms     │ (timing jitter)     │\n" "Std Dev" "$latency_stddev"
+    echo "    └─────────────────────────────────────────────────────────────────────┘"
+    
+    # Store results for summary
+    BENCHMARK_RESULTS["$description,ram"]="$avg_ram"
+    BENCHMARK_RESULTS["$description,cpu"]="$avg_cpu"
+    BENCHMARK_RESULTS["$description,gpu"]="$avg_gpu"
+    BENCHMARK_RESULTS["$description,fps"]="$actual_fps"
+    BENCHMARK_RESULTS["$description,latency"]="$latency_avg"
+    
+    # Cleanup
+    rm -f "$stats_file" "$latency_file" "$pipeline_log"
+    
+    return 0
+}
+
+# Measure camera open latency
+benchmark_camera_open_latency() {
+    benchmark_print_section "Camera Open Latency"
+    
+    local iterations=5
+    local total_time=0
+    local times=()
+    
+    echo "  Measuring camera initialization time ($iterations iterations)..."
+    
+    for i in $(seq 1 $iterations); do
+        # Force camera close by waiting
+        sleep 2
+        
+        local start_time end_time duration
+        start_time=$(date +%s.%N)
+        
+        # Open camera, grab 1 frame, close
+        timeout 30 gst-launch-1.0 zedsrc num-buffers=1 ! fakesink > /dev/null 2>&1
+        
+        end_time=$(date +%s.%N)
+        duration=$(echo "$end_time $start_time" | awk '{printf "%.3f", $1-$2}')
+        times+=("$duration")
+        total_time=$(echo "$total_time $duration" | awk '{print $1+$2}')
+        
+        echo -n "."
+    done
+    echo ""
+    
+    local avg_time min_time max_time
+    avg_time=$(echo "$total_time $iterations" | awk '{printf "%.3f", $1/$2}')
+    min_time=$(printf '%s\n' "${times[@]}" | sort -n | head -1)
+    max_time=$(printf '%s\n' "${times[@]}" | sort -n | tail -1)
+    
+    echo ""
+    echo "    ┌─────────────────────────────────────────────────────────────────────┐"
+    printf "    │ %-69s │\n" "CAMERA OPEN LATENCY"
+    echo "    ├─────────────────────────────────────────────────────────────────────┤"
+    printf "    │ %-30s │ %34s │\n" "Average open time" "${avg_time}s"
+    printf "    │ %-30s │ %34s │\n" "Minimum open time" "${min_time}s"
+    printf "    │ %-30s │ %34s │\n" "Maximum open time" "${max_time}s"
+    echo "    └─────────────────────────────────────────────────────────────────────┘"
+    
+    BENCHMARK_RESULTS["camera_open_avg"]="$avg_time"
+    
+    # Extra delay after multiple rapid camera opens
+    sleep 5
+}
+
+# Run all benchmarks
+run_benchmarks() {
+    benchmark_print_header
+    
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        echo -e "${RED}ERROR: No ZED camera detected. Benchmarks require hardware.${NC}"
+        exit 2
+    fi
+    
+    local platform
+    platform=$(detect_platform)
+    
+    local mode_str
+    if [ "$FAST_MODE" = true ]; then
+        mode_str="Fast (quick benchmark)"
+        BENCHMARK_DURATION=$BENCHMARK_DURATION_FAST
+    else
+        mode_str="Extensive (full benchmark)"
+    fi
+    
+    echo -e "${BLUE}[INFO]${NC} Platform: $platform"
+    echo -e "${BLUE}[INFO]${NC} Mode: $mode_str"
+    echo -e "${BLUE}[INFO]${NC} Benchmark duration: ${BENCHMARK_DURATION}s per test"
+    echo -e "${BLUE}[INFO]${NC} Warmup period: ${BENCHMARK_WARMUP}s"
+    if [[ -n "$BENCHMARK_BASELINE" ]]; then
+        echo -e "${BLUE}[INFO]${NC} Comparing with: $BENCHMARK_BASELINE"
+    fi
+    
+    # Get baseline measurements
+    benchmark_print_section "Baseline Measurements (Idle System)"
+    get_baseline_stats
+    
+    # Camera open latency (skip in fast mode - takes ~25s)
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        benchmark_camera_open_latency
+    else
+        echo -e "${YELLOW}[INFO]${NC} Skipping camera open latency test (use --extensive)"
+    fi
+    
+    # Detect camera type for appropriate resolutions
+    local is_gmsl=false
+    if command -v ZED_Explorer &> /dev/null; then
+        if ZED_Explorer -a 2>&1 | grep -qi "ZED X\|GMSL"; then
+            is_gmsl=true
+            echo -e "${BLUE}[INFO]${NC} Detected GMSL camera (ZED X series)"
+        else
+            echo -e "${BLUE}[INFO]${NC} Detected USB camera"
+        fi
+    fi
+    
+    # === CORE BENCHMARKS (always run) ===
+    
+    # Basic streaming benchmark
+    benchmark_print_section "Basic Streaming (Left Image Only)"
+    run_benchmark_pipeline "Stream: Left RGB" "zedsrc stream-type=0"
+    sleep $CAMERA_RESET_DELAY
+    
+    # Depth benchmark (one mode)
+    benchmark_print_section "Depth Processing Benchmark"
+    run_benchmark_pipeline "Depth: NEURAL mode" "zedsrc stream-type=4 depth-mode=4"
+    sleep $CAMERA_RESET_DELAY
+    
+    # === EXTENSIVE BENCHMARKS (only in extensive mode) ===
+    
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        benchmark_print_section "Stereo Streaming (Left + Right)"
+        run_benchmark_pipeline "Stream: Left+Right RGB" "zedsrc stream-type=2"
+        sleep $CAMERA_RESET_DELAY
+        
+        # Additional depth modes
+        benchmark_print_section "Additional Depth Modes"
+        
+        run_benchmark_pipeline "Depth: PERFORMANCE mode" "zedsrc stream-type=4 depth-mode=1"
+        sleep $CAMERA_RESET_DELAY
+        
+        run_benchmark_pipeline "Depth: ULTRA mode" "zedsrc stream-type=4 depth-mode=3"
+        sleep $CAMERA_RESET_DELAY
+        
+        # Resolution benchmarks
+        benchmark_print_section "Resolution Benchmarks"
+        
+        if [ "$is_gmsl" = true ]; then
+            run_benchmark_pipeline "Resolution: HD1200 (1920x1200)" "zedsrc stream-type=0 camera-resolution=2"
+            sleep $CAMERA_RESET_DELAY
+        else
+            run_benchmark_pipeline "Resolution: HD720 (1280x720)" "zedsrc stream-type=0 camera-resolution=3"
+            sleep $CAMERA_RESET_DELAY
+        fi
+        
+        run_benchmark_pipeline "Resolution: HD1080 (1920x1080)" "zedsrc stream-type=0 camera-resolution=1"
+        sleep $CAMERA_RESET_DELAY
+        
+        # AI Features benchmarks
+        benchmark_print_section "AI Features Benchmarks"
+        
+        run_benchmark_pipeline "Object Detection: MULTI_CLASS_BOX_FAST" \
+            "zedsrc stream-type=0 depth-mode=4 od-enabled=true od-detection-model=2"
+        sleep $CAMERA_RESET_DELAY
+        
+        run_benchmark_pipeline "Body Tracking: BODY_34_FAST" \
+            "zedsrc stream-type=0 depth-mode=4 bt-enabled=true bt-detection-model=0 bt-format=1"
+        sleep $CAMERA_RESET_DELAY
+        
+        # Positional Tracking benchmark
+        benchmark_print_section "Positional Tracking Benchmark"
+        run_benchmark_pipeline "Positional Tracking enabled" \
+            "zedsrc stream-type=0 depth-mode=1 enable-positional-tracking=true"
+        sleep $CAMERA_RESET_DELAY
+    else
+        echo ""
+        echo -e "${YELLOW}[INFO]${NC} Skipping extended benchmarks (use --extensive for full suite)"
+        echo ""
+    fi
+    
+    # Print summary
+    benchmark_print_section "BENCHMARK SUMMARY"
+    echo ""
+    echo "    ┌───────────────────────────────────────────────────────────────────────────────┐"
+    printf "    │ %-25s │ %8s │ %8s │ %8s │ %8s │ %8s │\n" "Configuration" "RAM(MB)" "CPU(%)" "GPU(%)" "FPS" "Lat(ms)"
+    echo "    ├───────────────────────────────────────────────────────────────────────────────┤"
+    
+    for key in "${!BENCHMARK_RESULTS[@]}"; do
+        if [[ "$key" == *",ram" ]]; then
+            local base="${key%,ram}"
+            local ram="${BENCHMARK_RESULTS[$base,ram]:-N/A}"
+            local cpu="${BENCHMARK_RESULTS[$base,cpu]:-N/A}"
+            local gpu="${BENCHMARK_RESULTS[$base,gpu]:-N/A}"
+            local fps="${BENCHMARK_RESULTS[$base,fps]:-N/A}"
+            local lat="${BENCHMARK_RESULTS[$base,latency]:-N/A}"
+            # Truncate description if too long
+            local short_desc="${base:0:25}"
+            printf "    │ %-25s │ %8s │ %8s │ %8s │ %8s │ %8s │\n" "$short_desc" "$ram" "$cpu" "$gpu" "$fps" "$lat"
+        fi
+    done
+    
+    echo "    └───────────────────────────────────────────────────────────────────────────────┘"
+    
+    if [ -n "${BENCHMARK_RESULTS[camera_open_avg]}" ]; then
+        echo ""
+        echo "    Camera open latency: ${BENCHMARK_RESULTS[camera_open_avg]}s (average)"
+    fi
+    
+    # Comparison with baseline if provided
+    if [[ -n "$BENCHMARK_BASELINE" ]]; then
+        benchmark_print_section "COMPARISON WITH BASELINE"
+        echo ""
+        echo "    Baseline file: $BENCHMARK_BASELINE"
+        echo ""
+        
+        # Parse baseline JSON
+        local baseline_open_latency
+        baseline_open_latency=$(grep -oP '"camera_open_latency_s":\s*\K[0-9.]+' "$BENCHMARK_BASELINE" 2>/dev/null)
+        
+        # Camera open latency comparison
+        if [[ -n "$baseline_open_latency" && -n "${BENCHMARK_RESULTS[camera_open_avg]}" ]]; then
+            local open_diff open_pct indicator
+            open_diff=$(echo "${BENCHMARK_RESULTS[camera_open_avg]} $baseline_open_latency" | awk '{printf "%.3f", $1-$2}')
+            open_pct=$(echo "${BENCHMARK_RESULTS[camera_open_avg]} $baseline_open_latency" | awk '{if($2>0) printf "%.1f", ($1-$2)/$2*100; else print "N/A"}')
+            
+            if (( $(echo "$open_diff < -0.1" | bc -l) )); then
+                indicator="${GREEN}▼ IMPROVED${NC}"
+            elif (( $(echo "$open_diff > 0.1" | bc -l) )); then
+                indicator="${RED}▲ SLOWER${NC}"
+            else
+                indicator="${YELLOW}≈ SAME${NC}"
+            fi
+            echo -e "    Camera Open: ${BENCHMARK_RESULTS[camera_open_avg]}s vs ${baseline_open_latency}s (${open_diff}s, ${open_pct}%) $indicator"
+        fi
+        
+        echo ""
+        echo "    ┌───────────────────────────────────────────────────────────────────────────────────────────┐"
+        printf "    │ %-25s │ %10s │ %10s │ %10s │ %-18s │\n" "Configuration" "Current" "Baseline" "Delta" "Status"
+        echo "    ├───────────────────────────────────────────────────────────────────────────────────────────┤"
+        
+        # Compare each benchmark
+        local improvements=0 regressions=0 unchanged=0
+        
+        for key in "${!BENCHMARK_RESULTS[@]}"; do
+            if [[ "$key" == *",ram" ]]; then
+                local base="${key%,ram}"
+                local short_desc="${base:0:25}"
+                
+                # Get current values
+                local cur_ram="${BENCHMARK_RESULTS[$base,ram]:-0}"
+                local cur_cpu="${BENCHMARK_RESULTS[$base,cpu]:-0}"
+                local cur_gpu="${BENCHMARK_RESULTS[$base,gpu]:-0}"
+                local cur_fps="${BENCHMARK_RESULTS[$base,fps]:-0}"
+                local cur_lat="${BENCHMARK_RESULTS[$base,latency]:-0}"
+                
+                # Get baseline values (parse from JSON)
+                local bl_data
+                bl_data=$(grep -A5 "\"name\": \"$base\"" "$BENCHMARK_BASELINE" 2>/dev/null | head -6)
+                
+                if [[ -n "$bl_data" ]]; then
+                    local bl_ram bl_cpu bl_gpu bl_fps bl_lat
+                    bl_ram=$(echo "$bl_data" | grep -oP '"ram_mb":\s*\K[0-9.]+' | head -1)
+                    bl_cpu=$(echo "$bl_data" | grep -oP '"cpu_percent":\s*\K[0-9.]+' | head -1)
+                    bl_gpu=$(echo "$bl_data" | grep -oP '"gpu_percent":\s*\K[0-9.]+' | head -1)
+                    bl_fps=$(echo "$bl_data" | grep -oP '"fps":\s*\K[0-9.]+' | head -1)
+                    bl_lat=$(echo "$bl_data" | grep -oP '"frame_time_ms":\s*\K[0-9.]+' | head -1)
+                    
+                    # Calculate deltas
+                    local ram_delta cpu_delta fps_delta lat_delta status
+                    ram_delta=$(echo "${cur_ram:-0} ${bl_ram:-0}" | awk '{printf "%.0f", $1-$2}')
+                    cpu_delta=$(echo "${cur_cpu:-0} ${bl_cpu:-0}" | awk '{printf "%.1f", $1-$2}')
+                    fps_delta=$(echo "${cur_fps:-0} ${bl_fps:-0}" | awk '{printf "%.1f", $1-$2}')
+                    lat_delta=$(echo "${cur_lat:-0} ${bl_lat:-0}" | awk '{printf "%.2f", $1-$2}')
+                    
+                    # Determine status based on key metrics (FPS up=good, RAM/CPU/Latency down=good)
+                    local score=0
+                    # FPS: higher is better
+                    if (( $(echo "$fps_delta > 0.5" | bc -l 2>/dev/null || echo 0) )); then
+                        score=$((score + 1))
+                    elif (( $(echo "$fps_delta < -0.5" | bc -l 2>/dev/null || echo 0) )); then
+                        score=$((score - 1))
+                    fi
+                    # RAM: lower is better
+                    if (( $(echo "$ram_delta < -20" | bc -l 2>/dev/null || echo 0) )); then
+                        score=$((score + 1))
+                    elif (( $(echo "$ram_delta > 20" | bc -l 2>/dev/null || echo 0) )); then
+                        score=$((score - 1))
+                    fi
+                    # Latency: lower is better
+                    if (( $(echo "$lat_delta < -1" | bc -l 2>/dev/null || echo 0) )); then
+                        score=$((score + 1))
+                    elif (( $(echo "$lat_delta > 1" | bc -l 2>/dev/null || echo 0) )); then
+                        score=$((score - 1))
+                    fi
+                    
+                    if [ $score -gt 0 ]; then
+                        status="${GREEN}▲ IMPROVED${NC}"
+                        improvements=$((improvements + 1))
+                    elif [ $score -lt 0 ]; then
+                        status="${RED}▼ REGRESSED${NC}"
+                        regressions=$((regressions + 1))
+                    else
+                        status="${YELLOW}≈ UNCHANGED${NC}"
+                        unchanged=$((unchanged + 1))
+                    fi
+                    
+                    # Print RAM comparison row
+                    printf "    │ %-25s │ %8s MB │ %8s MB │ %+8s MB │ " "$short_desc" "$cur_ram" "${bl_ram:-N/A}" "$ram_delta"
+                    echo -e "$status │"
+                    
+                    # Print FPS comparison row  
+                    printf "    │ %-25s │ %7s fps │ %7s fps │ %+7s fps │ " "  └─ FPS" "$cur_fps" "${bl_fps:-N/A}" "$fps_delta"
+                    if (( $(echo "$fps_delta > 0.5" | bc -l 2>/dev/null || echo 0) )); then
+                        echo -e "${GREEN}better${NC}              │"
+                    elif (( $(echo "$fps_delta < -0.5" | bc -l 2>/dev/null || echo 0) )); then
+                        echo -e "${RED}worse${NC}               │"
+                    else
+                        echo -e "${YELLOW}same${NC}                │"
+                    fi
+                else
+                    printf "    │ %-25s │ %10s │ %10s │ %10s │ %-18s │\n" "$short_desc" "$cur_ram MB" "N/A" "N/A" "NEW TEST"
+                    unchanged=$((unchanged + 1))
+                fi
+            fi
+        done
+        
+        echo "    └───────────────────────────────────────────────────────────────────────────────────────────┘"
+        
+        # Summary
+        echo ""
+        echo -e "    ${GREEN}Improvements: $improvements${NC}  ${RED}Regressions: $regressions${NC}  ${YELLOW}Unchanged: $unchanged${NC}"
+        
+        if [ $regressions -gt 0 ]; then
+            echo ""
+            echo -e "    ${RED}⚠ WARNING: Performance regressions detected!${NC}"
+        elif [ $improvements -gt 0 ]; then
+            echo ""
+            echo -e "    ${GREEN}✓ Performance improvements detected!${NC}"
+        fi
+    fi
+    
+    # Export results to JSON file
+    local json_file="/tmp/zed_benchmark_$(date +%Y%m%d_%H%M%S).json"
+    {
+        echo "{"
+        echo "  \"timestamp\": \"$(date -Iseconds)\","
+        echo "  \"platform\": \"$platform\","
+        echo "  \"camera_type\": \"$([ "$is_gmsl" = true ] && echo 'GMSL' || echo 'USB')\","
+        echo "  \"camera_open_latency_s\": ${BENCHMARK_RESULTS[camera_open_avg]:-null},"
+        echo "  \"baseline\": {"
+        echo "    \"ram_mb\": $BASELINE_RAM,"
+        echo "    \"cpu_percent\": $BASELINE_CPU,"
+        echo "    \"gpu_percent\": $BASELINE_GPU"
+        echo "  },"
+        echo "  \"benchmarks\": ["
+        local first=true
+        for key in "${!BENCHMARK_RESULTS[@]}"; do
+            if [[ "$key" == *",ram" ]]; then
+                local base="${key%,ram}"
+                [ "$first" = true ] && first=false || echo ","
+                echo -n "    {"
+                echo -n "\"name\": \"$base\", "
+                echo -n "\"ram_mb\": ${BENCHMARK_RESULTS[$base,ram]:-null}, "
+                echo -n "\"cpu_percent\": ${BENCHMARK_RESULTS[$base,cpu]:-null}, "
+                echo -n "\"gpu_percent\": ${BENCHMARK_RESULTS[$base,gpu]:-null}, "
+                echo -n "\"fps\": ${BENCHMARK_RESULTS[$base,fps]:-null}, "
+                echo -n "\"frame_time_ms\": ${BENCHMARK_RESULTS[$base,latency]:-null}"
+                echo -n "}"
+            fi
+        done
+        echo ""
+        echo "  ]"
+        echo "}"
+    } > "$json_file"
+    
+    echo ""
+    echo "    Results exported to: $json_file"
+    echo ""
+    echo -e "${GREEN}Benchmark complete!${NC}"
+}
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -1311,11 +1911,31 @@ show_help() {
     echo ""
     echo "Usage: $0 [OPTIONS]"
     echo ""
-    echo "Options:"
-    echo "  -f, --fast      Fast mode (~30-60 seconds, plugin checks only)"
-    echo "  -e, --extensive Extensive mode (~10 minutes, includes runtime tests)"
-    echo "  -v, --verbose   Verbose output"
-    echo "  -h, --help      Show this help message"
+    echo "Modes (mutually exclusive, default is --fast):"
+    echo "  -f, --fast            Fast mode (~30s) - plugin registration checks only"
+    echo "  -e, --extensive       Extensive mode (~10min) - full test suite with hardware"
+    echo "  -b, --benchmark       Benchmark mode - performance measurements"
+    echo ""
+    echo "Benchmark options:"
+    echo "  --fast                With --benchmark: quick benchmark (3 tests, ~2min)"
+    echo "  --extensive           With --benchmark: full benchmark (all tests, ~5min)"
+    echo "  --baseline FILE       Compare results with previous baseline JSON file"
+    echo ""
+    echo "Other options:"
+    echo "  -v, --verbose         Verbose output"
+    echo "  -h, --help            Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0                    # Fast tests (default)"
+    echo "  $0 -e                 # Extensive tests"
+    echo "  $0 -b                 # Full benchmark"
+    echo "  $0 -b -f              # Quick benchmark"
+    echo "  $0 -b --baseline /tmp/zed_benchmark_xxx.json  # Compare with baseline"
+    echo ""
+    echo "Benchmark workflow:"
+    echo "  1. Run initial benchmark:  $0 --benchmark"
+    echo "  2. Make code changes"
+    echo "  3. Run comparison:         $0 --benchmark --baseline <file.json>"
     echo ""
     echo "Exit codes:"
     echo "  0 - All tests passed"
@@ -1337,6 +1957,24 @@ parse_args() {
                 EXTENSIVE_MODE=true
                 shift
                 ;;
+            -b|--benchmark)
+                BENCHMARK_MODE=true
+                # Default benchmark to extensive mode for accurate results
+                if [ "$FAST_MODE" = true ] && [ "$EXTENSIVE_MODE" = false ]; then
+                    FAST_MODE=false
+                    EXTENSIVE_MODE=true
+                fi
+                shift
+                ;;
+            --baseline)
+                if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+                    BENCHMARK_BASELINE="$2"
+                    shift 2
+                else
+                    echo "Error: --baseline requires a file path argument"
+                    exit 1
+                fi
+                ;;
             -v|--verbose)
                 VERBOSE=true
                 shift
@@ -1352,6 +1990,17 @@ parse_args() {
                 ;;
         esac
     done
+    
+    # Validate baseline option
+    if [[ -n "$BENCHMARK_BASELINE" && "$BENCHMARK_MODE" != true ]]; then
+        echo "Error: --baseline requires --benchmark mode"
+        exit 1
+    fi
+    
+    if [[ -n "$BENCHMARK_BASELINE" && ! -f "$BENCHMARK_BASELINE" ]]; then
+        echo "Error: Baseline file not found: $BENCHMARK_BASELINE"
+        exit 1
+    fi
 }
 
 main() {
@@ -1360,10 +2009,27 @@ main() {
     local start_time
     start_time=$(date +%s)
     
-    print_header "ZED GStreamer Plugin Test Suite"
-    
     local platform
     platform=$(detect_platform)
+    
+    # Check dependencies first
+    if ! check_command "gst-inspect-1.0"; then
+        log_error "GStreamer not found"
+        exit 3
+    fi
+    
+    # Check hardware availability
+    check_hardware
+    
+    # Benchmark mode - separate execution path
+    if [ "$BENCHMARK_MODE" = true ]; then
+        run_benchmarks
+        exit 0
+    fi
+    
+    # Normal test mode
+    print_header "ZED GStreamer Plugin Test Suite"
+    
     log_info "Platform: $platform"
     log_info "Mode: $([ "$EXTENSIVE_MODE" = true ] && echo 'Extensive' || echo 'Fast')"
     log_info "Verbose: $VERBOSE"

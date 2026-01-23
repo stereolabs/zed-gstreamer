@@ -471,6 +471,20 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   svo-file-path       : Input from SVO file
                         flags: readable, writable
                         String. Default: ""
+  svo-recording-compression: Compression mode for SVO recording
+                        flags: readable, writable
+                        Enum "GstZedsrcSvoCompression" Default: 2, "H265"
+                           (0): LOSSLESS         - Lossless (PNG/ZSTD, CPU)
+                           (1): H264             - H264 (GPU)
+                           (2): H265             - H265/HEVC (GPU)
+                           (3): H264_LOSSLESS    - H264 Lossless (GPU)
+                           (4): H265_LOSSLESS    - H265 Lossless (GPU)
+  svo-recording-enable: Start/stop SVO recording at runtime (requires svo-recording-filename to be set)
+                        flags: readable, writable
+                        Boolean. Default: false
+  svo-recording-filename: Output filename for SVO recording (.svo2 extension recommended)
+                        flags: readable, writable
+                        String. Default: ""
   texture-confidence-threshold: Specify the Texture Confidence Threshold
                         flags: readable, writable
                         Integer. Range: 0 - 100 Default: 100
@@ -581,6 +595,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   opencv-calibration-file: Optional OpenCV Calibration File
                         flags: readable, writable
                         String. Default: ""
+  output-rectified-image: Enable image rectification (disable for custom optics without calibration)
+                        flags: readable, writable
+                        Boolean. Default: true
   parent              : The parent of the object
                         flags: readable, writable, 0x2000
                         Object of type "GstObject"
