@@ -49,24 +49,24 @@ struct _GstZedXOneSrc {
     gboolean _stopRequested;   // stop request flagout_framesize
 
     // ----> Properties
-    gint _cameraResolution;         // Camera resolution [enum]
-    gint _cameraFps;                // Camera FPS
-    gint _sdkVerboseLevel;          // Capture library verbose level
-    gfloat _camTimeout_sec;         // Camera open timeout
-    gint _cameraId;                 // Camera ID
-    gint64 _cameraSN;               // Camera Serial Number
-    GString *_svoFile;              // SVO file path
-    GString *_streamIp;             // Input Stream IP
-    gint _streamPort;               // Input Stream Port
+    gint _cameraResolution;            // Camera resolution [enum]
+    gint _cameraFps;                   // Camera FPS
+    gint _sdkVerboseLevel;             // Capture library verbose level
+    gfloat _camTimeout_sec;            // Camera open timeout
+    gint _cameraId;                    // Camera ID
+    gint64 _cameraSN;                  // Camera Serial Number
+    GString *_svoFile;                 // SVO file path
+    GString *_streamIp;                // Input Stream IP
+    gint _streamPort;                  // Input Stream Port
     GString *_opencvCalibrationFile;   // OpenCV calibration file path
-    gboolean _cameraImageFlip;      // Camera flipped
-    gboolean _enableHDR;            // HDR mode
-    gboolean _svoRealTime;          // SVO Real Time Mode
-    gint _coordUnit;                // Coordinate unit
-    gint _coordSys;                 // Coordinate system
-    GString *_sdkLogFile;           // SDK Log file path
-    GString *_settingsPath;         // Settings file path
-    gboolean _asyncRecovery;        // Async grab camera recovery
+    gboolean _cameraImageFlip;         // Camera flipped
+    gboolean _enableHDR;               // HDR mode
+    gboolean _svoRealTime;             // SVO Real Time Mode
+    gint _coordUnit;                   // Coordinate unit
+    gint _coordSys;                    // Coordinate system
+    GString *_sdkLogFile;              // SDK Log file path
+    GString *_settingsPath;            // Settings file path
+    gboolean _asyncRecovery;           // Async grab camera recovery
 
     gint _saturation;   // Image Saturation
     gint _sharpness;    // Image Sharpness
@@ -74,31 +74,32 @@ struct _GstZedXOneSrc {
     gboolean _autoWb;   // Enable Automatic White Balance
     gint _manualWb;     // Manual White Balance [2800,6500]
 
-    gboolean _autoExposure;      // Enable Automatic Exposure
-    gint _exposure_usec;         // Manual Exposure time [28,30000]
-    gint _exposureRange_min;     // Minimum value for Automatic Exposure [28,30000]
-    gint _exposureRange_max;     // Maximum value for Automatic Exposure [28,30000]
-    gint _exposureCompensation;  // Exposure Compensation [0,100]
+    gboolean _autoExposure;       // Enable Automatic Exposure
+    gint _exposure_usec;          // Manual Exposure time [28,30000]
+    gint _exposureRange_min;      // Minimum value for Automatic Exposure [28,30000]
+    gint _exposureRange_max;      // Maximum value for Automatic Exposure [28,30000]
+    gint _exposureCompensation;   // Exposure Compensation [0,100]
 
     gboolean _autoAnalogGain;    // Enable Automatic Analog Gain
     gint _analogGain;            // Manual Analog Gain [1000,16000]
     gint _analogGainRange_min;   // Minimum value for Automatic Analog Gain [1000,16000]
     gint _analogGainRange_max;   // Maximum value for Automatic Analog Gain [1000,16000]
-    
 
-    gboolean _autoDigitalGain;  // Enable Automatic Digital Gain
-    gint _digitalGain;          // Manual Digital Gain [1,256]
-    gint _digitalGainRange_min; // Minimum value for Automatic Digital Gain [1,256]
-    gint _digitalGainRange_max; // Maximum value for Automatic Digital Gain [1,256]
-    
-    gint _denoising;    // Image Denoising [0,100]
+    gboolean _autoDigitalGain;    // Enable Automatic Digital Gain
+    gint _digitalGain;            // Manual Digital Gain [1,256]
+    gint _digitalGainRange_min;   // Minimum value for Automatic Digital Gain [1,256]
+    gint _digitalGainRange_max;   // Maximum value for Automatic Digital Gain [1,256]
+
+    gint _denoising;   // Image Denoising [0,100]
     // <---- Properties
 
     int _realFps;   // Real FPS
 
     GstClockTime _acqStartTime;   // Acquisition start time
 
-    GstCaps *_caps;         // Stream caps
+    guint64 _bufferIndex;   // Buffer index counter
+
+    GstCaps *_caps;        // Stream caps
     guint _outFramesize;   // Output frame size in byte
 };
 
