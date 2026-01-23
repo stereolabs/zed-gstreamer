@@ -3540,8 +3540,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                 GST_LOG_OBJECT(src, "OD new data");
 
                 obj_count = det_objs.object_list.size();
-                if (obj_count >= (uint) 256)
-                    obj_count = (uint) 256;
+                if (obj_count > 255)
+                    obj_count = 255;
 
                 GST_LOG_OBJECT(src, "Number of detected objects (clamped): %d", obj_count);
 

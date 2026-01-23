@@ -16,7 +16,18 @@ if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 14)
 endif()
 
-add_definitions(-Werror=return-type)
+if(NOT WIN32)
+    add_definitions(-Werror=return-type 
+                    -Wfatal-errors
+                    -Wno-deprecated-declarations
+                    -Werror=overflow
+                    -Werror=uninitialized
+                    -Werror=delete-incomplete
+                    -Werror=shadow
+                    -Werror=array-bounds
+                    -Werror=vla
+                    -Walloc-zero)
+endif()
 
 set(CMAKE_SHARED_MODULE_PREFIX "lib")
 set(CMAKE_SHARED_LIBRARY_PREFIX "lib")

@@ -1141,9 +1141,9 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     }
 
     // Lambda to check return values
-    auto check_ret = [src](sl::ERROR_CODE ret) {
-        if (ret != sl::ERROR_CODE::SUCCESS) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed, '%s'", sl::toString(ret).c_str()),
+    auto check_ret = [src](sl::ERROR_CODE err) {
+        if (err != sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed, '%s'", sl::toString(err).c_str()),
                               (NULL));
             return false;
         }
@@ -1473,11 +1473,11 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // ----> Retrieve images
     GST_TRACE("Retrieve images");
-    auto check_ret = [src](sl::ERROR_CODE ret) {
-        if (ret != sl::ERROR_CODE::SUCCESS) {
+    auto check_ret = [src](sl::ERROR_CODE err) {
+        if (err != sl::ERROR_CODE::SUCCESS) {
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                              ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
-                               sl::toVerbose(ret).c_str()),
+                              ("Grabbing failed with error: '%s' - %s", sl::toString(err).c_str(),
+                               sl::toVerbose(err).c_str()),
                               (NULL));
             return false;
         }
