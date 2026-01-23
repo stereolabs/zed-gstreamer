@@ -60,8 +60,6 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *src, GstBuffer *buf);
 
 static gboolean gst_zedsrc_query(GstBaseSrc *src, GstQuery *query);
 
-
-
 enum {
     PROP_0,
     PROP_CAM_RES,
@@ -178,13 +176,13 @@ enum {
 };
 
 typedef enum {
-    GST_ZEDSRC_HD2K = 0, // 2208x1242
-    GST_ZEDSRC_HD1080 = 1, // 1920x1080
-    GST_ZEDSRC_HD1200 = 2, // 1920x1200
-    GST_ZEDSRC_HD720 = 3, // 1280x720
-    GST_ZEDSRC_SVGA = 4, // 960x600
-    GST_ZEDSRC_VGA = 5, // 672x376
-    GST_ZEDSRC_AUTO_RES = 6, // Default value for the camera model
+    GST_ZEDSRC_HD2K = 0,       // 2208x1242
+    GST_ZEDSRC_HD1080 = 1,     // 1920x1080
+    GST_ZEDSRC_HD1200 = 2,     // 1920x1200
+    GST_ZEDSRC_HD720 = 3,      // 1280x720
+    GST_ZEDSRC_SVGA = 4,       // 960x600
+    GST_ZEDSRC_VGA = 5,        // 672x376
+    GST_ZEDSRC_AUTO_RES = 6,   // Default value for the camera model
 } GstZedSrcRes;
 
 typedef enum {
@@ -263,23 +261,23 @@ typedef enum {
 /////////////////////////////////////////////////////////////////////////////
 
 // INITIALIZATION
-#define DEFAULT_PROP_CAM_RES        GST_ZEDSRC_AUTO_RES
-#define DEFAULT_PROP_CAM_FPS        GST_ZEDSRC_15FPS
-#define DEFAULT_PROP_SDK_VERBOSE    0
-#define DEFAULT_PROP_CAM_FLIP       2
-#define DEFAULT_PROP_CAM_ID         0
-#define DEFAULT_PROP_CAM_SN         0
-#define DEFAULT_PROP_SVO_FILE       ""
-#define DEFAULT_PROP_OPENCV_CALIB_FILE       ""
-#define DEFAULT_PROP_STREAM_IP      ""
-#define DEFAULT_PROP_STREAM_PORT    30000
-#define DEFAULT_PROP_STREAM_TYPE    0
-#define DEFAULT_PROP_DEPTH_MIN      300.f
-#define DEFAULT_PROP_DEPTH_MAX      20000.f
-#define DEFAULT_PROP_DEPTH_MODE     static_cast<gint>(sl::DEPTH_MODE::NONE)
-#define DEFAULT_PROP_COORD_SYS      static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
+#define DEFAULT_PROP_CAM_RES GST_ZEDSRC_AUTO_RES
+#define DEFAULT_PROP_CAM_FPS GST_ZEDSRC_15FPS
+#define DEFAULT_PROP_SDK_VERBOSE 0
+#define DEFAULT_PROP_CAM_FLIP 2
+#define DEFAULT_PROP_CAM_ID 0
+#define DEFAULT_PROP_CAM_SN 0
+#define DEFAULT_PROP_SVO_FILE ""
+#define DEFAULT_PROP_OPENCV_CALIB_FILE ""
+#define DEFAULT_PROP_STREAM_IP ""
+#define DEFAULT_PROP_STREAM_PORT 30000
+#define DEFAULT_PROP_STREAM_TYPE 0
+#define DEFAULT_PROP_DEPTH_MIN 300.f
+#define DEFAULT_PROP_DEPTH_MAX 20000.f
+#define DEFAULT_PROP_DEPTH_MODE static_cast<gint>(sl::DEPTH_MODE::NONE)
+#define DEFAULT_PROP_COORD_SYS static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
-#define DEFAULT_PROP_DEPTH_STAB     1
+#define DEFAULT_PROP_DEPTH_STAB 1
 #define DEFAULT_PROP_RIGHT_DEPTH FALSE
 #define DEFAULT_PROP_SVO_REAL_TIME FALSE
 #define DEFAULT_PROP_SDK_GPU_ID -1
@@ -294,96 +292,96 @@ typedef enum {
 #define DEFAULT_PROP_ASYNC_IMAGE_RETRIEVAL FALSE
 #define DEFAULT_PROP_MAX_WORKING_RES_W 0
 #define DEFAULT_PROP_MAX_WORKING_RES_H 0
-#define DEFAULT_PROP_ROI   FALSE
+#define DEFAULT_PROP_ROI FALSE
 #define DEFAULT_PROP_ROI_X -1
 #define DEFAULT_PROP_ROI_Y -1
 #define DEFAULT_PROP_ROI_W -1
 #define DEFAULT_PROP_ROI_H -1
 
 // RUNTIME
-#define DEFAULT_PROP_CONFIDENCE_THRESH   50
+#define DEFAULT_PROP_CONFIDENCE_THRESH 50
 #define DEFAULT_PROP_TEXTURE_CONF_THRESH 100
-#define DEFAULT_PROP_3D_REF_FRAME        static_cast<gint>(sl::REFERENCE_FRAME::WORLD)
-#define DEFAULT_PROP_FILL_MODE           FALSE
+#define DEFAULT_PROP_3D_REF_FRAME static_cast<gint>(sl::REFERENCE_FRAME::WORLD)
+#define DEFAULT_PROP_FILL_MODE FALSE
 #define DEFAULT_PROP_REMOVE_SATURATED_AREAS FALSE
 
 // POSITIONAL TRACKING
-#define DEFAULT_PROP_POS_TRACKING              FALSE
-#define DEFAULT_PROP_PT_MODE                   GST_ZEDSRC_PT_GEN_1
-#define DEFAULT_PROP_CAMERA_STATIC             FALSE
-#define DEFAULT_PROP_POS_AREA_FILE_PATH        ""
-#define DEFAULT_PROP_POS_ENABLE_AREA_MEMORY    TRUE
-#define DEFAULT_PROP_POS_ENABLE_IMU_FUSION     TRUE
+#define DEFAULT_PROP_POS_TRACKING FALSE
+#define DEFAULT_PROP_PT_MODE GST_ZEDSRC_PT_GEN_1
+#define DEFAULT_PROP_CAMERA_STATIC FALSE
+#define DEFAULT_PROP_POS_AREA_FILE_PATH ""
+#define DEFAULT_PROP_POS_ENABLE_AREA_MEMORY TRUE
+#define DEFAULT_PROP_POS_ENABLE_IMU_FUSION TRUE
 #define DEFAULT_PROP_POS_ENABLE_POSE_SMOOTHING TRUE
-#define DEFAULT_PROP_POS_SET_FLOOR_AS_ORIGIN   FALSE
+#define DEFAULT_PROP_POS_SET_FLOOR_AS_ORIGIN FALSE
 #define DEFAULT_PROP_POS_SET_GRAVITY_AS_ORIGIN TRUE
-#define DEFAULT_PROP_POS_DEPTH_MIN_RANGE       -1.0
-#define DEFAULT_PROP_POS_INIT_X                0.0
-#define DEFAULT_PROP_POS_INIT_Y                0.0
-#define DEFAULT_PROP_POS_INIT_Z                0.0
-#define DEFAULT_PROP_POS_INIT_ROLL             0.0
-#define DEFAULT_PROP_POS_INIT_PITCH            0.0
-#define DEFAULT_PROP_POS_INIT_YAW              0.0
+#define DEFAULT_PROP_POS_DEPTH_MIN_RANGE -1.0
+#define DEFAULT_PROP_POS_INIT_X 0.0
+#define DEFAULT_PROP_POS_INIT_Y 0.0
+#define DEFAULT_PROP_POS_INIT_Z 0.0
+#define DEFAULT_PROP_POS_INIT_ROLL 0.0
+#define DEFAULT_PROP_POS_INIT_PITCH 0.0
+#define DEFAULT_PROP_POS_INIT_YAW 0.0
 
 // OBJECT DETECTION
-#define DEFAULT_PROP_OD_ENABLE                            FALSE
-#define DEFAULT_PROP_OD_SYNC                              TRUE
-#define DEFAULT_PROP_OD_TRACKING                          TRUE
-#define DEFAULT_PROP_OD_SEGM                              FALSE   // NOTE(Walter) for the future
-#define DEFAULT_PROP_OD_MODEL                             GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM
-#define DEFAULT_PROP_OD_FILTER_MODE                       GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS
-#define DEFAULT_PROP_OD_CONFIDENCE                        50.0
-#define DEFAULT_PROP_OD_MAX_RANGE                         DEFAULT_PROP_DEPTH_MAX
-#define DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S              0.2
+#define DEFAULT_PROP_OD_ENABLE FALSE
+#define DEFAULT_PROP_OD_SYNC TRUE
+#define DEFAULT_PROP_OD_TRACKING TRUE
+#define DEFAULT_PROP_OD_SEGM FALSE   // NOTE(Walter) for the future
+#define DEFAULT_PROP_OD_MODEL GST_ZEDSRC_OD_MULTI_CLASS_BOX_MEDIUM
+#define DEFAULT_PROP_OD_FILTER_MODE GST_ZEDSRC_OD_FILTER_MODE_NMS3D_PER_CLASS
+#define DEFAULT_PROP_OD_CONFIDENCE 50.0
+#define DEFAULT_PROP_OD_MAX_RANGE DEFAULT_PROP_DEPTH_MAX
+#define DEFAULT_PROP_OD_PREDICTION_TIMEOUT_S 0.2
 #define DEFAULT_PROP_OD_ALLOW_REDUCED_PRECISION_INFERENCE FALSE
 #define DEFAULT_PROP_OD_INSTANCE_ID OD_INSTANCE_MODULE_ID
 #define DEFAULT_PROP_OD_CUSTOM_ONNX_FILE ""
 #define DEFAULT_PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_W 512
 #define DEFAULT_PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H 512
-#define DEFAULT_PROP_OD_PEOPLE_CONF                       35.0
-#define DEFAULT_PROP_OD_VEHICLE_CONF                      35.0
-#define DEFAULT_PROP_OD_BAG_CONF                          35.0
-#define DEFAULT_PROP_OD_ANIMAL_CONF                       35.0
-#define DEFAULT_PROP_OD_ELECTRONICS_CONF                  35.0
-#define DEFAULT_PROP_OD_FRUIT_VEGETABLES_CONF             35.0
-#define DEFAULT_PROP_OD_SPORT_CONF                        35.0
+#define DEFAULT_PROP_OD_PEOPLE_CONF 35.0
+#define DEFAULT_PROP_OD_VEHICLE_CONF 35.0
+#define DEFAULT_PROP_OD_BAG_CONF 35.0
+#define DEFAULT_PROP_OD_ANIMAL_CONF 35.0
+#define DEFAULT_PROP_OD_ELECTRONICS_CONF 35.0
+#define DEFAULT_PROP_OD_FRUIT_VEGETABLES_CONF 35.0
+#define DEFAULT_PROP_OD_SPORT_CONF 35.0
 
 // BODY TRACKING
-#define DEFAULT_PROP_BT_ENABLE                            FALSE
-#define DEFAULT_PROP_BT_SEGM                              FALSE   // NOTE(Walter) for the future
-#define DEFAULT_PROP_BT_SYNC                              TRUE
-#define DEFAULT_PROP_BT_MODEL                             GST_ZEDSRC_BT_HUMAN_BODY_MEDIUM
-#define DEFAULT_PROP_BT_FORMAT                            GST_ZEDSRC_BT_BODY_34
+#define DEFAULT_PROP_BT_ENABLE FALSE
+#define DEFAULT_PROP_BT_SEGM FALSE   // NOTE(Walter) for the future
+#define DEFAULT_PROP_BT_SYNC TRUE
+#define DEFAULT_PROP_BT_MODEL GST_ZEDSRC_BT_HUMAN_BODY_MEDIUM
+#define DEFAULT_PROP_BT_FORMAT GST_ZEDSRC_BT_BODY_34
 #define DEFAULT_PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE FALSE
-#define DEFAULT_PROP_BT_MAX_RANGE                         DEFAULT_PROP_DEPTH_MAX
-#define DEFAULT_PROP_BT_KP_SELECT                         GST_ZEDSRC_BT_KP_FULL
-#define DEFAULT_PROP_BT_BODY_FITTING                      TRUE
-#define DEFAULT_PROP_BT_TRACKING                          TRUE
-#define DEFAULT_PROP_BT_PREDICTION_TIMEOUT_S              0.2
-#define DEFAULT_PROP_BT_CONFIDENCE                        20.0
-#define DEFAULT_PROP_BT_MIN_KP_THRESH                     5
-#define DEFAULT_PROP_BT_SMOOTHING                         0.0
+#define DEFAULT_PROP_BT_MAX_RANGE DEFAULT_PROP_DEPTH_MAX
+#define DEFAULT_PROP_BT_KP_SELECT GST_ZEDSRC_BT_KP_FULL
+#define DEFAULT_PROP_BT_BODY_FITTING TRUE
+#define DEFAULT_PROP_BT_TRACKING TRUE
+#define DEFAULT_PROP_BT_PREDICTION_TIMEOUT_S 0.2
+#define DEFAULT_PROP_BT_CONFIDENCE 20.0
+#define DEFAULT_PROP_BT_MIN_KP_THRESH 5
+#define DEFAULT_PROP_BT_SMOOTHING 0.0
 
 // CAMERA CONTROLS
-#define DEFAULT_PROP_BRIGHTNESS        4
-#define DEFAULT_PROP_CONTRAST          4
-#define DEFAULT_PROP_HUE               0
-#define DEFAULT_PROP_SATURATION        4
-#define DEFAULT_PROP_SHARPNESS         4
-#define DEFAULT_PROP_GAMMA             8
-#define DEFAULT_PROP_GAIN              60
-#define DEFAULT_PROP_EXPOSURE          80
+#define DEFAULT_PROP_BRIGHTNESS 4
+#define DEFAULT_PROP_CONTRAST 4
+#define DEFAULT_PROP_HUE 0
+#define DEFAULT_PROP_SATURATION 4
+#define DEFAULT_PROP_SHARPNESS 4
+#define DEFAULT_PROP_GAMMA 8
+#define DEFAULT_PROP_GAIN 60
+#define DEFAULT_PROP_EXPOSURE 80
 #define DEFAULT_PROP_EXPOSURE_RANGE_MIN 28
 #define DEFAULT_PROP_EXPOSURE_RANGE_MAX 66000
-#define DEFAULT_PROP_AEC_AGC           1
-#define DEFAULT_PROP_AEC_AGC_ROI_X     -1
-#define DEFAULT_PROP_AEC_AGC_ROI_Y     -1
-#define DEFAULT_PROP_AEC_AGC_ROI_W     -1
-#define DEFAULT_PROP_AEC_AGC_ROI_H     -1
-#define DEFAULT_PROP_AEC_AGC_ROI_SIDE  GST_ZEDSRC_SIDE_BOTH
-#define DEFAULT_PROP_WHITEBALANCE      4600
+#define DEFAULT_PROP_AEC_AGC 1
+#define DEFAULT_PROP_AEC_AGC_ROI_X -1
+#define DEFAULT_PROP_AEC_AGC_ROI_Y -1
+#define DEFAULT_PROP_AEC_AGC_ROI_W -1
+#define DEFAULT_PROP_AEC_AGC_ROI_H -1
+#define DEFAULT_PROP_AEC_AGC_ROI_SIDE GST_ZEDSRC_SIDE_BOTH
+#define DEFAULT_PROP_WHITEBALANCE 4600
 #define DEFAULT_PROP_WHITEBALANCE_AUTO 1
-#define DEFAULT_PROP_LEDSTATUS         1
+#define DEFAULT_PROP_LEDSTATUS 1
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define GST_TYPE_ZED_SIDE (gst_zedsrc_side_get_type())
@@ -434,8 +432,7 @@ static GType gst_zedsrc_resol_get_type(void) {
             {GST_ZEDSRC_HD720, "1280x720", "HD720 (USB3)"},
             {GST_ZEDSRC_SVGA, "960x600", "SVGA (GMSL2)"},
             {GST_ZEDSRC_VGA, "672x376", "VGA (USB3)"},
-            {GST_ZEDSRC_AUTO_RES, "Automatic",
-             "Default value for the camera model"},
+            {GST_ZEDSRC_AUTO_RES, "Automatic", "Default value for the camera model"},
             {0, NULL, NULL},
         };
 
@@ -582,8 +579,7 @@ static GType gst_zedsrc_od_filter_mode_get_type(void) {
     if (!zedsrc_od_filter_mode_type) {
         static GEnumValue pattern_types[] = {
             {GST_ZEDSRC_OD_FILTER_MODE_NONE,
-             "SDK will not apply any preprocessing to the detected objects",
-             "NONE"},
+             "SDK will not apply any preprocessing to the detected objects", "NONE"},
             {GST_ZEDSRC_OD_FILTER_MODE_NMS3D,
              "SDK will remove objects that are in the same 3D position as an already tracked "
              "object (independant of class ID)",
@@ -881,7 +877,6 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                           DEFAULT_PROP_CAM_FPS,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-
     g_object_class_install_property(
         gobject_class, PROP_STREAM_TYPE,
         g_param_spec_enum("stream-type", "Image stream type", "Image stream type",
@@ -919,11 +914,11 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
         g_param_spec_string("svo-file-path", "SVO file", "Input from SVO file",
                             DEFAULT_PROP_SVO_FILE,
                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-    
+
     g_object_class_install_property(
         gobject_class, PROP_OPENCV_CALIB_FILE,
-        g_param_spec_string("opencv-calibration-file", "Optional OpenCV Calibration File", "Optional OpenCV Calibration File", 
-                            DEFAULT_PROP_OPENCV_CALIB_FILE,
+        g_param_spec_string("opencv-calibration-file", "Optional OpenCV Calibration File",
+                            "Optional OpenCV Calibration File", DEFAULT_PROP_OPENCV_CALIB_FILE,
                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -1004,10 +999,9 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 
     g_object_class_install_property(
         gobject_class, PROP_ROI_W,
-        g_param_spec_int("roi-w", "Region of interest width",
-                         "Region of interest width (-1 to not set ROI)", -1, 2208,
-                         DEFAULT_PROP_ROI_W,
-                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+        g_param_spec_int(
+            "roi-w", "Region of interest width", "Region of interest width (-1 to not set ROI)", -1,
+            2208, DEFAULT_PROP_ROI_W, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_ROI_H,
@@ -1052,8 +1046,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_POS_MODE,
         g_param_spec_enum("positional-tracking-mode", "Positional tracking mode",
-                          "Positional tracking mode", GST_TYPE_ZED_PT_MODE,
-                          DEFAULT_PROP_PT_MODE,
+                          "Positional tracking mode", GST_TYPE_ZED_PT_MODE, DEFAULT_PROP_PT_MODE,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -1397,11 +1390,13 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_GAMMA,
-        g_param_spec_int("ctrl-gamma", "Camera control: gamma", "Image gamma", 1, 9, DEFAULT_PROP_GAMMA,
+        g_param_spec_int("ctrl-gamma", "Camera control: gamma", "Image gamma", 1, 9,
+                         DEFAULT_PROP_GAMMA,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_GAIN,
-        g_param_spec_int("ctrl-gain", "Camera control: gain", "Camera gain", 0, 100, DEFAULT_PROP_GAIN,
+        g_param_spec_int("ctrl-gain", "Camera control: gain", "Camera gain", 0, 100,
+                         DEFAULT_PROP_GAIN,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_EXPOSURE,
@@ -1413,13 +1408,13 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
         g_param_spec_int("ctrl-exposure-range-min", "Minimum Exposure time [µsec]",
                          "Minimum exposure time in microseconds for the automatic exposure setting",
                          28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MIN,
-                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_EXPOSURE_RANGE_MAX,
         g_param_spec_int("ctrl-exposure-range-max", "Maximum Exposure time [µsec]",
                          "Maximum exposure time in microseconds for the automatic exposure setting",
                          28, 66000, DEFAULT_PROP_EXPOSURE_RANGE_MAX,
-                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+                         (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_AEC_AGC,
         g_param_spec_boolean("ctrl-aec-agc", "Camera control: automatic gain and exposure",
@@ -1459,7 +1454,8 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
         gobject_class, PROP_WHITEBALANCE,
-        g_param_spec_int("ctrl-whitebalance-temperature", "Camera control: white balance temperature",
+        g_param_spec_int("ctrl-whitebalance-temperature",
+                         "Camera control: white balance temperature",
                          "Image white balance temperature", 2800, 6500, DEFAULT_PROP_WHITEBALANCE,
                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
     g_object_class_install_property(
@@ -2536,9 +2532,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     sl::ERROR_CODE ret;
 
 #if (ZED_SDK_MAJOR_VERSION != 5)
-    GST_ELEMENT_ERROR(src, LIBRARY, FAILED, 
-    ("Wrong ZED SDK version. SDK v5.0 EA or newer required "),
-                      (NULL));
+    GST_ELEMENT_ERROR(src, LIBRARY, FAILED,
+                      ("Wrong ZED SDK version. SDK v5.0 EA or newer required "), (NULL));
     return FALSE;
 #endif
 
@@ -2549,32 +2544,31 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
     GST_INFO("CAMERA INITIALIZATION PARAMETERS");
 
-    switch(src->camera_resolution) {
-        case GST_ZEDSRC_HD2K:
-            init_params.camera_resolution = sl::RESOLUTION::HD2K;
-            break;
-        case GST_ZEDSRC_HD1080:
-            init_params.camera_resolution = sl::RESOLUTION::HD1080;
-            break;
-        case GST_ZEDSRC_HD1200:
-            init_params.camera_resolution = sl::RESOLUTION::HD1200;
-            break;
-        case GST_ZEDSRC_HD720:
-            init_params.camera_resolution = sl::RESOLUTION::HD720;
-            break;
-        case GST_ZEDSRC_SVGA:
-            init_params.camera_resolution = sl::RESOLUTION::SVGA;
-            break;
-        case GST_ZEDSRC_VGA:
-            init_params.camera_resolution = sl::RESOLUTION::VGA;
-            break;
-        case GST_ZEDSRC_AUTO_RES:
-            init_params.camera_resolution = sl::RESOLUTION::AUTO;
-            break;
-        default:
-            GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
-                              ("Failed to set camera resolution"), (NULL));
-            return FALSE;
+    switch (src->camera_resolution) {
+    case GST_ZEDSRC_HD2K:
+        init_params.camera_resolution = sl::RESOLUTION::HD2K;
+        break;
+    case GST_ZEDSRC_HD1080:
+        init_params.camera_resolution = sl::RESOLUTION::HD1080;
+        break;
+    case GST_ZEDSRC_HD1200:
+        init_params.camera_resolution = sl::RESOLUTION::HD1200;
+        break;
+    case GST_ZEDSRC_HD720:
+        init_params.camera_resolution = sl::RESOLUTION::HD720;
+        break;
+    case GST_ZEDSRC_SVGA:
+        init_params.camera_resolution = sl::RESOLUTION::SVGA;
+        break;
+    case GST_ZEDSRC_VGA:
+        init_params.camera_resolution = sl::RESOLUTION::VGA;
+        break;
+    case GST_ZEDSRC_AUTO_RES:
+        init_params.camera_resolution = sl::RESOLUTION::AUTO;
+        break;
+    default:
+        GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set camera resolution"), (NULL));
+        return FALSE;
     }
     GST_INFO(" * Camera resolution: %s", sl::toString(init_params.camera_resolution).c_str());
     init_params.camera_fps = src->camera_fps;
@@ -2745,9 +2739,11 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
             src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side);
         }
-        
-        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AUTO_EXPOSURE_TIME_RANGE, src->exposureRange_min, src->exposureRange_max);
-        GST_INFO(" * AUTO EXPOSURE TIME RANGE: [%d,%d]", src->exposureRange_min, src->exposureRange_max);
+
+        src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AUTO_EXPOSURE_TIME_RANGE,
+                                   src->exposureRange_min, src->exposureRange_max);
+        GST_INFO(" * AUTO EXPOSURE TIME RANGE: [%d,%d]", src->exposureRange_min,
+                 src->exposureRange_max);
     }
     if (src->whitebalance_temperature_auto == FALSE) {
         src->zed.setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO,
@@ -2785,32 +2781,31 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Fill Mode: %s", (src->fill_mode ? "TRUE" : "FALSE"));
 
     if (src->roi) {
-        if (src->roi_x != -1 && 
-                src->roi_y != -1 && 
-                src->roi_w != -1 && 
-                src->roi_h != -1) {
+        if (src->roi_x != -1 && src->roi_y != -1 && src->roi_w != -1 && src->roi_h != -1) {
             int roi_x_end = src->roi_x + src->roi_w;
             int roi_y_end = src->roi_y + src->roi_h;
             sl::Resolution resolution = sl::getResolution(init_params.camera_resolution);
-            if (src->roi_x >= 0 && src->roi_x < resolution.width &&
-                    src->roi_y >= 0 && src->roi_y < resolution.height &&
-                    roi_x_end <= resolution.width && roi_y_end <= resolution.height) {
+            if (src->roi_x >= 0 && src->roi_x < resolution.width && src->roi_y >= 0 &&
+                src->roi_y < resolution.height && roi_x_end <= resolution.width &&
+                roi_y_end <= resolution.height) {
 
                 sl::Mat roi_mask(resolution, sl::MAT_TYPE::U8_C1, sl::MEM::CPU);
                 roi_mask.setTo<sl::uchar1>(0, sl::MEM::CPU);
                 for (unsigned int v = src->roi_y; v < roi_y_end; v++)
-                  for (unsigned int u = src->roi_x; u < roi_x_end; u++)
+                    for (unsigned int u = src->roi_x; u < roi_x_end; u++)
                         roi_mask.setValue<sl::uchar1>(u, v, 255, sl::MEM::CPU);
-                
-                GST_INFO(" * ROI mask: (%d,%d)-%dx%d",
-                        src->roi_x, src->roi_y, src->roi_w, src->roi_h);
+
+                GST_INFO(" * ROI mask: (%d,%d)-%dx%d", src->roi_x, src->roi_y, src->roi_w,
+                         src->roi_h);
 
                 ret = src->zed.setRegionOfInterest(roi_mask);
-                if (ret!=sl::ERROR_CODE::SUCCESS) {
-                    GST_ELEMENT_ERROR (src, RESOURCE, NOT_FOUND,
-                                    ("Failed to set region of interest, '%s'", sl::toString(ret).c_str() ), (NULL));
+                if (ret != sl::ERROR_CODE::SUCCESS) {
+                    GST_ELEMENT_ERROR(
+                        src, RESOURCE, NOT_FOUND,
+                        ("Failed to set region of interest, '%s'", sl::toString(ret).c_str()),
+                        (NULL));
                     return FALSE;
-                } 
+                }
             }
         }
     }
@@ -3068,41 +3063,39 @@ static gboolean gst_zedsrc_query(GstBaseSrc *bsrc, GstQuery *query) {
     gboolean ret;
 
     switch (GST_QUERY_TYPE(query)) {
-        case GST_QUERY_LATENCY: {
-            GstClockTime min_latency, max_latency;
+    case GST_QUERY_LATENCY: {
+        GstClockTime min_latency, max_latency;
 
-            if (!src->is_started) {
-                GST_DEBUG_OBJECT(src, "Latency query before started, returning FALSE");
-                return FALSE;
-            }
-
-            // Calculate latency based on configured FPS
-            // Latency is approximately one frame duration
-            if (src->camera_fps > 0) {
-                min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, src->camera_fps);
-                max_latency = min_latency * 2;  // Allow some buffer for processing
-            } else {
-                // Fallback to 30 FPS assumption
-                min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, 30);
-                max_latency = min_latency * 2;
-            }
-
-            GST_DEBUG_OBJECT(src, "Latency query: min=%.3f ms, max=%.3f ms",
-                             (gdouble)min_latency / GST_MSECOND,
-                             (gdouble)max_latency / GST_MSECOND);
-
-            gst_query_set_latency(query, TRUE, min_latency, max_latency);
-            ret = TRUE;
-            break;
+        if (!src->is_started) {
+            GST_DEBUG_OBJECT(src, "Latency query before started, returning FALSE");
+            return FALSE;
         }
-        default:
-            ret = GST_BASE_SRC_CLASS(gst_zedsrc_parent_class)->query(bsrc, query);
-            break;
+
+        // Calculate latency based on configured FPS
+        // Latency is approximately one frame duration
+        if (src->camera_fps > 0) {
+            min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, src->camera_fps);
+            max_latency = min_latency * 2;   // Allow some buffer for processing
+        } else {
+            // Fallback to 30 FPS assumption
+            min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, 30);
+            max_latency = min_latency * 2;
+        }
+
+        GST_DEBUG_OBJECT(src, "Latency query: min=%.3f ms, max=%.3f ms",
+                         (gdouble) min_latency / GST_MSECOND, (gdouble) max_latency / GST_MSECOND);
+
+        gst_query_set_latency(query, TRUE, min_latency, max_latency);
+        ret = TRUE;
+        break;
+    }
+    default:
+        ret = GST_BASE_SRC_CLASS(gst_zedsrc_parent_class)->query(bsrc, query);
+        break;
     }
 
     return ret;
 }
-
 
 static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstZedSrc *src = GST_ZED_SRC(psrc);
@@ -3145,10 +3138,10 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     //// Acquisition start time
     if (!src->is_started) {
-        GstClock *start_clock = gst_element_get_clock (GST_ELEMENT (src));
+        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
         if (start_clock) {
-            src->acq_start_time = gst_clock_get_time (start_clock);
-            gst_object_unref (start_clock);
+            src->acq_start_time = gst_clock_get_time(start_clock);
+            gst_object_unref(start_clock);
         }
         src->is_started = TRUE;
     }
@@ -3178,17 +3171,17 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             src->exposure_gain_updated = FALSE;
         } else {
             // Auto exposure control
-            if (src->aec_agc_roi_x != -1 && src->aec_agc_roi_y != -1 &&
-                src->aec_agc_roi_w != -1 && src->aec_agc_roi_h != -1) {
+            if (src->aec_agc_roi_x != -1 && src->aec_agc_roi_y != -1 && src->aec_agc_roi_w != -1 &&
+                src->aec_agc_roi_h != -1) {
                 sl::Rect roi;
                 roi.x = src->aec_agc_roi_x;
                 roi.y = src->aec_agc_roi_y;
                 roi.width = src->aec_agc_roi_w;
                 roi.height = src->aec_agc_roi_h;
                 sl::SIDE side = static_cast<sl::SIDE>(src->aec_agc_roi_side);
-                GST_INFO(" Runtime AEC_AGC_ROI: (%d,%d)-%dx%d - Side: %d",
-                         src->aec_agc_roi_x, src->aec_agc_roi_y,
-                         src->aec_agc_roi_w, src->aec_agc_roi_h, src->aec_agc_roi_side);
+                GST_INFO(" Runtime AEC_AGC_ROI: (%d,%d)-%dx%d - Side: %d", src->aec_agc_roi_x,
+                         src->aec_agc_roi_y, src->aec_agc_roi_w, src->aec_agc_roi_h,
+                         src->aec_agc_roi_side);
                 src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC, src->aec_agc);
                 src->zed.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi, side);
                 src->exposure_gain_updated = FALSE;
@@ -3198,10 +3191,9 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Set runtime parameters
 
     /// Push zed cuda context as current
-    int cu_err = (int)cudaGetLastError();
+    int cu_err = (int) cudaGetLastError();
     if (cu_err > 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Cuda ERROR trigger before ZED SDK : %d", cu_err),
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Cuda ERROR trigger before ZED SDK : %d", cu_err),
                           (NULL));
         return GST_FLOW_ERROR;
     }
@@ -3209,28 +3201,25 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     zctx = src->zed.getCUDAContext();
     cuCtxPushCurrent_v2(zctx);
 
-
     /// Utils for check ret value and send to out
-#define CHECK_RET_OR_GOTO(_ret_expr)                                     \
-    do {                                                                 \
-        ret = (_ret_expr);                                               \
-        if (ret != sl::ERROR_CODE::SUCCESS) {                            \
-            GST_ELEMENT_ERROR (src, RESOURCE, FAILED,                    \
-                               ("Grabbing failed with error: '%s' - %s", \
-                                sl::toString (ret).c_str (),             \
-                                sl::toVerbose (ret).c_str ()),           \
-                               (NULL));                                  \
-            flow_ret = GST_FLOW_ERROR;                                   \
-            goto out;                                                    \
-        }                                                                \
+#define CHECK_RET_OR_GOTO(_ret_expr)                                                               \
+    do {                                                                                           \
+        ret = (_ret_expr);                                                                         \
+        if (ret != sl::ERROR_CODE::SUCCESS) {                                                      \
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,                                               \
+                              ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(), \
+                               sl::toVerbose(ret).c_str()),                                        \
+                              (NULL));                                                             \
+            flow_ret = GST_FLOW_ERROR;                                                             \
+            goto out;                                                                              \
+        }                                                                                          \
     } while (0)
 
     // ----> ZED grab
     ret = src->zed.grab(zedRtParams);
     if (ret > sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error: '%s' - %s",
-                           sl::toString(ret).c_str(),
+                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
                            sl::toVerbose(ret).c_str()),
                           (NULL));
         flow_ret = GST_FLOW_ERROR;
@@ -3239,18 +3228,17 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- ZED grab
 
     // ----> Clock update
-    clock = gst_element_get_clock (GST_ELEMENT (src));
+    clock = gst_element_get_clock(GST_ELEMENT(src));
     if (clock) {
-        clock_time = gst_clock_get_time (clock);
-        gst_object_unref (clock);
+        clock_time = gst_clock_get_time(clock);
+        gst_object_unref(clock);
         clock = nullptr;
     }
     // <---- Clock update
 
     // Memory mapping
     if (FALSE == gst_buffer_map(buf, &minfo, GST_MAP_WRITE)) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Failed to map buffer for writing"), (NULL));
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"), (NULL));
         flow_ret = GST_FLOW_ERROR;
         goto out;
     }
@@ -3258,35 +3246,31 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // ----> Mats retrieving
     if (src->stream_type == GST_ZEDSRC_ONLY_LEFT) {
-        CHECK_RET_OR_GOTO (src->zed.retrieveImage (left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
     } else if (src->stream_type == GST_ZEDSRC_ONLY_RIGHT) {
-        CHECK_RET_OR_GOTO (src->zed.retrieveImage (left_img, sl::VIEW::RIGHT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU));
     } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
-        CHECK_RET_OR_GOTO (src->zed.retrieveImage (left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-        CHECK_RET_OR_GOTO (src->zed.retrieveImage (right_img, sl::VIEW::RIGHT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU));
     } else if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
-        CHECK_RET_OR_GOTO (src->zed.retrieveMeasure (depth_data,
-                                                     sl::MEASURE::DEPTH_U16_MM,
-                                                     sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(
+            src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU));
     } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
-        CHECK_RET_OR_GOTO (src->zed.retrieveImage (left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-        CHECK_RET_OR_GOTO (src->zed.retrieveMeasure (depth_data,
-                                                     sl::MEASURE::DEPTH,
-                                                     sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU));
     }
 
     /* --- Memory copy into GstBuffer ------------------------------------ */
     if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
-        memcpy (minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
+        memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
     } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
         /* Left RGB data on half top */
-        memcpy (minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
         /* Right RGB data on half bottom */
-        memcpy (minfo.data + minfo.size / 2,
-                right_img.getPtr<sl::uchar4>(), minfo.size / 2);
+        memcpy(minfo.data + minfo.size / 2, right_img.getPtr<sl::uchar4>(), minfo.size / 2);
     } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         /* RGB data on half top */
-        memcpy (minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
 
         /* Depth data on half bottom */
         {
@@ -3294,11 +3278,11 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             sl::float1 *depthDataPtr = depth_data.getPtr<sl::float1>();
 
             for (unsigned long i = 0; i < minfo.size / 8; i++) {
-                *(gst_data++) = static_cast<uint32_t> (*(depthDataPtr++));
+                *(gst_data++) = static_cast<uint32_t>(*(depthDataPtr++));
             }
         }
     } else {
-        memcpy (minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
     }
     // <---- Memory copy
 
@@ -3306,7 +3290,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     cam_info = src->zed.getCameraInformation();
     info.cam_model = (gint) cam_info.camera_model;
     info.stream_type = src->stream_type;
-    info.grab_single_frame_width  = cam_info.camera_configuration.resolution.width;
+    info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
     info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
     if (info.grab_single_frame_height == 752 || info.grab_single_frame_height == 1440 ||
         info.grab_single_frame_height == 2160 || info.grab_single_frame_height == 2484) {
@@ -3366,9 +3350,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             sens.env.env_avail = TRUE;
 
             float temp;
-            sens_data.temperature.get(
-                sl::SensorsData::TemperatureData::SENSOR_LOCATION::BAROMETER,
-                temp);
+            sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::BAROMETER,
+                                      temp);
             sens.env.temp = temp;
             sens.env.press = sens_data.barometer.pressure * 1e-2;
 
@@ -3418,13 +3401,13 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         od_rt_params.object_class_filter = class_filter;
 
         class_det_conf.clear();
-        class_det_conf[sl::OBJECT_CLASS::PERSON]          = src->od_person_conf;
-        class_det_conf[sl::OBJECT_CLASS::VEHICLE]         = src->od_vehicle_conf;
-        class_det_conf[sl::OBJECT_CLASS::ANIMAL]          = src->od_animal_conf;
-        class_det_conf[sl::OBJECT_CLASS::ELECTRONICS]     = src->od_electronics_conf;
-        class_det_conf[sl::OBJECT_CLASS::BAG]             = src->od_bag_conf;
+        class_det_conf[sl::OBJECT_CLASS::PERSON] = src->od_person_conf;
+        class_det_conf[sl::OBJECT_CLASS::VEHICLE] = src->od_vehicle_conf;
+        class_det_conf[sl::OBJECT_CLASS::ANIMAL] = src->od_animal_conf;
+        class_det_conf[sl::OBJECT_CLASS::ELECTRONICS] = src->od_electronics_conf;
+        class_det_conf[sl::OBJECT_CLASS::BAG] = src->od_bag_conf;
         class_det_conf[sl::OBJECT_CLASS::FRUIT_VEGETABLE] = src->od_fruit_vegetable_conf;
-        class_det_conf[sl::OBJECT_CLASS::SPORT]           = src->od_sport_conf;
+        class_det_conf[sl::OBJECT_CLASS::SPORT] = src->od_sport_conf;
         od_rt_params.object_class_detection_confidence_threshold = class_det_conf;
 
         ret = src->zed.retrieveObjects(det_objs, od_rt_params, OD_INSTANCE_MODULE_ID);
@@ -3434,8 +3417,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                 GST_LOG_OBJECT(src, "OD new data");
 
                 obj_count = det_objs.object_list.size();
-                if (obj_count >= (uint)256)
-                    obj_count = (uint)256;
+                if (obj_count >= (uint) 256)
+                    obj_count = (uint) 256;
 
                 GST_LOG_OBJECT(src, "Number of detected objects (clamped): %d", obj_count);
 
@@ -3447,38 +3430,32 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                     obj_data[idx].skeletons_avail = FALSE;
                     obj_data[idx].id = obj.id;
 
-                    obj_data[idx].label =
-                        static_cast<OBJECT_CLASS>(obj.label);
-                    obj_data[idx].sublabel =
-                        static_cast<OBJECT_SUBCLASS>(obj.sublabel);
+                    obj_data[idx].label = static_cast<OBJECT_CLASS>(obj.label);
+                    obj_data[idx].sublabel = static_cast<OBJECT_SUBCLASS>(obj.sublabel);
 
                     obj_data[idx].tracking_state =
                         static_cast<OBJECT_TRACKING_STATE>(obj.tracking_state);
-                    obj_data[idx].action_state =
-                        static_cast<OBJECT_ACTION_STATE>(obj.action_state);
+                    obj_data[idx].action_state = static_cast<OBJECT_ACTION_STATE>(obj.action_state);
 
                     obj_data[idx].confidence = obj.confidence;
 
-                    memcpy(obj_data[idx].position,
-                           (void *)obj.position.ptr(), 3 * sizeof(float));
-                    memcpy(obj_data[idx].position_covariance,
-                           (void *)obj.position_covariance, 6 * sizeof(float));
-                    memcpy(obj_data[idx].velocity,
-                           (void *)obj.velocity.ptr(), 3 * sizeof(float));
+                    memcpy(obj_data[idx].position, (void *) obj.position.ptr(), 3 * sizeof(float));
+                    memcpy(obj_data[idx].position_covariance, (void *) obj.position_covariance,
+                           6 * sizeof(float));
+                    memcpy(obj_data[idx].velocity, (void *) obj.velocity.ptr(), 3 * sizeof(float));
 
                     if (obj.bounding_box_2d.size() > 0) {
-                        memcpy((uint8_t *)obj_data[idx].bounding_box_2d,
-                               (uint8_t *)obj.bounding_box_2d.data(),
+                        memcpy((uint8_t *) obj_data[idx].bounding_box_2d,
+                               (uint8_t *) obj.bounding_box_2d.data(),
                                obj.bounding_box_2d.size() * 2 * sizeof(unsigned int));
                     }
                     if (obj.bounding_box.size() > 0) {
-                        memcpy(obj_data[idx].bounding_box_3d,
-                               (void *)obj.bounding_box.data(),
+                        memcpy(obj_data[idx].bounding_box_3d, (void *) obj.bounding_box.data(),
                                24 * sizeof(float));
                     }
 
-                    memcpy(obj_data[idx].dimensions,
-                           (void *)obj.dimensions.ptr(), 3 * sizeof(float));
+                    memcpy(obj_data[idx].dimensions, (void *) obj.dimensions.ptr(),
+                           3 * sizeof(float));
                 }
             } else {
                 obj_count = 0;
@@ -3497,8 +3474,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         GST_LOG_OBJECT(src, "Body Tracking enabled");
 
         bt_rt_params.detection_confidence_threshold = src->bt_rt_det_conf;
-        bt_rt_params.minimum_keypoints_threshold    = src->bt_rt_min_kp_thresh;
-        bt_rt_params.skeleton_smoothing             = src->bt_rt_skel_smoothing;
+        bt_rt_params.minimum_keypoints_threshold = src->bt_rt_min_kp_thresh;
+        bt_rt_params.skeleton_smoothing = src->bt_rt_skel_smoothing;
 
         ret = src->zed.retrieveBodies(bodies, bt_rt_params, BT_INSTANCE_MODULE_ID);
 
@@ -3509,13 +3486,13 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                 int bodies_count = bodies.body_list.size();
                 GST_LOG_OBJECT(src, "Number of detected bodies: %d", bodies_count);
 
-                for (auto i = bodies.body_list.begin();
-                     i != bodies.body_list.end() && b_idx < 256; ++i, ++b_idx) {
+                for (auto i = bodies.body_list.begin(); i != bodies.body_list.end() && b_idx < 256;
+                     ++i, ++b_idx) {
                     sl::BodyData obj = *i;
 
                     obj_data[b_idx].skeletons_avail = TRUE;
                     obj_data[b_idx].id = obj.id;
-                    obj_data[b_idx].label    = OBJECT_CLASS::PERSON;
+                    obj_data[b_idx].label = OBJECT_CLASS::PERSON;
                     obj_data[b_idx].sublabel = OBJECT_SUBCLASS::PERSON;
 
                     obj_data[b_idx].tracking_state =
@@ -3525,26 +3502,25 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
                     obj_data[b_idx].confidence = obj.confidence;
 
-                    memcpy(obj_data[b_idx].position,
-                           (void *)obj.position.ptr(), 3 * sizeof(float));
-                    memcpy(obj_data[b_idx].position_covariance,
-                           (void *)obj.position_covariance, 6 * sizeof(float));
-                    memcpy(obj_data[b_idx].velocity,
-                           (void *)obj.velocity.ptr(), 3 * sizeof(float));
+                    memcpy(obj_data[b_idx].position, (void *) obj.position.ptr(),
+                           3 * sizeof(float));
+                    memcpy(obj_data[b_idx].position_covariance, (void *) obj.position_covariance,
+                           6 * sizeof(float));
+                    memcpy(obj_data[b_idx].velocity, (void *) obj.velocity.ptr(),
+                           3 * sizeof(float));
 
                     if (obj.bounding_box_2d.size() > 0) {
-                        memcpy((uint8_t *)obj_data[b_idx].bounding_box_2d,
-                               (uint8_t *)obj.bounding_box_2d.data(),
+                        memcpy((uint8_t *) obj_data[b_idx].bounding_box_2d,
+                               (uint8_t *) obj.bounding_box_2d.data(),
                                obj.bounding_box_2d.size() * 2 * sizeof(unsigned int));
                     }
                     if (obj.bounding_box.size() > 0) {
-                        memcpy(obj_data[b_idx].bounding_box_3d,
-                               (void *)obj.bounding_box.data(),
+                        memcpy(obj_data[b_idx].bounding_box_3d, (void *) obj.bounding_box.data(),
                                24 * sizeof(float));
                     }
 
-                    memcpy(obj_data[b_idx].dimensions,
-                           (void *)obj.dimensions.ptr(), 3 * sizeof(float));
+                    memcpy(obj_data[b_idx].dimensions, (void *) obj.dimensions.ptr(),
+                           3 * sizeof(float));
 
                     switch (static_cast<sl::BODY_FORMAT>(src->bt_format)) {
                     case sl::BODY_FORMAT::BODY_18:
@@ -3562,35 +3538,31 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                     }
 
                     if (obj.keypoint_2d.size() > 0 && obj_data[b_idx].skel_format > 0) {
-                        memcpy(obj_data[b_idx].keypoint_2d,
-                               (void *)obj.keypoint_2d.data(),
+                        memcpy(obj_data[b_idx].keypoint_2d, (void *) obj.keypoint_2d.data(),
                                2 * obj_data[b_idx].skel_format * sizeof(float));
                     }
                     if (obj.keypoint.size() > 0 && obj_data[b_idx].skel_format > 0) {
-                        memcpy(obj_data[b_idx].keypoint_3d,
-                               (void *)obj.keypoint.data(),
+                        memcpy(obj_data[b_idx].keypoint_3d, (void *) obj.keypoint.data(),
                                3 * obj_data[b_idx].skel_format * sizeof(float));
                     }
 
                     if (obj.head_bounding_box_2d.size() > 0) {
                         memcpy(obj_data[b_idx].head_bounding_box_2d,
-                               (void *)obj.head_bounding_box_2d.data(),
-                               8 * sizeof(unsigned int));
+                               (void *) obj.head_bounding_box_2d.data(), 8 * sizeof(unsigned int));
                     }
                     if (obj.head_bounding_box.size() > 0) {
                         memcpy(obj_data[b_idx].head_bounding_box_3d,
-                               (void *)obj.head_bounding_box.data(),
-                               24 * sizeof(float));
+                               (void *) obj.head_bounding_box.data(), 24 * sizeof(float));
                     }
-                    memcpy(obj_data[b_idx].head_position,
-                           (void *)obj.head_position.ptr(), 3 * sizeof(float));
+                    memcpy(obj_data[b_idx].head_position, (void *) obj.head_position.ptr(),
+                           3 * sizeof(float));
                 }
 
                 obj_count = b_idx;
             }
         } else {
-            GST_WARNING_OBJECT(src, "Body Tracking problem: '%s' - %s",
-                               sl::toString(ret).c_str(), sl::toVerbose(ret).c_str());
+            GST_WARNING_OBJECT(src, "Body Tracking problem: '%s' - %s", sl::toString(ret).c_str(),
+                               sl::toVerbose(ret).c_str());
         }
     }
     // <---- Body Tracking metadata
@@ -3604,8 +3576,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     offset = GST_BUFFER_OFFSET(buf);
     meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
-                                       src->object_detection | src->body_tracking,
-                                       obj_count, obj_data, offset);
+                                       src->object_detection | src->body_tracking, obj_count,
+                                       obj_data, offset);
 
 out:
     if (mapped)
@@ -3623,11 +3595,10 @@ out:
 
 static gboolean plugin_init(GstPlugin *plugin) {
     GST_DEBUG_CATEGORY_INIT(gst_zedsrc_debug, "zedsrc", 0, "debug category for zedsrc element");
-    GST_DEBUG_CATEGORY_INIT(gst_zedsrc_tracking_debug, "zedsrc-tracking", 0, 
+    GST_DEBUG_CATEGORY_INIT(gst_zedsrc_tracking_debug, "zedsrc-tracking", 0,
                             "zedsrc positional tracking debug");
-    GST_DEBUG_CATEGORY_INIT(gst_zedsrc_od_debug, "zedsrc-od", 0, 
-                            "zedsrc object detection debug");
-    GST_DEBUG_CATEGORY_INIT(gst_zedsrc_controls_debug, "zedsrc-controls", 0, 
+    GST_DEBUG_CATEGORY_INIT(gst_zedsrc_od_debug, "zedsrc-od", 0, "zedsrc object detection debug");
+    GST_DEBUG_CATEGORY_INIT(gst_zedsrc_controls_debug, "zedsrc-controls", 0,
                             "zedsrc camera controls debug");
     gst_element_register(plugin, "zedsrc", GST_RANK_NONE, gst_zedsrc_get_type());
 

@@ -291,13 +291,13 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Float. Range:             100 -            3000 Default:             300 
   depth-mode          : Depth Mode
                         flags: readable, writable
-                        Enum "GstZedsrcDepthMode" Default: 0, "NONE"
+                        Enum "GstZedsrcDepthMode" Default: -1, "NONE"
                            (5): NEURAL_PLUS      - More accurate Neural disparity estimation, Requires AI module.
                            (4): NEURAL           - End to End Neural disparity estimation, requires AI module
                            (3): NEURAL_LIGHT     - End to End Neural disparity estimation (light), requires AI module
-                           (2): ULTRA            - Computation mode favorising edges and sharpness. Requires more GPU memory and computation power.
-                           (1): QUALITY          - Computation mode designed for challenging areas with untextured surfaces.
-                           (0): PERFORMANCE      - Computation mode optimized for speed.
+                           (2): ULTRA            - [DEPRECATED]
+                           (1): QUALITY          - [DEPRECATED]
+                           (0): PERFORMANCE      - [DEPRECATED]
                            (-1): NONE            - This mode does not compute any depth map. Only rectified stereo images will be available.
   depth-stabilization : Enable depth stabilization
                         flags: readable, writable
