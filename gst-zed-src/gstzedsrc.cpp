@@ -714,14 +714,14 @@ static GType gst_zedsrc_depth_mode_get_type(void) {
             {static_cast<gint>(sl::DEPTH_MODE::NEURAL_LIGHT),
              "End to End Neural disparity estimation (light), requires AI module", "NEURAL_LIGHT"},
             {static_cast<gint>(sl::DEPTH_MODE::ULTRA),
-             "Computation mode favorising edges and sharpness. Requires more GPU memory and "
+             "[DEPRECATED] Computation mode favorising edges and sharpness. Requires more GPU memory and "
              "computation power.",
              "ULTRA"},
             {static_cast<gint>(sl::DEPTH_MODE::QUALITY),
-             "Computation mode designed for challenging areas with untextured surfaces.",
+             "[DEPRECATED] Computation mode designed for challenging areas with untextured surfaces.",
              "QUALITY"},
             {static_cast<gint>(sl::DEPTH_MODE::PERFORMANCE),
-             "Computation mode optimized for speed.", "PERFORMANCE"},
+             "[DEPRECATED] Computation mode optimized for speed.", "PERFORMANCE"},
             {static_cast<gint>(sl::DEPTH_MODE::NONE),
              "This mode does not compute any depth map. Only rectified stereo images will be "
              "available.",
