@@ -5,6 +5,12 @@
 # Raw UDP/RTP has the absolute minimum latency (~30-80ms)
 # No session overhead, no muxing, just raw H.265 RTP packets
 #
+# For GMSL cameras (ZED X, ZED X Mini) with SDK 5.2+:
+#   - Uses zero-copy NV12 for maximum performance
+#
+# For USB cameras or older SDK:
+#   - Uses BGRA with nvvideoconvert to NVMM NV12
+#
 # Usage:
 #   ./udp_stream.sh [client_ip] [port] [fps] [resolution] [bitrate]
 #
@@ -22,6 +28,10 @@
 # =============================================================================
 
 set -e
+
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 CLIENT_IP="${1:-}"
 PORT="${2:-5000}"
@@ -52,6 +62,7 @@ IP_ADDR=$(hostname -I | awk '{print $1}')
 echo "=============================================="
 echo " ZED UDP Streaming (Lowest Latency)"
 echo "=============================================="
+print_camera_info
 echo " Sending to: $CLIENT_IP:$PORT"
 echo " Resolution: ${RES_NAMES[$RESOLUTION]:-$RESOLUTION}"
 echo " FPS: $FPS"
@@ -90,9 +101,21 @@ echo ""
 
 # Direct UDP/RTP stream - absolute minimum latency
 # No RTSP session, no MPEG-TS muxing, just raw RTP packets
-gst-launch-1.0 -e \
-    zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
-    nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
-    h265parse config-interval=1 ! \
-    rtph265pay config-interval=1 ! \
-    udpsink host=$CLIENT_IP port=$PORT sync=false async=false
+if is_zero_copy_available; then
+    # Zero-copy NV12 path
+    gst-launch-1.0 -e \
+        zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
+        h265parse config-interval=1 ! \
+        rtph265pay config-interval=1 ! \
+        udpsink host=$CLIENT_IP port=$PORT sync=false async=false
+else
+    # BGRA with conversion path (USB or older SDK)
+    gst-launch-1.0 -e \
+        zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+        nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
+        h265parse config-interval=1 ! \
+        rtph265pay config-interval=1 ! \
+        udpsink host=$CLIENT_IP port=$PORT sync=false async=false
+fi

@@ -1,21 +1,39 @@
-# ZED GStreamer Zero-Copy Examples for Jetson
+# ZED GStreamer Examples for Jetson
 
-These scripts demonstrate how to use the ZED GStreamer plugin with zero-copy NV12 output on Jetson platforms (GMSL cameras only).
+These scripts demonstrate how to use the ZED GStreamer plugin on Jetson platforms with hardware-accelerated encoding.
+
+## Camera Support
+
+The scripts automatically detect your camera type and SDK version to use the optimal pipeline:
+
+### GMSL Cameras (ZED X, ZED X Mini) with SDK 5.2+
+- **Zero-copy NV12** (stream-type=5): Direct memory path from camera to encoder
+- Maximum performance with minimal CPU overhead
+- Requires ZED SDK 5.2+ with Advanced Capture API
+
+### USB Cameras (ZED 2, ZED 2i, ZED Mini) or older SDK
+- **BGRA with conversion** (stream-type=0): Uses `nvvideoconvert` to NVMM NV12
+- Still hardware accelerated, slightly higher CPU usage
+- Works with any ZED SDK version
 
 ## Requirements
 
 - NVIDIA Jetson platform (Orin, Xavier, etc.)
-- ZED SDK 5.2 or newer
-- ZED X or ZED X Mini camera (GMSL interface)
+- ZED SDK (5.2+ recommended for zero-copy with GMSL cameras)
 - GStreamer 1.0 with NVIDIA plugins
-- DeepStream SDK (for DeepStream examples)
+- DeepStream SDK (for DeepStream examples only)
 
 ## Stream Types
 
-The `zedsrc` plugin now supports two new stream types for zero-copy NV12 output:
+The `zedsrc` plugin supports these stream types:
 
-- `stream-type=5` - **Raw NV12 zero-copy**: Single camera NV12 output
-- `stream-type=6` - **Raw NV12 stereo zero-copy**: Side-by-side stereo NV12 output
+- `stream-type=0` - **Left BGRA**: Standard left image (works on all cameras)
+- `stream-type=1` - **Right BGRA**: Right image
+- `stream-type=2` - **Stereo BGRA**: Left and right stacked vertically
+- `stream-type=3` - **Depth 16-bit**: Depth map as GRAY16
+- `stream-type=4` - **Left + Depth BGRA**: Left and depth stacked
+- `stream-type=5` - **Raw NV12 zero-copy**: GMSL cameras only, SDK 5.2+
+- `stream-type=6` - **Raw NV12 stereo zero-copy**: Side-by-side stereo, GMSL only
 
 ## Scripts
 
@@ -28,7 +46,7 @@ Records ZED camera output to H.265 file using NVIDIA's hardware encoder:
 ```
 
 Features:
-- Zero-copy NV12 from ZED camera
+- Automatic camera detection (zero-copy for GMSL, converted for USB)
 - Hardware H.265 encoding (nvv4l2h265enc)
 - Low latency, minimal CPU usage
 - Optional preview window
@@ -42,14 +60,22 @@ Runs object detection on ZED camera feed using DeepStream:
 ```
 
 Features:
-- Zero-copy NV12 directly to NVIDIA inference
+- Works with both GMSL and USB cameras
 - YOLOv5/ResNet object detection
 - On-screen display with bounding boxes
 - Optional recording
 
+### 3. Streaming Scripts
+
+- `srt_stream.sh` - SRT streaming (~50-100ms latency)
+- `rtsp_stream.sh` - RTSP streaming (~200ms latency)
+- `udp_stream.sh` - Raw UDP/RTP streaming (~30-80ms latency)
+
+All streaming scripts automatically detect camera type and use the optimal pipeline.
+
 ## Building
 
-Make sure to build the zed-gstreamer plugin with Advanced Capture API enabled:
+Make sure to build the zed-gstreamer plugin:
 
 ```bash
 cd /path/to/zed-gstreamer
@@ -59,8 +85,10 @@ make -j$(nproc)
 sudo make install
 ```
 
+For zero-copy support with GMSL cameras, ensure you have ZED SDK 5.2+ installed.
+
 ## Notes
 
-- Zero-copy NV12 is only available for GMSL cameras (ZED X, ZED X Mini)
-- USB cameras will not work with stream-type 5 or 6
-- The NV12 format is more efficient for hardware encoding and inference than BGRA
+- Zero-copy NV12 (stream-type=5/6) is only available for GMSL cameras with SDK 5.2+
+- USB cameras automatically fall back to BGRA with nvvideoconvert
+- The scripts will display the detected camera type and stream mode at startup

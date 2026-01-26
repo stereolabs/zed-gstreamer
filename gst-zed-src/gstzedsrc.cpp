@@ -3288,56 +3288,7 @@ static gboolean gst_zedsrc_query(GstBaseSrc *bsrc, GstQuery *query) {
     return ret;
 }
 
-static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
-    GstZedSrc *src = GST_ZED_SRC(psrc);
-    GST_TRACE_OBJECT(src, "gst_zedsrc_fill");
-
-    /// All locals here for goto
-    sl::ERROR_CODE ret;
-    GstMapInfo minfo;
-    GstClock *clock = nullptr;
-    GstClockTime clock_time = GST_CLOCK_TIME_NONE;
-
-    gboolean mapped = FALSE;
-    GstFlowReturn flow_ret = GST_FLOW_OK;
-
-    // objects we use later, but must be declared before any goto
-    ZedObjectData obj_data[GST_ZEDSRC_MAX_OBJECTS] = {0};
-    guint8 obj_count = 0;
-    guint64 offset = 0;
-    GstZedSrcMeta *meta = nullptr;
-
-    sl::RuntimeParameters zedRtParams;
-    CUcontext zctx;
-
-    sl::Mat left_img;
-    sl::Mat right_img;
-    sl::Mat depth_data;
-
-    sl::CameraInformation cam_info;
-    ZedInfo info;
-    ZedPose pose;
-    ZedSensors sens;
-
-    sl::ObjectDetectionRuntimeParameters od_rt_params;
-    std::vector<sl::OBJECT_CLASS> class_filter;
-    std::map<sl::OBJECT_CLASS, float> class_det_conf;
-    sl::Objects det_objs;
-
-    sl::BodyTrackingRuntimeParameters bt_rt_params;
-    sl::Bodies bodies;
-
-    //// Acquisition start time
-    if (!src->is_started) {
-        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
-        if (start_clock) {
-            src->acq_start_time = gst_clock_get_time(start_clock);
-            gst_object_unref(start_clock);
-        }
-        src->is_started = TRUE;
-    }
-
-    // ----> Set runtime parameters
+static void gst_zedsrc_setup_runtime_parameters(GstZedSrc *src, sl::RuntimeParameters &zedRtParams) {
     GST_TRACE_OBJECT(src, "CAMERA RUNTIME PARAMETERS");
     if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
         zedRtParams.enable_depth = false;
@@ -3379,186 +3330,26 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             }
         }
     }
-    // <---- Set runtime parameters
+}
 
-    /// Push zed cuda context as current
-    int cu_err = (int) cudaGetLastError();
-    if (cu_err > 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Cuda ERROR trigger before ZED SDK : %d", cu_err),
-                          (NULL));
-        return GST_FLOW_ERROR;
-    }
+static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockTime clock_time) {
+    ZedInfo info;
+    ZedPose pose;
+    ZedSensors sens;
+    ZedObjectData *obj_data = new ZedObjectData[GST_ZEDSRC_MAX_OBJECTS];
+    memset(obj_data, 0, GST_ZEDSRC_MAX_OBJECTS * sizeof(ZedObjectData));
+    
+    guint8 obj_count = 0;
+    guint64 offset = 0;
+    sl::ERROR_CODE ret;
 
-    zctx = src->zed.getCUDAContext();
-    cuCtxPushCurrent_v2(zctx);
-
-    /// Utils for check ret value and send to out
-#define CHECK_RET_OR_GOTO(_ret_expr)                                                               \
-    do {                                                                                           \
-        ret = (_ret_expr);                                                                         \
-        if (ret != sl::ERROR_CODE::SUCCESS) {                                                      \
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,                                               \
-                              ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(), \
-                               sl::toVerbose(ret).c_str()),                                        \
-                              (NULL));                                                             \
-            flow_ret = GST_FLOW_ERROR;                                                             \
-            goto out;                                                                              \
-        }                                                                                          \
-    } while (0)
-
-    // ----> ZED grab
-    ret = src->zed.grab(zedRtParams);
-    if (ret > sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
-                           sl::toVerbose(ret).c_str()),
-                          (NULL));
-        flow_ret = GST_FLOW_ERROR;
-        goto out;
-    }
-    // <---- ZED grab
-
-    // ----> Clock update
-    clock = gst_element_get_clock(GST_ELEMENT(src));
-    if (clock) {
-        clock_time = gst_clock_get_time(clock);
-        gst_object_unref(clock);
-        clock = nullptr;
-    }
-    // <---- Clock update
-
-    // Memory mapping
-    if (FALSE == gst_buffer_map(buf, &minfo, GST_MAP_WRITE)) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"), (NULL));
-        flow_ret = GST_FLOW_ERROR;
-        goto out;
-    }
-    mapped = TRUE;
-
-    // ----> Mats retrieving
-#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    if (src->stream_type == GST_ZEDSRC_RAW_NV12 || src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
-        // Zero-copy path: retrieve RawBuffer and get NvBufSurface
-        sl::RawBuffer raw_buffer;
-        ret = src->zed.retrieveImage(raw_buffer);
-        if (ret != sl::ERROR_CODE::SUCCESS) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                              ("Failed to retrieve RawBuffer: '%s' - %s", sl::toString(ret).c_str(),
-                               sl::toVerbose(ret).c_str()),
-                              (NULL));
-            flow_ret = GST_FLOW_ERROR;
-            goto out;
-        }
-
-        // Get NvBufSurface from RawBuffer
-        NvBufSurface *nvbuf_left = static_cast<NvBufSurface *>(raw_buffer.getRawBuffer());
-        if (!nvbuf_left) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("RawBuffer returned null NvBufSurface"), (NULL));
-            flow_ret = GST_FLOW_ERROR;
-            goto out;
-        }
-
-        // Map the NvBufSurface for CPU access
-        if (NvBufSurfaceMap(nvbuf_left, 0, -1, NVBUF_MAP_READ) != 0) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map NvBufSurface"), (NULL));
-            flow_ret = GST_FLOW_ERROR;
-            goto out;
-        }
-        NvBufSurfaceSyncForCpu(nvbuf_left, 0, -1);
-
-        NvBufSurfaceParams *params = &nvbuf_left->surfaceList[0];
-        guint width = params->width;
-        guint height = params->height;
-        guint pitch = params->pitch;
-
-        // NV12 format: Y plane followed by interleaved UV plane
-        guint8 *y_plane = (guint8 *)params->mappedAddr.addr[0];
-        guint8 *uv_plane = (guint8 *)params->mappedAddr.addr[1];
-
-        // Copy Y plane
-        guint8 *dst = minfo.data;
-        for (guint row = 0; row < height; row++) {
-            memcpy(dst + row * width, y_plane + row * pitch, width);
-        }
-        // Copy UV plane (half height for NV12)
-        guint8 *dst_uv = minfo.data + width * height;
-        for (guint row = 0; row < height / 2; row++) {
-            memcpy(dst_uv + row * width, uv_plane + row * pitch, width);
-        }
-
-        if (src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
-            // Also get right buffer and copy side-by-side
-            NvBufSurface *nvbuf_right = static_cast<NvBufSurface *>(raw_buffer.getRawBufferRight());
-            if (nvbuf_right) {
-                if (NvBufSurfaceMap(nvbuf_right, 0, -1, NVBUF_MAP_READ) == 0) {
-                    NvBufSurfaceSyncForCpu(nvbuf_right, 0, -1);
-                    NvBufSurfaceParams *params_r = &nvbuf_right->surfaceList[0];
-                    guint8 *y_plane_r = (guint8 *)params_r->mappedAddr.addr[0];
-                    guint8 *uv_plane_r = (guint8 *)params_r->mappedAddr.addr[1];
-
-                    // Copy right Y plane next to left (side-by-side)
-                    for (guint row = 0; row < height; row++) {
-                        memcpy(dst + row * (width * 2) + width, y_plane_r + row * pitch, width);
-                    }
-                    // Copy right UV plane
-                    for (guint row = 0; row < height / 2; row++) {
-                        memcpy(dst_uv + row * (width * 2) + width, uv_plane_r + row * pitch, width);
-                    }
-
-                    NvBufSurfaceUnMap(nvbuf_right, 0, -1);
-                }
-            }
-        }
-
-        NvBufSurfaceUnMap(nvbuf_left, 0, -1);
-        // RawBuffer will auto-release when going out of scope
-    } else
-#endif
-    if (src->stream_type == GST_ZEDSRC_ONLY_LEFT) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_ONLY_RIGHT) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
-        CHECK_RET_OR_GOTO(
-            src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-        CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU));
-    }
-
-    /* --- Memory copy into GstBuffer ------------------------------------ */
-#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    if (src->stream_type == GST_ZEDSRC_RAW_NV12 || src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
-        // Already copied in the RawBuffer retrieval section above
-    } else
-#endif
-    if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
-        memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
-        /* Left RGB data on half top */
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
-        /* Right RGB data on half bottom */
-        memcpy(minfo.data + minfo.size / 2, right_img.getPtr<sl::uchar4>(), minfo.size / 2);
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
-        /* RGB data on half top */
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
-
-        /* Depth data on half bottom */
-        {
-            uint32_t *gst_data = (uint32_t *) (minfo.data + minfo.size / 2);
-            sl::float1 *depthDataPtr = depth_data.getPtr<sl::float1>();
-
-            for (unsigned long i = 0; i < minfo.size / 8; i++) {
-                *(gst_data++) = static_cast<uint32_t>(*(depthDataPtr++));
-            }
-        }
-    } else {
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
-    }
-    // <---- Memory copy
+    sl::CameraInformation cam_info;
+    sl::ObjectDetectionRuntimeParameters od_rt_params;
+    std::vector<sl::OBJECT_CLASS> class_filter;
+    std::map<sl::OBJECT_CLASS, float> class_det_conf;
+    sl::Objects det_objs;
+    sl::BodyTrackingRuntimeParameters bt_rt_params;
+    sl::Bodies bodies;
 
     // ----> Info metadata
     cam_info = src->zed.getCameraInformation();
@@ -3849,9 +3640,166 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Timestamp meta-data
 
     offset = GST_BUFFER_OFFSET(buf);
-    meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
+    gst_buffer_add_zed_src_meta(buf, info, pose, sens,
                                        src->object_detection | src->body_tracking, obj_count,
                                        obj_data, offset);
+    
+    delete[] obj_data;
+}
+
+static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
+    GstZedSrc *src = GST_ZED_SRC(psrc);
+    GST_TRACE_OBJECT(src, "gst_zedsrc_fill");
+
+    /// All locals here for goto
+    sl::ERROR_CODE ret;
+    GstMapInfo minfo;
+    GstClock *clock = nullptr;
+    GstClockTime clock_time = GST_CLOCK_TIME_NONE;
+
+    gboolean mapped = FALSE;
+    GstFlowReturn flow_ret = GST_FLOW_OK;
+
+    // objects we use later, but must be declared before any goto
+    ZedObjectData obj_data[GST_ZEDSRC_MAX_OBJECTS] = {0};
+    guint8 obj_count = 0;
+    guint64 offset = 0;
+    GstZedSrcMeta *meta = nullptr;
+
+    sl::RuntimeParameters zedRtParams;
+    CUcontext zctx;
+
+    sl::Mat left_img;
+    sl::Mat right_img;
+    sl::Mat depth_data;
+
+    sl::CameraInformation cam_info;
+    ZedInfo info;
+    ZedPose pose;
+    ZedSensors sens;
+
+    sl::ObjectDetectionRuntimeParameters od_rt_params;
+    std::vector<sl::OBJECT_CLASS> class_filter;
+    std::map<sl::OBJECT_CLASS, float> class_det_conf;
+    sl::Objects det_objs;
+
+    sl::BodyTrackingRuntimeParameters bt_rt_params;
+    sl::Bodies bodies;
+
+    //// Acquisition start time
+    if (!src->is_started) {
+        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (start_clock) {
+            src->acq_start_time = gst_clock_get_time(start_clock);
+            gst_object_unref(start_clock);
+        }
+        src->is_started = TRUE;
+    }
+
+    // ----> Set runtime parameters
+    gst_zedsrc_setup_runtime_parameters(src, zedRtParams);
+    // <---- Set runtime parameters
+
+    /// Push zed cuda context as current
+    int cu_err = (int) cudaGetLastError();
+    if (cu_err > 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Cuda ERROR trigger before ZED SDK : %d", cu_err),
+                          (NULL));
+        return GST_FLOW_ERROR;
+    }
+
+    zctx = src->zed.getCUDAContext();
+    cuCtxPushCurrent_v2(zctx);
+
+    /// Utils for check ret value and send to out
+#define CHECK_RET_OR_GOTO(_ret_expr)                                                               \
+    do {                                                                                           \
+        ret = (_ret_expr);                                                                         \
+        if (ret != sl::ERROR_CODE::SUCCESS) {                                                      \
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,                                               \
+                              ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(), \
+                               sl::toVerbose(ret).c_str()),                                        \
+                              (NULL));                                                             \
+            flow_ret = GST_FLOW_ERROR;                                                             \
+            goto out;                                                                              \
+        }                                                                                          \
+    } while (0)
+
+    // ----> ZED grab
+    ret = src->zed.grab(zedRtParams);
+    if (ret > sl::ERROR_CODE::SUCCESS) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                           sl::toVerbose(ret).c_str()),
+                          (NULL));
+        flow_ret = GST_FLOW_ERROR;
+        goto out;
+    }
+    // <---- ZED grab
+
+    // ----> Clock update
+    clock = gst_element_get_clock(GST_ELEMENT(src));
+    if (clock) {
+        clock_time = gst_clock_get_time(clock);
+        gst_object_unref(clock);
+        clock = nullptr;
+    }
+    // <---- Clock update
+
+    // Memory mapping
+    if (FALSE == gst_buffer_map(buf, &minfo, GST_MAP_WRITE)) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"), (NULL));
+        flow_ret = GST_FLOW_ERROR;
+        goto out;
+    }
+    mapped = TRUE;
+
+    // ----> Mats retrieving
+    // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_STEREO) are handled
+    // by gst_zedsrc_create() which wraps NvBufSurface directly without memcpy.
+    // This fill() function only handles non-NVMM stream types.
+    if (src->stream_type == GST_ZEDSRC_ONLY_LEFT) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+    } else if (src->stream_type == GST_ZEDSRC_ONLY_RIGHT) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU));
+    } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU));
+    } else if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
+        CHECK_RET_OR_GOTO(
+            src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU));
+    } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU));
+    }
+
+    /* --- Memory copy into GstBuffer ------------------------------------ */
+    if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
+        memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
+    } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
+        /* Left RGB data on half top */
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
+        /* Right RGB data on half bottom */
+        memcpy(minfo.data + minfo.size / 2, right_img.getPtr<sl::uchar4>(), minfo.size / 2);
+    } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
+        /* RGB data on half top */
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
+
+        /* Depth data on half bottom */
+        {
+            uint32_t *gst_data = (uint32_t *) (minfo.data + minfo.size / 2);
+            sl::float1 *depthDataPtr = depth_data.getPtr<sl::float1>();
+
+            for (unsigned long i = 0; i < minfo.size / 8; i++) {
+                *(gst_data++) = static_cast<uint32_t>(*(depthDataPtr++));
+            }
+        }
+    } else {
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
+    }
+    // <---- Memory copy
+
+    gst_zedsrc_attach_metadata(src, buf, clock_time);
 
 out:
     if (mapped)
@@ -3915,9 +3863,9 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         src->is_started = TRUE;
     }
 
-    // Runtime parameters
+    // Runtime parameters - Unified path
     sl::RuntimeParameters zedRtParams;
-    zedRtParams.enable_depth = false;  // Raw NV12 doesn't need depth
+    gst_zedsrc_setup_runtime_parameters(src, zedRtParams);
 
     // Grab frame
     if (cuCtxPushCurrent_v2(src->zed.getCUDAContext()) != CUDA_SUCCESS) {
@@ -3963,6 +3911,16 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         return GST_FLOW_ERROR;
     }
 
+    if (nvbuf->numFilled == 0) {
+        GST_WARNING_OBJECT(src, "NvBufSurface has no filled surfaces");
+        delete raw_buffer;
+        cuCtxPopCurrent_v2(NULL);
+        // We cannot return NO_BUFFER here easily without implementing a retry loop.
+        // For debugging purposes, let's fail softly.
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("NvBufSurface empty"), (NULL)); 
+        return GST_FLOW_ERROR;
+    }
+
     // Log buffer info
     NvBufSurfaceParams *params = &nvbuf->surfaceList[0];
     GST_DEBUG_OBJECT(src, "NvBufSurface: %p, FD: %ld, size: %d, memType: %d, format: %d",
@@ -3972,7 +3930,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
     // DeepStream and other NVIDIA elements expect this format
     GstBuffer *buf = gst_buffer_new_wrapped_full(
-        GST_MEMORY_FLAG_READONLY,   // Memory is read-only
+        (GstMemoryFlags)0,          // NVIDIA elements require writable memory even for reading   // NVIDIA elements require writable memory even for reading
         nvbuf,                      // Data pointer is the NvBufSurface*
         sizeof(NvBufSurface),       // Max size
         0,                          // Offset
@@ -3981,27 +3939,8 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         raw_buffer_destroy_notify   // Called when buffer is unreffed
     );
 
-    // Set timestamps
-    GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
-    GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
-    GST_BUFFER_OFFSET(buf) = src->buffer_index++;
-
-    // Add metadata (simplified - no depth/tracking for raw NV12)
-    ZedInfo info = {0};
-    sl::CameraInformation cam_info = src->zed.getCameraInformation();
-    info.cam_model = (gint)cam_info.camera_model;
-    info.stream_type = src->stream_type;
-    info.grab_single_frame_width = raw_buffer->getWidth();
-    info.grab_single_frame_height = raw_buffer->getHeight();
-
-    ZedPose pose = {0};
-    pose.pose_avail = FALSE;
-
-    ZedSensors sens = {0};
-    sens.sens_avail = FALSE;
-
-    ZedObjectData obj_data[1] = {0};
-    gst_buffer_add_zed_src_meta(buf, info, pose, sens, FALSE, 0, obj_data, GST_BUFFER_OFFSET(buf));
+    // Attach Unified Metadata
+    gst_zedsrc_attach_metadata(src, buf, clock_time);
 
     cuCtxPopCurrent_v2(NULL);
 

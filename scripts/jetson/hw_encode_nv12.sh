@@ -1,21 +1,28 @@
 #!/bin/bash
 # =============================================================================
-# ZED Camera Hardware Encoding Pipeline (Zero-Copy NV12)
+# ZED Camera Hardware Encoding Pipeline
 # =============================================================================
-# This script demonstrates zero-copy NV12 capture from ZED GMSL cameras
-# with hardware H.265 encoding on NVIDIA Jetson platforms.
+# This script demonstrates hardware H.265 encoding from ZED cameras on
+# NVIDIA Jetson platforms.
+#
+# For GMSL cameras (ZED X, ZED X Mini):
+#   - Uses zero-copy NV12 for maximum performance
+#   - Direct path to hardware encoder
+#
+# For USB cameras (ZED 2, ZED 2i, ZED Mini):
+#   - Uses BGRA with nvvideoconvert to NVMM
+#   - Slightly higher CPU usage but still hardware accelerated
 #
 # Requirements:
 #   - NVIDIA Jetson platform (Orin, Xavier, etc.)
-#   - ZED SDK 5.2+ with Advanced Capture API enabled
-#   - ZED X or ZED X Mini camera (GMSL)
+#   - ZED SDK 5.2+ (with Advanced Capture API for GMSL zero-copy)
 #   - GStreamer 1.0 with NVIDIA plugins
 #
 # Usage:
 #   ./hw_encode_nv12.sh [output_file] [duration_seconds] [resolution] [fps]
 #
 # Examples:
-#   ./hw_encode_nv12.sh                          # Preview only
+#   ./hw_encode_nv12.sh                          # Preview (or default record if headless)
 #   ./hw_encode_nv12.sh output.mp4               # Record to file
 #   ./hw_encode_nv12.sh output.mp4 60            # Record 60 seconds
 #   ./hw_encode_nv12.sh output.mp4 0 1200 30     # 1920x1200@30fps, infinite
@@ -23,8 +30,20 @@
 
 set -e
 
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
+
 # Default parameters
 OUTPUT_FILE="${1:-}"
+
+# UX: If no output file is provided and we are on a headless system, 
+# default to a file instead of failing to open a window.
+if [ -z "$OUTPUT_FILE" ] && [ -z "$DISPLAY" ]; then
+    OUTPUT_FILE="output.mp4"
+    echo "Info: No output file specified and no display detected. Defaulting to recording to '$OUTPUT_FILE'"
+fi
+
 DURATION="${2:-0}"
 RESOLUTION="${3:-1200}"  # HD1200 by default
 FPS="${4:-30}"
@@ -56,8 +75,9 @@ case "$RESOLUTION" in
 esac
 
 echo "=============================================="
-echo " ZED Zero-Copy NV12 Hardware Encoding"
+echo " ZED Hardware Encoding Pipeline"
 echo "=============================================="
+print_camera_info
 echo " Resolution: $RESOLUTION (prop=$RES_PROP)"
 echo " FPS: $FPS"
 echo " Bitrate: $BITRATE bps"
@@ -81,56 +101,107 @@ if ! gst-inspect-1.0 zedsrc > /dev/null 2>&1; then
 fi
 
 # Check if this is a Jetson platform
-if [ ! -f /etc/nv_tegra_release ]; then
-    echo "WARNING: This script is designed for NVIDIA Jetson platforms."
-    echo "Zero-copy NV12 may not be available on this system."
-fi
+warn_if_not_jetson
 
-# Build and run the pipeline
-# stream-type=5 outputs video/x-raw(memory:NVMM) with NV12 format
-# This provides true zero-copy from ZED GMSL camera to NVIDIA hardware encoder
+# Determine stream type based on camera and SDK support
+STREAM_TYPE=$(get_optimal_stream_type)
+
+# Build the pipeline based on zero-copy availability
+# Zero-copy NV12 (stream-type=5) - direct path to hardware encoder (GMSL + SDK 5.2+)
+# BGRA (stream-type=0) with nvvideoconvert to NVMM NV12 (USB or older SDK)
 if [ -n "$OUTPUT_FILE" ]; then
     # Recording pipeline
     # Check if we have a display for preview
     if [ -n "$DISPLAY" ] && xset q &>/dev/null 2>&1; then
         # Recording with preview (has display)
-        if [ "$DURATION" -gt 0 ]; then
-            timeout "${DURATION}s" gst-launch-1.0 -e \
-                zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
-                tee name=t \
-                t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                    h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
-                t. ! queue ! nv3dsink sync=false \
-                || true
+        if is_zero_copy_available; then
+            # Zero-copy path
+            if [ "$DURATION" -gt 0 ]; then
+                timeout "${DURATION}s" gst-launch-1.0 -e \
+                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
+                    tee name=t \
+                    t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
+                        h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
+                    t. ! queue ! nv3dsink sync=false \
+                    || true
+            else
+                gst-launch-1.0 -e \
+                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
+                    tee name=t \
+                    t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
+                        h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
+                    t. ! queue ! nv3dsink sync=false
+            fi
         else
-            gst-launch-1.0 -e \
-                zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
-                tee name=t \
-                t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                    h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
-                t. ! queue ! nv3dsink sync=false
+            # USB: Need conversion to NVMM
+            if [ "$DURATION" -gt 0 ]; then
+                timeout "${DURATION}s" gst-launch-1.0 -e \
+                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                    tee name=t \
+                    t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
+                        h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
+                    t. ! queue ! nv3dsink sync=false \
+                    || true
+            else
+                gst-launch-1.0 -e \
+                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                    tee name=t \
+                    t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
+                        h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
+                    t. ! queue ! nv3dsink sync=false
+            fi
         fi
     else
         # Recording only (no display / SSH session)
         echo "No display detected - recording without preview"
-        if [ "$DURATION" -gt 0 ]; then
-            timeout "${DURATION}s" gst-launch-1.0 -e \
-                zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
-                nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
-                || true
+        if is_zero_copy_available; then
+            # Zero-copy path
+            if [ "$DURATION" -gt 0 ]; then
+                timeout "${DURATION}s" gst-launch-1.0 -e \
+                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
+                    nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
+                    h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
+                    || true
+            else
+                gst-launch-1.0 -e \
+                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
+                    nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
+                    h265parse ! mp4mux ! filesink location=$OUTPUT_FILE
+            fi
         else
-            gst-launch-1.0 -e \
-                zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
-                nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                h265parse ! mp4mux ! filesink location=$OUTPUT_FILE
+            # Need conversion to NVMM (USB or older SDK)
+            if [ "$DURATION" -gt 0 ]; then
+                timeout "${DURATION}s" gst-launch-1.0 -e \
+                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                    nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
+                    h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
+                    || true
+            else
+                gst-launch-1.0 -e \
+                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                    nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
+                    h265parse ! mp4mux ! filesink location=$OUTPUT_FILE
+            fi
         fi
     fi
 else
-    # Preview only pipeline (NVMM directly to nv3dsink)
-    gst-launch-1.0 \
-        zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
-        nv3dsink sync=false
+    # Preview only pipeline
+    if is_zero_copy_available; then
+        # Zero-copy: NVMM directly to nv3dsink
+        gst-launch-1.0 \
+            zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
+            nv3dsink sync=false
+    else
+        # Need conversion to NVMM for display
+        gst-launch-1.0 \
+            zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+            nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+            nv3dsink sync=false
+    fi
 fi
 
 echo ""

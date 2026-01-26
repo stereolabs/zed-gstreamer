@@ -4,6 +4,12 @@
 # =============================================================================
 # SRT provides ~50-100ms latency vs ~200ms for RTSP
 #
+# For GMSL cameras (ZED X, ZED X Mini) with SDK 5.2+:
+#   - Uses zero-copy NV12 for maximum performance
+#
+# For USB cameras or older SDK:
+#   - Uses BGRA with nvvideoconvert to NVMM NV12
+#
 # Usage:
 #   ./srt_stream.sh [port] [fps] [resolution] [bitrate] [latency_ms]
 #
@@ -28,6 +34,10 @@
 
 set -e
 
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
+
 PORT="${1:-8888}"
 FPS="${2:-30}"
 RESOLUTION="${3:-6}"  # 6 = Auto
@@ -50,6 +60,7 @@ IP_ADDR=$(hostname -I | awk '{print $1}')
 echo "=============================================="
 echo " ZED SRT Streaming (Ultra Low Latency)"
 echo "=============================================="
+print_camera_info
 echo " Stream URL: srt://$IP_ADDR:$PORT"
 echo " Resolution: ${RES_NAMES[$RESOLUTION]:-$RESOLUTION}"
 echo " FPS: $FPS"
@@ -72,9 +83,21 @@ fi
 echo "Starting SRT server (listener mode)..."
 
 # SRT streaming with MPEG-TS container
-gst-launch-1.0 -e \
-    zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
-    nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
-    h265parse config-interval=1 ! \
-    mpegtsmux alignment=7 ! \
-    srtsink uri="srt://:$PORT" latency=$SRT_LATENCY mode=listener wait-for-connection=true
+if is_zero_copy_available; then
+    # Zero-copy NV12 path
+    gst-launch-1.0 -e \
+        zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
+        h265parse config-interval=1 ! \
+        mpegtsmux alignment=7 ! \
+        srtsink uri="srt://:$PORT" latency=$SRT_LATENCY mode=listener wait-for-connection=true
+else
+    # BGRA with conversion path (USB or older SDK)
+    gst-launch-1.0 -e \
+        zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+        nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
+        h265parse config-interval=1 ! \
+        mpegtsmux alignment=7 ! \
+        srtsink uri="srt://:$PORT" latency=$SRT_LATENCY mode=listener wait-for-connection=true
+fi
