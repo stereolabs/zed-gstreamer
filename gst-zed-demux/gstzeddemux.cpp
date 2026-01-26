@@ -523,11 +523,10 @@ static gboolean gst_zeddemux_sink_event(GstPad *pad, GstObject *parent, GstEvent
 /* chain function
  * this function does the actual processing
  */
-static GstFlowReturn gst_zeddemux_chain (GstPad *pad, GstObject *parent, GstBuffer *buf)
-{
-    GstZedDemux *filter = GST_ZEDDEMUX (parent);
+static GstFlowReturn gst_zeddemux_chain(GstPad *pad, GstObject *parent, GstBuffer *buf) {
+    GstZedDemux *filter = GST_ZEDDEMUX(parent);
 
-    GST_TRACE_OBJECT (filter, "Chain");
+    GST_TRACE_OBJECT(filter, "Chain");
 
     GstMapInfo map_in;
     GstMapInfo map_out_left;
@@ -539,24 +538,24 @@ static GstFlowReturn gst_zeddemux_chain (GstPad *pad, GstObject *parent, GstBuff
 
     GstFlowReturn ret_left = GST_FLOW_ERROR;
     GstFlowReturn ret_mono = GST_FLOW_ERROR;
-    GstFlowReturn ret_aux  = GST_FLOW_ERROR;
+    GstFlowReturn ret_aux = GST_FLOW_ERROR;
     GstFlowReturn flow_ret = GST_FLOW_ERROR;
 
-    GstClockTime timestamp = GST_BUFFER_TIMESTAMP (buf);
-    GST_LOG ("timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS (timestamp));
+    GstClockTime timestamp = GST_BUFFER_TIMESTAMP(buf);
+    GST_LOG("timestamp %" GST_TIME_FORMAT, GST_TIME_ARGS(timestamp));
 
     /// Get buffer
-    if (!gst_buffer_map (buf, &map_in, GST_MAP_READ)) {
-        GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,("Failed to map buffer for reading"), (NULL));
+    if (!gst_buffer_map(buf, &map_in, GST_MAP_READ)) {
+        GST_ELEMENT_ERROR(pad, RESOURCE, FAILED, ("Failed to map buffer for reading"), (NULL));
         return GST_FLOW_ERROR;
     }
 
-    GST_TRACE_OBJECT (filter, "Processing ...");
+    GST_TRACE_OBJECT(filter, "Processing ...");
 
     // Get metadata
-    meta = (GstZedSrcMeta *) gst_buffer_get_meta (buf, GST_ZED_SRC_META_API_TYPE);
+    meta = (GstZedSrcMeta *) gst_buffer_get_meta(buf, GST_ZED_SRC_META_API_TYPE);
     if (meta == NULL) {
-        GST_WARNING ("The Input Stream does not contain metadata");
+        GST_WARNING("The Input Stream does not contain metadata");
     }
 
     // ----> Data buffer
@@ -601,44 +600,43 @@ static GstFlowReturn gst_zeddemux_chain (GstPad *pad, GstObject *parent, GstBuff
             }
 #endif
 
-        gsize data_size = sizeof (GstZedSrcMeta);
-        GstBuffer *data_buf = gst_buffer_new_allocate (NULL, data_size, NULL);
-
+        gsize data_size = sizeof(GstZedSrcMeta);
+        GstBuffer *data_buf = gst_buffer_new_allocate(NULL, data_size, NULL);
 
         // Check if valid or go out
-        if (!GST_IS_BUFFER(data_buf)){
+        if (!GST_IS_BUFFER(data_buf)) {
             GST_DEBUG("Data buffer not allocated");
             flow_ret = GST_FLOW_ERROR;
             goto out;
         }
 
-        if (gst_buffer_map (data_buf, &map_out_data, GST_MAP_WRITE)) {
-            GST_TRACE ("Copying data buffer %lu B", map_out_data.size);
-            memcpy (map_out_data.data, meta, map_out_data.size);
+        if (gst_buffer_map(data_buf, &map_out_data, GST_MAP_WRITE)) {
+            GST_TRACE("Copying data buffer %lu B", map_out_data.size);
+            memcpy(map_out_data.data, meta, map_out_data.size);
 
-            GST_TRACE ("Data buffer set timestamp");
-            GST_BUFFER_PTS (data_buf)        = GST_BUFFER_PTS (buf);
-            GST_BUFFER_DTS (data_buf)        = GST_BUFFER_DTS (buf);
-            GST_BUFFER_TIMESTAMP (data_buf)  = GST_BUFFER_TIMESTAMP (buf);
+            GST_TRACE("Data buffer set timestamp");
+            GST_BUFFER_PTS(data_buf) = GST_BUFFER_PTS(buf);
+            GST_BUFFER_DTS(data_buf) = GST_BUFFER_DTS(buf);
+            GST_BUFFER_TIMESTAMP(data_buf) = GST_BUFFER_TIMESTAMP(buf);
 
             /// Unmap before pushing to stream
-            gst_buffer_unmap (data_buf, &map_out_data);
+            gst_buffer_unmap(data_buf, &map_out_data);
 
-            GST_TRACE ("Data buffer push");
-            GstFlowReturn ret_data = gst_pad_push (filter->srcpad_data, data_buf);
+            GST_TRACE("Data buffer push");
+            GstFlowReturn ret_data = gst_pad_push(filter->srcpad_data, data_buf);
 
             if (ret_data != GST_FLOW_OK) {
-                GST_DEBUG_OBJECT (filter, "Error pushing data buffer: %s",
-                                  gst_flow_get_name (ret_data));
-                gst_buffer_unref (data_buf);  /* still ours on failure */
+                GST_DEBUG_OBJECT(filter, "Error pushing data buffer: %s",
+                                 gst_flow_get_name(ret_data));
+                gst_buffer_unref(data_buf); /* still ours on failure */
                 flow_ret = ret_data;
                 goto out;
             }
             // Now downstream owns data
         } else {
-            GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
-                               ("Failed to map data buffer for writing"), (NULL));
-            gst_buffer_unref (data_buf);
+            GST_ELEMENT_ERROR(pad, RESOURCE, FAILED, ("Failed to map data buffer for writing"),
+                              (NULL));
+            gst_buffer_unref(data_buf);
             flow_ret = GST_FLOW_ERROR;
             goto out;
         }
@@ -648,47 +646,46 @@ static GstFlowReturn gst_zeddemux_chain (GstPad *pad, GstObject *parent, GstBuff
     if (!filter->is_mono) {
         gsize left_framesize = map_in.size / 2;
 
-        GST_TRACE ("Left buffer allocation - size %lu B", left_framesize);
+        GST_TRACE("Left buffer allocation - size %lu B", left_framesize);
 
-        GstBuffer *left_proc_buf = gst_buffer_new_allocate (NULL, left_framesize, NULL);
+        GstBuffer *left_proc_buf = gst_buffer_new_allocate(NULL, left_framesize, NULL);
         if (!left_proc_buf) {
-            GST_DEBUG ("Left buffer not allocated");
+            GST_DEBUG("Left buffer not allocated");
             flow_ret = GST_FLOW_ERROR;
             goto out;
         }
 
-        if (gst_buffer_map (left_proc_buf, &map_out_left, GST_MAP_WRITE)) {
-            GST_TRACE ("Copying left buffer %lu B", map_out_left.size);
-            memcpy (map_out_left.data, map_in.data, map_out_left.size);
+        if (gst_buffer_map(left_proc_buf, &map_out_left, GST_MAP_WRITE)) {
+            GST_TRACE("Copying left buffer %lu B", map_out_left.size);
+            memcpy(map_out_left.data, map_in.data, map_out_left.size);
 
             if (meta) {
-                gst_buffer_add_zed_src_meta (left_proc_buf,
-                                             meta->info, meta->pose, meta->sens,
-                                             meta->od_enabled, meta->obj_count,
-                                             meta->objects, meta->frame_id);
+                gst_buffer_add_zed_src_meta(left_proc_buf, meta->info, meta->pose, meta->sens,
+                                            meta->od_enabled, meta->obj_count, meta->objects,
+                                            meta->frame_id);
             }
 
-            GST_TRACE ("Left buffer set timestamp");
-            GST_BUFFER_PTS (left_proc_buf)       = GST_BUFFER_PTS (buf);
-            GST_BUFFER_DTS (left_proc_buf)       = GST_BUFFER_DTS (buf);
-            GST_BUFFER_TIMESTAMP (left_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
+            GST_TRACE("Left buffer set timestamp");
+            GST_BUFFER_PTS(left_proc_buf) = GST_BUFFER_PTS(buf);
+            GST_BUFFER_DTS(left_proc_buf) = GST_BUFFER_DTS(buf);
+            GST_BUFFER_TIMESTAMP(left_proc_buf) = GST_BUFFER_TIMESTAMP(buf);
 
             /// Unmap before pushing to stream
-            gst_buffer_unmap (left_proc_buf, &map_out_left);
-            ret_left = gst_pad_push (filter->srcpad_left, left_proc_buf);
+            gst_buffer_unmap(left_proc_buf, &map_out_left);
+            ret_left = gst_pad_push(filter->srcpad_left, left_proc_buf);
 
             if (ret_left != GST_FLOW_OK) {
-                GST_DEBUG_OBJECT (filter, "Error pushing left buffer: %s",
-                                  gst_flow_get_name (ret_left));
-                gst_buffer_unref (left_proc_buf); /* still ours on failure */
+                GST_DEBUG_OBJECT(filter, "Error pushing left buffer: %s",
+                                 gst_flow_get_name(ret_left));
+                gst_buffer_unref(left_proc_buf); /* still ours on failure */
                 flow_ret = ret_left;
                 goto out;
             }
             // Now downstream owns left buffer
         } else {
-            GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
-                               ("Failed to map left buffer for writing"), (NULL));
-            gst_buffer_unref (left_proc_buf);
+            GST_ELEMENT_ERROR(pad, RESOURCE, FAILED, ("Failed to map left buffer for writing"),
+                              (NULL));
+            gst_buffer_unref(left_proc_buf);
             flow_ret = GST_FLOW_ERROR;
             goto out;
         }
@@ -699,49 +696,47 @@ static GstFlowReturn gst_zeddemux_chain (GstPad *pad, GstObject *parent, GstBuff
     if (filter->is_mono) {
         gsize mono_framesize = map_in.size;
 
-        GST_TRACE ("Mono buffer allocation - size %lu B", mono_framesize);
+        GST_TRACE("Mono buffer allocation - size %lu B", mono_framesize);
 
-        GstBuffer *mono_proc_buf = gst_buffer_new_allocate (NULL, mono_framesize, NULL);
+        GstBuffer *mono_proc_buf = gst_buffer_new_allocate(NULL, mono_framesize, NULL);
         if (!mono_proc_buf) {
-            GST_DEBUG ("Mono buffer not allocated");
+            GST_DEBUG("Mono buffer not allocated");
             flow_ret = GST_FLOW_ERROR;
             goto out;
         }
 
-        if (gst_buffer_map (mono_proc_buf, &map_out_mono, GST_MAP_WRITE)) {
-            GST_TRACE ("Copying mono buffer %lu B", map_out_mono.size);
-            memcpy (map_out_mono.data, map_in.data, map_out_mono.size);
+        if (gst_buffer_map(mono_proc_buf, &map_out_mono, GST_MAP_WRITE)) {
+            GST_TRACE("Copying mono buffer %lu B", map_out_mono.size);
+            memcpy(map_out_mono.data, map_in.data, map_out_mono.size);
 
             if (meta) {
-                gst_buffer_add_zed_src_meta (mono_proc_buf,
-                                             meta->info, meta->pose, meta->sens,
-                                             meta->od_enabled, meta->obj_count,
-                                             meta->objects, meta->frame_id);
+                gst_buffer_add_zed_src_meta(mono_proc_buf, meta->info, meta->pose, meta->sens,
+                                            meta->od_enabled, meta->obj_count, meta->objects,
+                                            meta->frame_id);
             }
 
-            GST_TRACE ("Mono buffer set timestamp");
-            GST_BUFFER_PTS (mono_proc_buf)       = GST_BUFFER_PTS (buf);
-            GST_BUFFER_DTS (mono_proc_buf)       = GST_BUFFER_DTS (buf);
-            GST_BUFFER_TIMESTAMP (mono_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
-
+            GST_TRACE("Mono buffer set timestamp");
+            GST_BUFFER_PTS(mono_proc_buf) = GST_BUFFER_PTS(buf);
+            GST_BUFFER_DTS(mono_proc_buf) = GST_BUFFER_DTS(buf);
+            GST_BUFFER_TIMESTAMP(mono_proc_buf) = GST_BUFFER_TIMESTAMP(buf);
 
             /// push before unmap
-            gst_buffer_unmap (mono_proc_buf, &map_out_mono);
-            GST_TRACE ("Mono buffer push");
-            ret_mono = gst_pad_push (filter->srcpad_mono, mono_proc_buf);
+            gst_buffer_unmap(mono_proc_buf, &map_out_mono);
+            GST_TRACE("Mono buffer push");
+            ret_mono = gst_pad_push(filter->srcpad_mono, mono_proc_buf);
 
             if (ret_mono != GST_FLOW_OK) {
-                GST_DEBUG_OBJECT (filter, "Error pushing mono buffer: %s",
-                                  gst_flow_get_name (ret_mono));
-                gst_buffer_unref (mono_proc_buf);
+                GST_DEBUG_OBJECT(filter, "Error pushing mono buffer: %s",
+                                 gst_flow_get_name(ret_mono));
+                gst_buffer_unref(mono_proc_buf);
                 flow_ret = ret_mono;
                 goto out;
             }
             // downstream owns mono buffer
         } else {
-            GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
-                               ("Failed to map mono buffer for writing"), (NULL));
-            gst_buffer_unref (mono_proc_buf);
+            GST_ELEMENT_ERROR(pad, RESOURCE, FAILED, ("Failed to map mono buffer for writing"),
+                              (NULL));
+            gst_buffer_unref(mono_proc_buf);
             flow_ret = GST_FLOW_ERROR;
             goto out;
         }
@@ -752,65 +747,61 @@ static GstFlowReturn gst_zeddemux_chain (GstPad *pad, GstObject *parent, GstBuff
     if (!filter->is_mono) {
         gsize aux_framesize = map_in.size / 2;
         if (filter->is_depth)
-            aux_framesize /= 2;   /* 16-bit data */
+            aux_framesize /= 2; /* 16-bit data */
 
-        GST_TRACE ("Aux buffer allocation - size %lu B", aux_framesize);
+        GST_TRACE("Aux buffer allocation - size %lu B", aux_framesize);
 
-        GstBuffer *aux_proc_buf = gst_buffer_new_allocate (NULL, aux_framesize, NULL);
+        GstBuffer *aux_proc_buf = gst_buffer_new_allocate(NULL, aux_framesize, NULL);
         if (!aux_proc_buf) {
-            GST_DEBUG ("Aux buffer not allocated");
+            GST_DEBUG("Aux buffer not allocated");
             flow_ret = GST_FLOW_ERROR;
             goto out;
         }
 
-        if (gst_buffer_map (aux_proc_buf, &map_out_aux, GST_MAP_WRITE)) {
+        if (gst_buffer_map(aux_proc_buf, &map_out_aux, GST_MAP_WRITE)) {
             if (!filter->is_depth) {
-                GST_TRACE ("Copying aux buffer %lu B", map_out_aux.size);
-                memcpy (map_out_aux.data,
-                        map_in.data + map_in.size / 2,  /* right half */
-                        map_out_aux.size);
+                GST_TRACE("Copying aux buffer %lu B", map_out_aux.size);
+                memcpy(map_out_aux.data, map_in.data + map_in.size / 2, /* right half */
+                       map_out_aux.size);
             } else {
-                GST_TRACE ("Converting aux buffer %lu B", map_out_aux.size);
+                GST_TRACE("Converting aux buffer %lu B", map_out_aux.size);
 
-                guint32 *gst_in_data  =
-                    (guint32 *) (map_in.data + map_in.size / 2);
+                guint32 *gst_in_data = (guint32 *) (map_in.data + map_in.size / 2);
                 guint16 *gst_out_data = (guint16 *) map_out_aux.data;
 
-                for (unsigned long i = 0;
-                     i < map_out_aux.size / sizeof (guint16); i++) {
+                for (unsigned long i = 0; i < map_out_aux.size / sizeof(guint16); i++) {
                     float depth = (float) (*(gst_in_data++));
                     *(gst_out_data++) = (guint16) depth;
                 }
             }
 
             if (meta) {
-                gst_buffer_add_zed_src_meta (aux_proc_buf,
-                                             meta->info, meta->pose, meta->sens,
-                                             meta->od_enabled, meta->obj_count,
-                                             meta->objects, meta->frame_id);
+                gst_buffer_add_zed_src_meta(aux_proc_buf, meta->info, meta->pose, meta->sens,
+                                            meta->od_enabled, meta->obj_count, meta->objects,
+                                            meta->frame_id);
             }
 
-            GST_TRACE ("Aux buffer set timestamp");
-            GST_BUFFER_PTS (aux_proc_buf)       = GST_BUFFER_PTS (buf);
-            GST_BUFFER_DTS (aux_proc_buf)       = GST_BUFFER_DTS (buf);
-            GST_BUFFER_TIMESTAMP (aux_proc_buf) = GST_BUFFER_TIMESTAMP (buf);
+            GST_TRACE("Aux buffer set timestamp");
+            GST_BUFFER_PTS(aux_proc_buf) = GST_BUFFER_PTS(buf);
+            GST_BUFFER_DTS(aux_proc_buf) = GST_BUFFER_DTS(buf);
+            GST_BUFFER_TIMESTAMP(aux_proc_buf) = GST_BUFFER_TIMESTAMP(buf);
 
-            GST_TRACE ("Aux buffer unmap");
-            gst_buffer_unmap (aux_proc_buf, &map_out_aux);
-            GST_TRACE ("Aux buffer push");
-            ret_aux = gst_pad_push (filter->srcpad_aux, aux_proc_buf);
+            GST_TRACE("Aux buffer unmap");
+            gst_buffer_unmap(aux_proc_buf, &map_out_aux);
+            GST_TRACE("Aux buffer push");
+            ret_aux = gst_pad_push(filter->srcpad_aux, aux_proc_buf);
 
             if (ret_aux != GST_FLOW_OK) {
-                GST_DEBUG_OBJECT (filter, "Error pushing aux buffer: %s",
-                                  gst_flow_get_name (ret_aux));
-                gst_buffer_unref (aux_proc_buf);
+                GST_DEBUG_OBJECT(filter, "Error pushing aux buffer: %s",
+                                 gst_flow_get_name(ret_aux));
+                gst_buffer_unref(aux_proc_buf);
                 flow_ret = ret_aux;
                 goto out;
             }
         } else {
-            GST_ELEMENT_ERROR (pad, RESOURCE, FAILED,
-                               ("Failed to map aux buffer for writing"), (NULL));
-            gst_buffer_unref (aux_proc_buf);
+            GST_ELEMENT_ERROR(pad, RESOURCE, FAILED, ("Failed to map aux buffer for writing"),
+                              (NULL));
+            gst_buffer_unref(aux_proc_buf);
             flow_ret = GST_FLOW_ERROR;
             goto out;
         }
@@ -831,12 +822,12 @@ static GstFlowReturn gst_zeddemux_chain (GstPad *pad, GstObject *parent, GstBuff
 
 out:
     /// Release incoming buffer any case
-    gst_buffer_unmap (buf, &map_in);
-    gst_buffer_unref (buf);
+    gst_buffer_unmap(buf, &map_in);
+    gst_buffer_unref(buf);
 
     if (flow_ret == GST_FLOW_OK) {
-        GST_TRACE_OBJECT (filter, "Chain OK");
-        GST_LOG ("**************************");
+        GST_TRACE_OBJECT(filter, "Chain OK");
+        GST_LOG("**************************");
     }
 
     return flow_ret;
@@ -847,10 +838,7 @@ out:
  * register the element factories and other features
  */
 static gboolean plugin_init(GstPlugin *plugin) {
-    /* debug category for fltering log messages
-     *
-     * exchange the string 'Template plugin' with your description
-     */
+    /* debug category for filtering log messages */
     GST_DEBUG_CATEGORY_INIT(gst_zeddemux_debug, "zeddemux", 0,
                             "debug category for zeddemux element");
 
@@ -859,10 +847,7 @@ static gboolean plugin_init(GstPlugin *plugin) {
     return TRUE;
 }
 
-/* gstreamer looks for this structure to register plugins
- *
- * exchange the string 'Template plugin' with your plugin description
- */
+/* gstreamer looks for this structure to register plugins */
 GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, zeddemux, "ZED composite stream demuxer",
                   plugin_init, GST_PACKAGE_VERSION, GST_PACKAGE_LICENSE, GST_PACKAGE_NAME,
                   GST_PACKAGE_ORIGIN)

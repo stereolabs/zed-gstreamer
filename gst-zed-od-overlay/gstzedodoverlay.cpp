@@ -32,7 +32,8 @@
 GST_DEBUG_CATEGORY_STATIC(gst_zed_od_overlay_debug);
 #define GST_CAT_DEFAULT gst_zed_od_overlay_debug
 
-static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_count, ZedObjectData *objs, gfloat scaleW, gfloat scaleH);
+static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_count,
+                         ZedObjectData *objs, gfloat scaleW, gfloat scaleH);
 gboolean gst_zedoddisplaysink_event(GstBaseTransform *base, GstEvent *event);
 
 /* Filter signals and args */
@@ -266,8 +267,10 @@ static GstStaticPadTemplate src_template =
 #define gst_zed_od_overlay_parent_class parent_class
 G_DEFINE_TYPE(GstZedOdOverlay, gst_zed_od_overlay, GST_TYPE_BASE_TRANSFORM);
 
-static void gst_zed_od_overlay_set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec);
-static void gst_zed_od_overlay_get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec);
+static void gst_zed_od_overlay_set_property(GObject *object, guint prop_id, const GValue *value,
+                                            GParamSpec *pspec);
+static void gst_zed_od_overlay_get_property(GObject *object, guint prop_id, GValue *value,
+                                            GParamSpec *pspec);
 
 static GstFlowReturn gst_zed_od_overlay_transform_ip(GstBaseTransform *base, GstBuffer *outbuf);
 
@@ -284,18 +287,23 @@ static void gst_zed_od_overlay_class_init(GstZedOdOverlayClass *klass) {
     gobject_class->set_property = gst_zed_od_overlay_set_property;
     gobject_class->get_property = gst_zed_od_overlay_get_property;
 
-    gst_element_class_set_details_simple(gstelement_class, "ZedOdOverlay", "Generic/Filter", "Draws the results of ZED Object Detection module",
+    gst_element_class_set_details_simple(gstelement_class, "ZedOdOverlay", "Generic/Filter",
+                                         "Draws the results of ZED Object Detection module",
                                          "Stereolabs <support@stereolabs.com>");
 
-    gst_element_class_add_pad_template(gstelement_class, gst_static_pad_template_get(&src_template));
-    gst_element_class_add_pad_template(gstelement_class, gst_static_pad_template_get(&sink_template));
+    gst_element_class_add_pad_template(gstelement_class,
+                                       gst_static_pad_template_get(&src_template));
+    gst_element_class_add_pad_template(gstelement_class,
+                                       gst_static_pad_template_get(&sink_template));
 
-    GST_BASE_TRANSFORM_CLASS(klass)->transform_ip = GST_DEBUG_FUNCPTR(gst_zed_od_overlay_transform_ip);
+    GST_BASE_TRANSFORM_CLASS(klass)->transform_ip =
+        GST_DEBUG_FUNCPTR(gst_zed_od_overlay_transform_ip);
 
     GST_BASE_TRANSFORM_CLASS(klass)->sink_event = GST_DEBUG_FUNCPTR(gst_zedoddisplaysink_event);
 
     // debug category for filtering log messages
-    GST_DEBUG_CATEGORY_INIT(gst_zed_od_overlay_debug, "zedodoverlay", 0, "Zed Object Detection Overlay");
+    GST_DEBUG_CATEGORY_INIT(gst_zed_od_overlay_debug, "zedodoverlay", 0,
+                            "Zed Object Detection Overlay");
 }
 
 /* initialize the new element
@@ -306,7 +314,8 @@ static void gst_zed_od_overlay_init(GstZedOdOverlay *filter) {
     filter->img_left_h = 0;
 }
 
-static void gst_zed_od_overlay_set_property(GObject *object, guint prop_id, const GValue *value, GParamSpec *pspec) {
+static void gst_zed_od_overlay_set_property(GObject *object, guint prop_id, const GValue *value,
+                                            GParamSpec *pspec) {
     GstZedOdOverlay *filter = GST_ZED_OD_OVERLAY(object);
 
     switch (prop_id) {
@@ -316,7 +325,8 @@ static void gst_zed_od_overlay_set_property(GObject *object, guint prop_id, cons
     }
 }
 
-static void gst_zed_od_overlay_get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec) {
+static void gst_zed_od_overlay_get_property(GObject *object, guint prop_id, GValue *value,
+                                            GParamSpec *pspec) {
     GstZedOdOverlay *filter = GST_ZED_OD_OVERLAY(object);
 
     switch (prop_id) {
@@ -348,7 +358,8 @@ gboolean gst_zedoddisplaysink_event(GstBaseTransform *base, GstEvent *event) {
         gst_video_info_from_caps(&vinfo_in, caps);
         filter->img_left_w = vinfo_in.width;
         filter->img_left_h = vinfo_in.height;
-        if (vinfo_in.height == 752 || vinfo_in.height == 1440 || vinfo_in.height == 2160 || vinfo_in.height == 2484) {
+        if (vinfo_in.height == 752 || vinfo_in.height == 1440 || vinfo_in.height == 2160 ||
+            vinfo_in.height == 2484) {
             filter->img_left_h /= 2;   // Only half buffer size if the stream is composite
         }
 
@@ -385,19 +396,22 @@ static GstFlowReturn gst_zed_od_overlay_transform_ip(GstBaseTransform *base, Gst
 
     if (meta == NULL)   // Metadata not found
     {
-        GST_ELEMENT_ERROR(filter, RESOURCE, FAILED, ("No ZED metadata [GstZedSrcMeta] found in the stream'"), (NULL));
+        GST_ELEMENT_ERROR(filter, RESOURCE, FAILED,
+                          ("No ZED metadata [GstZedSrcMeta] found in the stream'"), (NULL));
         return GST_FLOW_ERROR;
     }
 
     GST_LOG_OBJECT(filter, "Cam. Model: %d", meta->info.cam_model);
     GST_LOG_OBJECT(filter, "Stream type: %d", meta->info.stream_type);
-    GST_LOG_OBJECT(filter, "Grab frame Size: %d x %d", meta->info.grab_single_frame_width, meta->info.grab_single_frame_height);
+    GST_LOG_OBJECT(filter, "Grab frame Size: %d x %d", meta->info.grab_single_frame_width,
+                   meta->info.grab_single_frame_height);
     GST_LOG_OBJECT(filter, "Filter frame Size: %d x %d", filter->img_left_w, filter->img_left_h);
 
     gboolean rescaled = FALSE;
     gfloat scaleW = 1.0f;
     gfloat scaleH = 1.0f;
-    if (meta->info.grab_single_frame_width != filter->img_left_w || meta->info.grab_single_frame_height != filter->img_left_h) {
+    if (meta->info.grab_single_frame_width != filter->img_left_w ||
+        meta->info.grab_single_frame_height != filter->img_left_h) {
         rescaled = TRUE;
         scaleW = ((gfloat) filter->img_left_w) / meta->info.grab_single_frame_width;
         scaleH = ((gfloat) filter->img_left_h) / meta->info.grab_single_frame_height;
@@ -419,26 +433,32 @@ static GstFlowReturn gst_zed_od_overlay_transform_ip(GstBaseTransform *base, Gst
  * initialize the plug-in itself
  * register the element factories and other features
  */
-static gboolean plugin_init(GstPlugin *plugin) { return gst_element_register(plugin, "zedodoverlay", GST_RANK_NONE, GST_TYPE_ZED_OD_OVERLAY); }
+static gboolean plugin_init(GstPlugin *plugin) {
+    return gst_element_register(plugin, "zedodoverlay", GST_RANK_NONE, GST_TYPE_ZED_OD_OVERLAY);
+}
 
-GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, zedodoverlay, "ZED Object Detection Overlay", plugin_init, GST_PACKAGE_VERSION, GST_PACKAGE_LICENSE,
-                  GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, zedodoverlay,
+                  "ZED Object Detection Overlay", plugin_init, GST_PACKAGE_VERSION,
+                  GST_PACKAGE_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)
 
-static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_count, ZedObjectData *objs, gfloat scaleW, gfloat scaleH) {
+static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_count,
+                         ZedObjectData *objs, gfloat scaleW, gfloat scaleH) {
     for (int i = 0; i < obj_count; i++) {
         cv::Scalar color = cv::Scalar::all(125);
         if (objs[i].id >= 0) {
-            color = cv::Scalar((objs[i].id * 232 + 232) % 255, (objs[i].id * 176 + 176) % 255, (objs[i].id * 59 + 59) % 255);
+            color = cv::Scalar((objs[i].id * 232 + 232) % 255, (objs[i].id * 176 + 176) % 255,
+                               (objs[i].id * 59 + 59) % 255);
         }
 
         cv::Rect roi_render(0, 0, image.size().width, image.size().height);
 
-        GST_LOG_OBJECT(filter,"Object: %d", i);
-        GST_LOG_OBJECT(filter," * Id: %d [%d]", (int) objs[i].label, (int) objs[i].sublabel);
-        GST_LOG_OBJECT(filter," * Pos: %g,%g,%g", objs[i].position[0], objs[i].position[1], objs[i].position[2]);
+        GST_LOG_OBJECT(filter, "Object: %d", i);
+        GST_LOG_OBJECT(filter, " * Id: %d [%d]", (int) objs[i].label, (int) objs[i].sublabel);
+        GST_LOG_OBJECT(filter, " * Pos: %g,%g,%g", objs[i].position[0], objs[i].position[1],
+                       objs[i].position[2]);
 
         if (objs[i].skeletons_avail == FALSE) {
-            GST_LOG_OBJECT(filter,"Scale: %g, %g", scaleW, scaleH);
+            GST_LOG_OBJECT(filter, "Scale: %g, %g", scaleW, scaleH);
 
             // ----> Bounding box
 
@@ -559,7 +579,8 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                 }
             }
 
-            cv::Size txt_size = cv::getTextSize(txt_info.str(), font_face, font_scale, 1, &baseline);
+            cv::Size txt_size =
+                cv::getTextSize(txt_info.str(), font_face, font_scale, 1, &baseline);
 
             int offset = 5;
 
@@ -582,36 +603,47 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
             }
 
             cv::rectangle(image, txt_tl, txt_br, color, 1);
-            cv::putText(image, txt_info.str(), txt_pos, font_face, font_scale, color, 1, cv::LINE_AA);
+            cv::putText(image, txt_info.str(), txt_pos, font_face, font_scale, color, 1,
+                        cv::LINE_AA);
 
-            if (!std::isnan(objs[i].position[0]) && !std::isnan(objs[i].position[1]) && !std::isnan(objs[i].position[2])) {
-                float dist =
-                    sqrtf(objs[i].position[0] * objs[i].position[0] + objs[i].position[1] * objs[i].position[1] + objs[i].position[2] * objs[i].position[2]);
+            if (!std::isnan(objs[i].position[0]) && !std::isnan(objs[i].position[1]) &&
+                !std::isnan(objs[i].position[2])) {
+                float dist = sqrtf(objs[i].position[0] * objs[i].position[0] +
+                                   objs[i].position[1] * objs[i].position[1] +
+                                   objs[i].position[2] * objs[i].position[2]);
                 char text[64];
-                sprintf(text, "%.2fm", abs(dist / 1000.0f));
-                putText(image, text, cv::Point2i(tl.x + (br.x - tl.x) / 2 - 20, tl.y + (br.y - tl.y) / 2 - 12), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.75, color, 1);
+                snprintf(text, sizeof(text), "%.2fm", fabsf(dist / 1000.0f));
+                putText(image, text,
+                        cv::Point2i(tl.x + (br.x - tl.x) / 2 - 20, tl.y + (br.y - tl.y) / 2 - 12),
+                        cv::FONT_HERSHEY_COMPLEX_SMALL, 0.75, color, 1);
             }
             // <---- Text info
         } else {
-            GST_LOG_OBJECT(filter,"Scale: %g, %g", scaleW, scaleH);
-            GST_LOG_OBJECT(filter,"Format: %d", objs[i].skel_format);
+            GST_LOG_OBJECT(filter, "Scale: %g, %g", scaleW, scaleH);
+            GST_LOG_OBJECT(filter, "Format: %d", objs[i].skel_format);
             // ----> Skeletons
             {
                 switch (objs[i].skel_format) {
                 case 18:
                     // ----> Bones
                     for (const auto &parts : skeleton::BODY_18_BONES) {
-                        if (objs[i].keypoint_2d[skeleton::getIdx_18(parts.first)][0] >= 0 && objs[i].keypoint_2d[skeleton::getIdx_18(parts.first)][1] >= 0 &&
-                            objs[i].keypoint_2d[skeleton::getIdx_18(parts.second)][0] >= 0 && objs[i].keypoint_2d[skeleton::getIdx_18(parts.second)][1] >= 0) {
+                        if (objs[i].keypoint_2d[skeleton::getIdx_18(parts.first)][0] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_18(parts.first)][1] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_18(parts.second)][0] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_18(parts.second)][1] >= 0) {
                             cv::Point2f kp_a;
-                            kp_a.x = objs[i].keypoint_2d[skeleton::getIdx_18(parts.first)][0] * scaleW;
-                            kp_a.y = objs[i].keypoint_2d[skeleton::getIdx_18(parts.first)][1] * scaleH;
-                            GST_LOG_OBJECT(filter,"kp_a: %g, %g", kp_a.x, kp_a.y);
+                            kp_a.x =
+                                objs[i].keypoint_2d[skeleton::getIdx_18(parts.first)][0] * scaleW;
+                            kp_a.y =
+                                objs[i].keypoint_2d[skeleton::getIdx_18(parts.first)][1] * scaleH;
+                            GST_LOG_OBJECT(filter, "kp_a: %g, %g", kp_a.x, kp_a.y);
 
                             cv::Point2f kp_b;
-                            kp_b.x = objs[i].keypoint_2d[skeleton::getIdx_18(parts.second)][0] * scaleW;
-                            kp_b.y = objs[i].keypoint_2d[skeleton::getIdx_18(parts.second)][1] * scaleH;
-                            GST_LOG_OBJECT(filter,"kp_b: %g, %g", kp_b.x, kp_b.y);
+                            kp_b.x =
+                                objs[i].keypoint_2d[skeleton::getIdx_18(parts.second)][0] * scaleW;
+                            kp_b.y =
+                                objs[i].keypoint_2d[skeleton::getIdx_18(parts.second)][1] * scaleH;
+                            GST_LOG_OBJECT(filter, "kp_b: %g, %g", kp_b.x, kp_b.y);
 
                             if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
                                 cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
@@ -625,7 +657,8 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                             cv_kp.x = objs[i].keypoint_2d[j][0] * scaleW;
                             cv_kp.y = objs[i].keypoint_2d[j][1] * scaleH;
                             if (roi_render.contains(cv_kp)) {
-                                cv::circle(image, cv_kp, 3, color + cv::Scalar(50, 50, 50), -1, cv::LINE_AA);
+                                cv::circle(image, cv_kp, 3, color + cv::Scalar(50, 50, 50), -1,
+                                           cv::LINE_AA);
                             }
                         }
                     }
@@ -634,17 +667,23 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                 case 34:
                     // ----> Bones
                     for (const auto &parts : skeleton::BODY_34_BONES) {
-                        if (objs[i].keypoint_2d[skeleton::getIdx_34(parts.first)][0] >= 0 && objs[i].keypoint_2d[skeleton::getIdx_34(parts.first)][1] >= 0 &&
-                            objs[i].keypoint_2d[skeleton::getIdx_34(parts.second)][0] >= 0 && objs[i].keypoint_2d[skeleton::getIdx_34(parts.second)][1] >= 0) {
+                        if (objs[i].keypoint_2d[skeleton::getIdx_34(parts.first)][0] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_34(parts.first)][1] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_34(parts.second)][0] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_34(parts.second)][1] >= 0) {
                             cv::Point2f kp_a;
-                            kp_a.x = objs[i].keypoint_2d[skeleton::getIdx_34(parts.first)][0] * scaleW;
-                            kp_a.y = objs[i].keypoint_2d[skeleton::getIdx_34(parts.first)][1] * scaleH;
-                            GST_LOG_OBJECT(filter,"kp_a: %g, %g", kp_a.x, kp_a.y);
+                            kp_a.x =
+                                objs[i].keypoint_2d[skeleton::getIdx_34(parts.first)][0] * scaleW;
+                            kp_a.y =
+                                objs[i].keypoint_2d[skeleton::getIdx_34(parts.first)][1] * scaleH;
+                            GST_LOG_OBJECT(filter, "kp_a: %g, %g", kp_a.x, kp_a.y);
 
                             cv::Point2f kp_b;
-                            kp_b.x = objs[i].keypoint_2d[skeleton::getIdx_34(parts.second)][0] * scaleW;
-                            kp_b.y = objs[i].keypoint_2d[skeleton::getIdx_34(parts.second)][1] * scaleH;
-                            GST_LOG_OBJECT(filter,"kp_b: %g, %g", kp_b.x, kp_b.y);
+                            kp_b.x =
+                                objs[i].keypoint_2d[skeleton::getIdx_34(parts.second)][0] * scaleW;
+                            kp_b.y =
+                                objs[i].keypoint_2d[skeleton::getIdx_34(parts.second)][1] * scaleH;
+                            GST_LOG_OBJECT(filter, "kp_b: %g, %g", kp_b.x, kp_b.y);
 
                             if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
                                 cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
@@ -658,7 +697,8 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                             cv_kp.x = objs[i].keypoint_2d[j][0] * scaleW;
                             cv_kp.y = objs[i].keypoint_2d[j][1] * scaleH;
                             if (roi_render.contains(cv_kp)) {
-                                cv::circle(image, cv_kp, 3, color + cv::Scalar(50, 50, 50), -1, cv::LINE_AA);
+                                cv::circle(image, cv_kp, 3, color + cv::Scalar(50, 50, 50), -1,
+                                           cv::LINE_AA);
                             }
                         }
                     }
@@ -667,17 +707,23 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                 case 38:
                     // ----> Bones
                     for (const auto &parts : skeleton::BODY_38_BONES) {
-                        if (objs[i].keypoint_2d[skeleton::getIdx_38(parts.first)][0] >= 0 && objs[i].keypoint_2d[skeleton::getIdx_38(parts.first)][1] >= 0 &&
-                            objs[i].keypoint_2d[skeleton::getIdx_38(parts.second)][0] >= 0 && objs[i].keypoint_2d[skeleton::getIdx_38(parts.second)][1] >= 0) {
+                        if (objs[i].keypoint_2d[skeleton::getIdx_38(parts.first)][0] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_38(parts.first)][1] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_38(parts.second)][0] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_38(parts.second)][1] >= 0) {
                             cv::Point2f kp_a;
-                            kp_a.x = objs[i].keypoint_2d[skeleton::getIdx_38(parts.first)][0] * scaleW;
-                            kp_a.y = objs[i].keypoint_2d[skeleton::getIdx_38(parts.first)][1] * scaleH;
-                            GST_LOG_OBJECT(filter,"kp_a: %g, %g", kp_a.x, kp_a.y);
+                            kp_a.x =
+                                objs[i].keypoint_2d[skeleton::getIdx_38(parts.first)][0] * scaleW;
+                            kp_a.y =
+                                objs[i].keypoint_2d[skeleton::getIdx_38(parts.first)][1] * scaleH;
+                            GST_LOG_OBJECT(filter, "kp_a: %g, %g", kp_a.x, kp_a.y);
 
                             cv::Point2f kp_b;
-                            kp_b.x = objs[i].keypoint_2d[skeleton::getIdx_38(parts.second)][0] * scaleW;
-                            kp_b.y = objs[i].keypoint_2d[skeleton::getIdx_38(parts.second)][1] * scaleH;
-                            GST_LOG_OBJECT(filter,"kp_b: %g, %g", kp_b.x, kp_b.y);
+                            kp_b.x =
+                                objs[i].keypoint_2d[skeleton::getIdx_38(parts.second)][0] * scaleW;
+                            kp_b.y =
+                                objs[i].keypoint_2d[skeleton::getIdx_38(parts.second)][1] * scaleH;
+                            GST_LOG_OBJECT(filter, "kp_b: %g, %g", kp_b.x, kp_b.y);
 
                             if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
                                 cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
@@ -691,7 +737,8 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                             cv_kp.x = objs[i].keypoint_2d[j][0] * scaleW;
                             cv_kp.y = objs[i].keypoint_2d[j][1] * scaleH;
                             if (roi_render.contains(cv_kp)) {
-                                cv::circle(image, cv_kp, 3, color + cv::Scalar(50, 50, 50), -1, cv::LINE_AA);
+                                cv::circle(image, cv_kp, 3, color + cv::Scalar(50, 50, 50), -1,
+                                           cv::LINE_AA);
                             }
                         }
                     }
@@ -700,17 +747,23 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                 case 70:
                     // ----> Bones
                     for (const auto &parts : skeleton::BODY_70_BONES) {
-                        if (objs[i].keypoint_2d[skeleton::getIdx_70(parts.first)][0] >= 0 && objs[i].keypoint_2d[skeleton::getIdx_70(parts.first)][1] >= 0 &&
-                            objs[i].keypoint_2d[skeleton::getIdx_70(parts.second)][0] >= 0 && objs[i].keypoint_2d[skeleton::getIdx_70(parts.second)][1] >= 0) {
+                        if (objs[i].keypoint_2d[skeleton::getIdx_70(parts.first)][0] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_70(parts.first)][1] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_70(parts.second)][0] >= 0 &&
+                            objs[i].keypoint_2d[skeleton::getIdx_70(parts.second)][1] >= 0) {
                             cv::Point2f kp_a;
-                            kp_a.x = objs[i].keypoint_2d[skeleton::getIdx_70(parts.first)][0] * scaleW;
-                            kp_a.y = objs[i].keypoint_2d[skeleton::getIdx_70(parts.first)][1] * scaleH;
-                            GST_LOG_OBJECT(filter,"kp_a: %g, %g", kp_a.x, kp_a.y);
+                            kp_a.x =
+                                objs[i].keypoint_2d[skeleton::getIdx_70(parts.first)][0] * scaleW;
+                            kp_a.y =
+                                objs[i].keypoint_2d[skeleton::getIdx_70(parts.first)][1] * scaleH;
+                            GST_LOG_OBJECT(filter, "kp_a: %g, %g", kp_a.x, kp_a.y);
 
                             cv::Point2f kp_b;
-                            kp_b.x = objs[i].keypoint_2d[skeleton::getIdx_70(parts.second)][0] * scaleW;
-                            kp_b.y = objs[i].keypoint_2d[skeleton::getIdx_70(parts.second)][1] * scaleH;
-                            GST_LOG_OBJECT(filter,"kp_b: %g, %g", kp_b.x, kp_b.y);
+                            kp_b.x =
+                                objs[i].keypoint_2d[skeleton::getIdx_70(parts.second)][0] * scaleW;
+                            kp_b.y =
+                                objs[i].keypoint_2d[skeleton::getIdx_70(parts.second)][1] * scaleH;
+                            GST_LOG_OBJECT(filter, "kp_b: %g, %g", kp_b.x, kp_b.y);
 
                             if (roi_render.contains(kp_a) && roi_render.contains(kp_b))
                                 cv::line(image, kp_a, kp_b, color, 1, cv::LINE_AA);
@@ -723,17 +776,19 @@ static void draw_objects(GstZedOdOverlay *filter, cv::Mat &image, guint8 obj_cou
                             cv::Point2f cv_kp;
                             cv_kp.x = objs[i].keypoint_2d[j][0] * scaleW;
                             cv_kp.y = objs[i].keypoint_2d[j][1] * scaleH;
-                            GST_LOG_OBJECT(filter,"Joint: %g, %g", cv_kp.x, cv_kp.y);
+                            GST_LOG_OBJECT(filter, "Joint: %g, %g", cv_kp.x, cv_kp.y);
 
                             if (roi_render.contains(cv_kp)) {
-                                cv::circle(image, cv_kp, 3, color + cv::Scalar(50, 50, 50), -1, cv::LINE_AA);
+                                cv::circle(image, cv_kp, 3, color + cv::Scalar(50, 50, 50), -1,
+                                           cv::LINE_AA);
                             }
                         }
                     }
                     // <---- Joints
                     break;
                 default:
-                    GST_ELEMENT_ERROR(filter, RESOURCE, FAILED, ("Wrong skeleton model format: %d",objs[i].skel_format), (NULL));
+                    GST_ELEMENT_ERROR(filter, RESOURCE, FAILED, ("Wrong skeleton model format"),
+                                      ("Received skeleton format: %d", objs[i].skel_format));
                 }
             }
             // <---- Skeletons

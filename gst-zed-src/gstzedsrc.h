@@ -32,7 +32,7 @@ G_BEGIN_DECLS
 #define GST_ZED_SRC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_ZED_SRC, GstZedSrc))
 #define GST_ZED_SRC_CLASS(klass)                                                                   \
     (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_ZED_SRC, GstZedSrcClass))
-#define GST_IS_ZED_SRC(obj)       (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_ZED_SRC))
+#define GST_IS_ZED_SRC(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_ZED_SRC))
 #define GST_IS_ZED_SRC_CLASS(obj) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_ZED_SRC))
 
 typedef struct _GstZedSrc GstZedSrc;
@@ -168,11 +168,18 @@ struct _GstZedSrc {
     gint whitebalance_temperature;
     gboolean whitebalance_temperature_auto;
     gboolean led_status;
+
+    // SVO Recording (runtime)
+    gboolean svo_rec_enable;
+    GString *svo_rec_filename;
+    gint svo_rec_compression;
+    gboolean svo_rec_active;   // Internal state: is recording currently active
     // <---- Properties
 
     GstClockTime acq_start_time;
     guint32 last_frame_count;
     guint32 total_dropped_frames;
+    guint64 buffer_index;   // Frame counter for buffer offset
 
     GstCaps *caps;
     guint out_framesize;
