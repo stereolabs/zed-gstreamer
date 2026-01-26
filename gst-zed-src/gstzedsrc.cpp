@@ -23,6 +23,11 @@
 #include <gst/gst.h>
 #include <gst/video/video.h>
 
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+#include <gst/allocators/gstdmabuf.h>
+#include <nvbufsurface.h>
+#endif
+
 #include "gst-zed-meta/gstzedmeta.h"
 #include "gstzedsrc.h"
 
@@ -57,6 +62,10 @@ static gboolean gst_zedsrc_unlock(GstBaseSrc *src);
 static gboolean gst_zedsrc_unlock_stop(GstBaseSrc *src);
 
 static GstFlowReturn gst_zedsrc_fill(GstPushSrc *src, GstBuffer *buf);
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+static GstFlowReturn gst_zedsrc_create(GstPushSrc *src, GstBuffer **buf);
+#endif
 
 static gboolean gst_zedsrc_query(GstBaseSrc *src, GstQuery *query);
 
@@ -207,7 +216,11 @@ typedef enum {
     GST_ZEDSRC_ONLY_RIGHT = 1,
     GST_ZEDSRC_LEFT_RIGHT = 2,
     GST_ZEDSRC_DEPTH_16 = 3,
-    GST_ZEDSRC_LEFT_DEPTH = 4
+    GST_ZEDSRC_LEFT_DEPTH = 4,
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    GST_ZEDSRC_RAW_NV12 = 5,       // Zero-copy NV12 raw buffer (GMSL cameras only)
+    GST_ZEDSRC_RAW_NV12_STEREO = 6 // Zero-copy NV12 stereo (left + right)
+#endif
 } GstZedSrcStreamType;
 
 typedef enum {
@@ -532,6 +545,12 @@ static GType gst_zedsrc_stream_type_get_type(void) {
             {GST_ZEDSRC_DEPTH_16, "16 bits depth", "Depth image [GRAY16_LE]"},
             {GST_ZEDSRC_LEFT_DEPTH, "8 bits- 4 channels Left and Depth(image)",
              "Left and Depth up/down [BGRA]"},
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+            {GST_ZEDSRC_RAW_NV12, "Zero-copy NV12 raw buffer (GMSL cameras only)",
+             "Raw NV12 zero-copy [NV12]"},
+            {GST_ZEDSRC_RAW_NV12_STEREO, "Zero-copy NV12 stereo (left + right side by side)",
+             "Raw NV12 stereo zero-copy [NV12]"},
+#endif
             {0, NULL, NULL},
         };
 
@@ -868,7 +887,34 @@ static GstStaticPadTemplate gst_zedsrc_src_template =
                                              "format = (string)GRAY16_LE, "
                                              "width = (int)960, "
                                              "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }")));
+                                             "framerate = (fraction) { 15, 30, 60, 120 }"
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+                                             ";"
+                                             "video/x-raw(memory:NVMM), "   // NV12 HD1200 (GMSL2 zero-copy)
+                                             "format = (string)NV12, "
+                                             "width = (int)1920, "
+                                             "height = (int)1200, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw(memory:NVMM), "   // NV12 HD1080 (GMSL2 zero-copy)
+                                             "format = (string)NV12, "
+                                             "width = (int)1920, "
+                                             "height = (int)1080, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw(memory:NVMM), "   // NV12 SVGA (GMSL2 zero-copy)
+                                             "format = (string)NV12, "
+                                             "width = (int)960, "
+                                             "height = (int)600, "
+                                             "framerate = (fraction) { 15, 30, 60, 120 }"
+                                             ";"
+                                             "video/x-raw(memory:NVMM), "   // NV12 stereo HD1200 (side-by-side)
+                                             "format = (string)NV12, "
+                                             "width = (int)3840, "
+                                             "height = (int)1200, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+#endif
+                                             )));
 
 /* class initialization */
 G_DEFINE_TYPE(GstZedSrc, gst_zedsrc, GST_TYPE_PUSH_SRC);
@@ -900,6 +946,9 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     gstbasesrc_class->query = GST_DEBUG_FUNCPTR(gst_zedsrc_query);
 
     gstpushsrc_class->fill = GST_DEBUG_FUNCPTR(gst_zedsrc_fill);
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    gstpushsrc_class->create = GST_DEBUG_FUNCPTR(gst_zedsrc_create);
+#endif
 
     /* Install GObject properties */
     g_object_class_install_property(
@@ -2612,6 +2661,11 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
     if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
         format = GST_VIDEO_FORMAT_GRAY16_LE;
     }
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    else if (src->stream_type == GST_ZEDSRC_RAW_NV12 || src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        format = GST_VIDEO_FORMAT_NV12;
+    }
+#endif
 
     sl::CameraInformation cam_info = src->zed.getCameraInformation();
 
@@ -2621,6 +2675,11 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
     if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT || src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         height *= 2;
     }
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    else if (src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        width *= 2;  // Side-by-side stereo
+    }
+#endif
 
     fps = static_cast<gint>(cam_info.camera_configuration.fps);
 
@@ -2634,6 +2693,15 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
         vinfo.fps_n = fps;
         vinfo.fps_d = 1;
         src->caps = gst_video_info_to_caps(&vinfo);
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+        // Add memory:NVMM feature for zero-copy NV12 modes
+        if (src->stream_type == GST_ZEDSRC_RAW_NV12 || src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+            GstCapsFeatures *features = gst_caps_features_new("memory:NVMM", NULL);
+            gst_caps_set_features(src->caps, 0, features);
+            GST_INFO_OBJECT(src, "Added memory:NVMM feature for zero-copy");
+        }
+#endif
     }
 
     gst_base_src_set_blocksize(GST_BASE_SRC(src), src->out_framesize);
@@ -3368,6 +3436,84 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     mapped = TRUE;
 
     // ----> Mats retrieving
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    if (src->stream_type == GST_ZEDSRC_RAW_NV12 || src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        // Zero-copy path: retrieve RawBuffer and get NvBufSurface
+        sl::RawBuffer raw_buffer;
+        ret = src->zed.retrieveImage(raw_buffer);
+        if (ret != sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to retrieve RawBuffer: '%s' - %s", sl::toString(ret).c_str(),
+                               sl::toVerbose(ret).c_str()),
+                              (NULL));
+            flow_ret = GST_FLOW_ERROR;
+            goto out;
+        }
+
+        // Get NvBufSurface from RawBuffer
+        NvBufSurface *nvbuf_left = static_cast<NvBufSurface *>(raw_buffer.getRawBuffer());
+        if (!nvbuf_left) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("RawBuffer returned null NvBufSurface"), (NULL));
+            flow_ret = GST_FLOW_ERROR;
+            goto out;
+        }
+
+        // Map the NvBufSurface for CPU access
+        if (NvBufSurfaceMap(nvbuf_left, 0, -1, NVBUF_MAP_READ) != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map NvBufSurface"), (NULL));
+            flow_ret = GST_FLOW_ERROR;
+            goto out;
+        }
+        NvBufSurfaceSyncForCpu(nvbuf_left, 0, -1);
+
+        NvBufSurfaceParams *params = &nvbuf_left->surfaceList[0];
+        guint width = params->width;
+        guint height = params->height;
+        guint pitch = params->pitch;
+
+        // NV12 format: Y plane followed by interleaved UV plane
+        guint8 *y_plane = (guint8 *)params->mappedAddr.addr[0];
+        guint8 *uv_plane = (guint8 *)params->mappedAddr.addr[1];
+
+        // Copy Y plane
+        guint8 *dst = minfo.data;
+        for (guint row = 0; row < height; row++) {
+            memcpy(dst + row * width, y_plane + row * pitch, width);
+        }
+        // Copy UV plane (half height for NV12)
+        guint8 *dst_uv = minfo.data + width * height;
+        for (guint row = 0; row < height / 2; row++) {
+            memcpy(dst_uv + row * width, uv_plane + row * pitch, width);
+        }
+
+        if (src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+            // Also get right buffer and copy side-by-side
+            NvBufSurface *nvbuf_right = static_cast<NvBufSurface *>(raw_buffer.getRawBufferRight());
+            if (nvbuf_right) {
+                if (NvBufSurfaceMap(nvbuf_right, 0, -1, NVBUF_MAP_READ) == 0) {
+                    NvBufSurfaceSyncForCpu(nvbuf_right, 0, -1);
+                    NvBufSurfaceParams *params_r = &nvbuf_right->surfaceList[0];
+                    guint8 *y_plane_r = (guint8 *)params_r->mappedAddr.addr[0];
+                    guint8 *uv_plane_r = (guint8 *)params_r->mappedAddr.addr[1];
+
+                    // Copy right Y plane next to left (side-by-side)
+                    for (guint row = 0; row < height; row++) {
+                        memcpy(dst + row * (width * 2) + width, y_plane_r + row * pitch, width);
+                    }
+                    // Copy right UV plane
+                    for (guint row = 0; row < height / 2; row++) {
+                        memcpy(dst_uv + row * (width * 2) + width, uv_plane_r + row * pitch, width);
+                    }
+
+                    NvBufSurfaceUnMap(nvbuf_right, 0, -1);
+                }
+            }
+        }
+
+        NvBufSurfaceUnMap(nvbuf_left, 0, -1);
+        // RawBuffer will auto-release when going out of scope
+    } else
+#endif
     if (src->stream_type == GST_ZEDSRC_ONLY_LEFT) {
         CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
     } else if (src->stream_type == GST_ZEDSRC_ONLY_RIGHT) {
@@ -3384,6 +3530,11 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
 
     /* --- Memory copy into GstBuffer ------------------------------------ */
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    if (src->stream_type == GST_ZEDSRC_RAW_NV12 || src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        // Already copied in the RawBuffer retrieval section above
+    } else
+#endif
     if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
         memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
     } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
@@ -3715,6 +3866,154 @@ out:
 
     return GST_FLOW_OK;
 }
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+/**
+ * @brief Destroy callback for RawBuffer attached to GstBuffer
+ * 
+ * This is called when the GstBuffer is unreffed, releasing the RawBuffer
+ * back to the ZED SDK capture pipeline.
+ */
+static void raw_buffer_destroy_notify(gpointer data) {
+    sl::RawBuffer *raw = static_cast<sl::RawBuffer *>(data);
+    if (raw) {
+        GST_DEBUG("Releasing RawBuffer back to SDK");
+        delete raw;
+    }
+}
+
+/**
+ * @brief Create function for NVMM zero-copy mode
+ * 
+ * Unlike fill(), this creates a new GstBuffer wrapping the DMA-BUF FD
+ * from the NvBufSurface directly, enabling true zero-copy to downstream
+ * elements like nvvidconv, nv3dsink, nvv4l2h265enc.
+ */
+static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
+    GstZedSrc *src = GST_ZED_SRC(psrc);
+    
+    // For non-NVMM modes, fall back to the default fill() path
+    if (src->stream_type != GST_ZEDSRC_RAW_NV12 && src->stream_type != GST_ZEDSRC_RAW_NV12_STEREO) {
+        return GST_PUSH_SRC_CLASS(gst_zedsrc_parent_class)->create(psrc, outbuf);
+    }
+
+    GST_TRACE_OBJECT(src, "gst_zedsrc_create (NVMM zero-copy)");
+
+    sl::ERROR_CODE ret;
+    GstFlowReturn flow_ret = GST_FLOW_OK;
+    GstClock *clock = nullptr;
+    GstClockTime clock_time = GST_CLOCK_TIME_NONE;
+    CUcontext zctx;
+
+    // Acquisition start time
+    if (!src->is_started) {
+        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (start_clock) {
+            src->acq_start_time = gst_clock_get_time(start_clock);
+            gst_object_unref(start_clock);
+        }
+        src->is_started = TRUE;
+    }
+
+    // Runtime parameters
+    sl::RuntimeParameters zedRtParams;
+    zedRtParams.enable_depth = false;  // Raw NV12 doesn't need depth
+
+    // Grab frame
+    if (cuCtxPushCurrent_v2(src->zed.getCUDAContext()) != CUDA_SUCCESS) {
+        GST_ERROR_OBJECT(src, "Failed to push CUDA context");
+        return GST_FLOW_ERROR;
+    }
+
+    ret = src->zed.grab(zedRtParams);
+    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
+        GST_INFO_OBJECT(src, "End of SVO file");
+        cuCtxPopCurrent_v2(NULL);
+        return GST_FLOW_EOS;
+    } else if (ret != sl::ERROR_CODE::SUCCESS) {
+        GST_ERROR_OBJECT(src, "grab() failed: %s", sl::toString(ret).c_str());
+        cuCtxPopCurrent_v2(NULL);
+        return GST_FLOW_ERROR;
+    }
+
+    // Get clock for timestamp
+    clock = gst_element_get_clock(GST_ELEMENT(src));
+    if (clock) {
+        clock_time = gst_clock_get_time(clock);
+        gst_object_unref(clock);
+    }
+
+    // Retrieve RawBuffer - allocate on heap for GstBuffer lifecycle
+    sl::RawBuffer *raw_buffer = new sl::RawBuffer();
+    ret = src->zed.retrieveImage(*raw_buffer);
+    if (ret != sl::ERROR_CODE::SUCCESS) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()), (NULL));
+        delete raw_buffer;
+        cuCtxPopCurrent_v2(NULL);
+        return GST_FLOW_ERROR;
+    }
+
+    // Get NvBufSurface
+    NvBufSurface *nvbuf = static_cast<NvBufSurface *>(raw_buffer->getRawBuffer());
+    if (!nvbuf) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("RawBuffer returned null NvBufSurface"), (NULL));
+        delete raw_buffer;
+        cuCtxPopCurrent_v2(NULL);
+        return GST_FLOW_ERROR;
+    }
+
+    // Log buffer info
+    NvBufSurfaceParams *params = &nvbuf->surfaceList[0];
+    GST_DEBUG_OBJECT(src, "NvBufSurface: %p, FD: %ld, size: %d, memType: %d, format: %d",
+                     nvbuf, params->bufferDesc, params->dataSize, nvbuf->memType, params->colorFormat);
+
+    // Create GstBuffer wrapping the NvBufSurface pointer directly
+    // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
+    // DeepStream and other NVIDIA elements expect this format
+    GstBuffer *buf = gst_buffer_new_wrapped_full(
+        GST_MEMORY_FLAG_READONLY,   // Memory is read-only
+        nvbuf,                      // Data pointer is the NvBufSurface*
+        sizeof(NvBufSurface),       // Max size
+        0,                          // Offset
+        sizeof(NvBufSurface),       // Size
+        raw_buffer,                 // User data for destroy callback
+        raw_buffer_destroy_notify   // Called when buffer is unreffed
+    );
+
+    // Set timestamps
+    GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+    GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    GST_BUFFER_OFFSET(buf) = src->buffer_index++;
+
+    // Add metadata (simplified - no depth/tracking for raw NV12)
+    ZedInfo info = {0};
+    sl::CameraInformation cam_info = src->zed.getCameraInformation();
+    info.cam_model = (gint)cam_info.camera_model;
+    info.stream_type = src->stream_type;
+    info.grab_single_frame_width = raw_buffer->getWidth();
+    info.grab_single_frame_height = raw_buffer->getHeight();
+
+    ZedPose pose = {0};
+    pose.pose_avail = FALSE;
+
+    ZedSensors sens = {0};
+    sens.sens_avail = FALSE;
+
+    ZedObjectData obj_data[1] = {0};
+    gst_buffer_add_zed_src_meta(buf, info, pose, sens, FALSE, 0, obj_data, GST_BUFFER_OFFSET(buf));
+
+    cuCtxPopCurrent_v2(NULL);
+
+    if (src->stop_requested) {
+        gst_buffer_unref(buf);
+        return GST_FLOW_FLUSHING;
+    }
+
+    *outbuf = buf;
+    return GST_FLOW_OK;
+}
+#endif // SL_ENABLE_ADVANCED_CAPTURE_API
 
 static gboolean plugin_init(GstPlugin *plugin) {
     GST_DEBUG_CATEGORY_INIT(gst_zedsrc_debug, "zedsrc", 0, "debug category for zedsrc element");

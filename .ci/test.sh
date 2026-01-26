@@ -442,6 +442,52 @@ test_hardware_streaming() {
         fi
     fi
     
+    # Test RAW_NV12 stream types (5, 6) - only available on Jetson with GMSL cameras
+    # These require SL_ENABLE_ADVANCED_CAPTURE_API which is only enabled for SDK >= 5.2 on Jetson
+    if [ -f /etc/nv_tegra_release ]; then
+        # Check if stream-type 5 (RAW_NV12) is available in the plugin
+        if gst-inspect-1.0 zedsrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
+            # Detect if we have GMSL cameras
+            local is_gmsl=false
+            if command -v ZED_Explorer &> /dev/null; then
+                if ZED_Explorer -a 2>&1 | grep -qi "ZED X\|GMSL"; then
+                    is_gmsl=true
+                fi
+            fi
+            
+            if [ "$is_gmsl" = true ]; then
+                sleep $CAMERA_RESET_DELAY
+                
+                output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=5 num-buffers=$num_buffers ! \
+                    'video/x-raw,format=NV12' ! fakesink 2>&1)
+                if [ $? -eq 0 ]; then
+                    test_pass "Stream type 5 (RAW_NV12 zero-copy)"
+                else
+                    test_fail "Stream type 5 (RAW_NV12 zero-copy)"
+                    [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+                fi
+                
+                if [ "$EXTENSIVE_MODE" = true ]; then
+                    sleep $CAMERA_RESET_DELAY
+                    
+                    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 num-buffers=$num_buffers ! \
+                        'video/x-raw,format=NV12' ! fakesink 2>&1)
+                    if [ $? -eq 0 ]; then
+                        test_pass "Stream type 6 (RAW_NV12 stereo zero-copy)"
+                    else
+                        test_fail "Stream type 6 (RAW_NV12 stereo zero-copy)"
+                        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+                    fi
+                fi
+            else
+                skip_test "Stream type 5 (RAW_NV12)" "GMSL camera required"
+                skip_test "Stream type 6 (RAW_NV12 stereo)" "GMSL camera required"
+            fi
+        else
+            [ "$VERBOSE" = true ] && log_info "RAW_NV12 stream types not available (requires ZED SDK >= 5.2 on Jetson)"
+        fi
+    fi
+    
     sleep $CAMERA_RESET_DELAY
 }
 
@@ -1655,6 +1701,27 @@ run_benchmarks() {
         benchmark_print_section "Stereo Streaming (Left + Right)"
         run_benchmark_pipeline "Stream: Left+Right RGB" "zedsrc stream-type=2"
         sleep $CAMERA_RESET_DELAY
+        
+        # NV12 Zero-Copy benchmark (Jetson GMSL only)
+        if [ -f /etc/nv_tegra_release ] && [ "$is_gmsl" = true ]; then
+            if gst-inspect-1.0 zedsrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
+                benchmark_print_section "NV12 Zero-Copy Benchmarks (GMSL)"
+                
+                run_benchmark_pipeline "Stream: RAW_NV12 zero-copy" "zedsrc stream-type=5 ! video/x-raw,format=NV12"
+                sleep $CAMERA_RESET_DELAY
+                
+                run_benchmark_pipeline "Stream: RAW_NV12 stereo zero-copy" "zedsrc stream-type=6 ! video/x-raw,format=NV12"
+                sleep $CAMERA_RESET_DELAY
+                
+                # NV12 with hardware encoding benchmark
+                if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
+                    benchmark_print_section "NV12 Zero-Copy + Hardware Encoding"
+                    run_benchmark_pipeline "NV12 -> H.265 HW encode" \
+                        "zedsrc stream-type=5 ! video/x-raw,format=NV12 ! nvvidconv ! video/x-raw\(memory:NVMM\),format=NV12 ! nvv4l2h265enc ! fakesink"
+                    sleep $CAMERA_RESET_DELAY
+                fi
+            fi
+        fi
         
         # Additional depth modes
         benchmark_print_section "Additional Depth Modes"

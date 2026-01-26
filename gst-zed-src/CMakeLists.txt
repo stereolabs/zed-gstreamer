@@ -36,6 +36,30 @@ link_directories(${ZED_LIBRARY_DIR})
 link_directories(${CUDA_LIBRARY_DIRS})
 link_directories(${LIBRARY_INSTALL_DIR})
 
+# Enable Advanced Capture API (RawBuffer zero-copy) on Jetson with ZED SDK >= 5.2
+# This is only available for GMSL cameras on Jetson platforms
+if(L4T_FOUND)
+    # Add Jetson Multimedia API include path for nvbufsurface.h
+    include_directories(/usr/src/jetson_multimedia_api/include)
+    
+    # Check ZED SDK version from defines.hpp
+    file(STRINGS "${ZED_INCLUDE_DIRS}/sl_zed/defines.hpp" ZED_VERSION_MAJOR_LINE REGEX "^#define ZED_SDK_MAJOR_VERSION [0-9]+$")
+    file(STRINGS "${ZED_INCLUDE_DIRS}/sl_zed/defines.hpp" ZED_VERSION_MINOR_LINE REGEX "^#define ZED_SDK_MINOR_VERSION [0-9]+$")
+    
+    if(ZED_VERSION_MAJOR_LINE AND ZED_VERSION_MINOR_LINE)
+        string(REGEX REPLACE "^#define ZED_SDK_MAJOR_VERSION ([0-9]+)$" "\\1" ZED_VERSION_MAJOR "${ZED_VERSION_MAJOR_LINE}")
+        string(REGEX REPLACE "^#define ZED_SDK_MINOR_VERSION ([0-9]+)$" "\\1" ZED_VERSION_MINOR "${ZED_VERSION_MINOR_LINE}")
+        
+        message(STATUS "Detected ZED SDK version: ${ZED_VERSION_MAJOR}.${ZED_VERSION_MINOR}")
+        
+        # Enable zero-copy API for ZED SDK >= 5.2
+        if((ZED_VERSION_MAJOR GREATER 5) OR (ZED_VERSION_MAJOR EQUAL 5 AND ZED_VERSION_MINOR GREATER_EQUAL 2))
+            message(STATUS "Enabling Advanced Capture API (RawBuffer zero-copy) for GMSL cameras")
+            add_definitions(-DSL_ENABLE_ADVANCED_CAPTURE_API)
+        endif()
+    endif()
+endif()
+
 set(libname gstzedsrc)
 
 message( " * ${libname} plugin added")
@@ -65,6 +89,22 @@ SET(ZED_LIBS
     ${CUDA_NPP_LIBRARIES_ZED}
 )
 
+# Additional libraries for zero-copy RawBuffer support
+set(ZEROCOPY_LIBS "")
+if(L4T_FOUND)
+    # Find gstreamer allocators for DMA-BUF support
+    pkg_check_modules(GST_ALLOCATORS gstreamer-allocators-1.0)
+    if(GST_ALLOCATORS_FOUND)
+        list(APPEND ZEROCOPY_LIBS ${GST_ALLOCATORS_LIBRARIES})
+        include_directories(${GST_ALLOCATORS_INCLUDE_DIRS})
+    endif()
+    # NvBufSurface is part of nvbufsurface library
+    find_library(NVBUFSURFACE_LIB nvbufsurface PATHS /usr/lib/aarch64-linux-gnu/tegra)
+    if(NVBUFSURFACE_LIB)
+        list(APPEND ZEROCOPY_LIBS ${NVBUFSURFACE_LIB})
+    endif()
+endif()
+
 add_dependencies (${libname} gstzedmeta)
 
 if (WIN32)
@@ -85,6 +125,7 @@ else()
         ${GSTREAMER_BASE_LIBRARY}
         ${GSTREAMER_VIDEO_LIBRARY}
         ${ZED_LIBS}
+        ${ZEROCOPY_LIBS}
         ${CMAKE_CURRENT_BINARY_DIR}/../gst-zed-meta/libgstzedmeta.so
         )
 endif()
