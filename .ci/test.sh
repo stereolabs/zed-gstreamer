@@ -834,7 +834,7 @@ test_depth_modes() {
     print_subheader "Depth Mode Tests (requires camera)"
     
     if [ "$HARDWARE_AVAILABLE" = false ]; then
-        skip_test "Depth mode NEURAL" "No camera detected"
+        skip_test "Depth mode NEURAL_LIGHT" "No camera detected"
         skip_test "Depth mode ULTRA" "No camera detected"
         return 2
     fi
@@ -848,12 +848,12 @@ test_depth_modes() {
     local num_buffers=10
     local output
     
-    # Test NEURAL depth mode (mode 4) - most computationally intensive
+    # Test NEURAL_LIGHT depth mode (mode 4) - neural depth estimation
     output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=4 depth-mode=4 num-buffers=$num_buffers ! fakesink 2>&1)
     if [ $? -eq 0 ]; then
-        test_pass "Depth mode NEURAL"
+        test_pass "Depth mode NEURAL_LIGHT"
     else
-        test_fail "Depth mode NEURAL"
+        test_fail "Depth mode NEURAL_LIGHT"
         [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
     fi
     
@@ -1646,7 +1646,7 @@ run_benchmarks() {
     
     # Depth benchmark (one mode)
     benchmark_print_section "Depth Processing Benchmark"
-    run_benchmark_pipeline "Depth: NEURAL mode" "zedsrc stream-type=4 depth-mode=4"
+    run_benchmark_pipeline "Depth: NEURAL_LIGHT mode" "zedsrc stream-type=4 depth-mode=4"
     sleep $CAMERA_RESET_DELAY
     
     # === EXTENSIVE BENCHMARKS (only in extensive mode) ===
