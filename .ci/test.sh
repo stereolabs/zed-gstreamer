@@ -45,6 +45,8 @@ BENCHMARK_BASELINE=""  # Path to baseline JSON for comparison
 VERBOSE=false
 HARDWARE_AVAILABLE=false
 HARDWARE_CHECK_DONE=false
+GMSL_CAMERA=false
+ZERO_COPY_AVAILABLE=false
 
 # Counters
 TESTS_RUN=0
@@ -161,6 +163,17 @@ detect_platform() {
     fi
 }
 
+# Source common functions from jetson scripts (if available)
+# This provides: detect_gmsl_camera, zedsrc_supports_nv12, is_zero_copy_available, etc.
+SOURCE_COMMON_SH="$(dirname "${BASH_SOURCE[0]}")/../scripts/jetson/common.sh"
+if [ -f "$SOURCE_COMMON_SH" ]; then
+    # Only source on Jetson platforms where these functions are relevant
+    if [ -f /etc/nv_tegra_release ]; then
+        source "$SOURCE_COMMON_SH"
+        COMMON_SOURCED=true
+    fi
+fi
+
 check_hardware() {
     if [ "$HARDWARE_CHECK_DONE" = true ]; then
         return
@@ -179,21 +192,51 @@ check_hardware() {
             local cam_count
             cam_count=$(echo "$zed_output" | grep -ci "AVAILABLE" || echo "0")
             log_info "ZED camera(s) detected via ZED_Explorer ($cam_count available)"
-            return
+            
+            # Check if it's a GMSL camera (ZED X / ZED X Mini)
+            if echo "$zed_output" | grep -qi "ZED X\|GMSL"; then
+                GMSL_CAMERA=true
+                log_info "GMSL camera detected (ZED X / ZED X Mini)"
+            fi
         fi
     fi
     
     # Method 2: Try to detect ZED camera via USB (for USB cameras like ZED 2, ZED 2i, ZED Mini)
-    if command -v lsusb &> /dev/null; then
+    if [ "$HARDWARE_AVAILABLE" = false ] && command -v lsusb &> /dev/null; then
         if lsusb 2>/dev/null | grep -qi "stereolabs\|2b03:"; then
             HARDWARE_AVAILABLE=true
-            log_info "ZED camera detected via USB"
-            return
+            GMSL_CAMERA=false
+            log_info "ZED USB camera detected"
         fi
     fi
     
-    log_warning "No ZED camera hardware detected - hardware tests will be skipped"
-    HARDWARE_AVAILABLE=false
+    # Method 3: Use common.sh functions if available (Jetson only)
+    if [ "$HARDWARE_AVAILABLE" = false ] && [ "${COMMON_SOURCED:-false}" = true ]; then
+        if detect_gmsl_camera 2>/dev/null; then
+            HARDWARE_AVAILABLE=true
+            GMSL_CAMERA=true
+            log_info "GMSL camera detected via driver check"
+        elif detect_usb_camera 2>/dev/null; then
+            HARDWARE_AVAILABLE=true
+            GMSL_CAMERA=false
+            log_info "USB camera detected via lsusb"
+        fi
+    fi
+    
+    # Check zero-copy availability (Jetson + GMSL + SDK 5.2+)
+    if [ "$GMSL_CAMERA" = true ]; then
+        if [ "${COMMON_SOURCED:-false}" = true ] && is_zero_copy_available 2>/dev/null; then
+            ZERO_COPY_AVAILABLE=true
+            log_info "Zero-copy NV12 available (SDK 5.2+ with Advanced Capture API)"
+        elif gst-inspect-1.0 zedsrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
+            ZERO_COPY_AVAILABLE=true
+            log_info "Zero-copy NV12 available (stream-type=5)"
+        fi
+    fi
+    
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        log_warning "No ZED camera hardware detected - hardware tests will be skipped"
+    fi
 }
 
 # =============================================================================
@@ -445,46 +488,43 @@ test_hardware_streaming() {
     # Test RAW_NV12 stream types (5, 6) - only available on Jetson with GMSL cameras
     # These require SL_ENABLE_ADVANCED_CAPTURE_API which is only enabled for SDK >= 5.2 on Jetson
     if [ -f /etc/nv_tegra_release ]; then
-        # Check if stream-type 5 (RAW_NV12) is available in the plugin
-        if gst-inspect-1.0 zedsrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
-            # Detect if we have GMSL cameras
-            local is_gmsl=false
-            if command -v ZED_Explorer &> /dev/null; then
-                if ZED_Explorer -a 2>&1 | grep -qi "ZED X\|GMSL"; then
-                    is_gmsl=true
-                fi
+        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+            sleep $CAMERA_RESET_DELAY
+            
+            # Test stream-type=5 (single NV12 zero-copy)
+            output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=5 num-buffers=$num_buffers ! \
+                'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
+            if [ $? -eq 0 ]; then
+                test_pass "Stream type 5 (RAW_NV12 zero-copy)"
+            else
+                test_fail "Stream type 5 (RAW_NV12 zero-copy)"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
             fi
             
-            if [ "$is_gmsl" = true ]; then
+            if [ "$EXTENSIVE_MODE" = true ]; then
                 sleep $CAMERA_RESET_DELAY
                 
-                output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=5 num-buffers=$num_buffers ! \
-                    'video/x-raw,format=NV12' ! fakesink 2>&1)
+                # Test stream-type=6 (stereo NV12 zero-copy)
+                output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 num-buffers=$num_buffers ! \
+                    'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
                 if [ $? -eq 0 ]; then
-                    test_pass "Stream type 5 (RAW_NV12 zero-copy)"
+                    test_pass "Stream type 6 (RAW_NV12 stereo zero-copy)"
                 else
-                    test_fail "Stream type 5 (RAW_NV12 zero-copy)"
+                    test_fail "Stream type 6 (RAW_NV12 stereo zero-copy)"
                     [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
                 fi
-                
-                if [ "$EXTENSIVE_MODE" = true ]; then
-                    sleep $CAMERA_RESET_DELAY
-                    
-                    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 num-buffers=$num_buffers ! \
-                        'video/x-raw,format=NV12' ! fakesink 2>&1)
-                    if [ $? -eq 0 ]; then
-                        test_pass "Stream type 6 (RAW_NV12 stereo zero-copy)"
-                    else
-                        test_fail "Stream type 6 (RAW_NV12 stereo zero-copy)"
-                        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
-                    fi
-                fi
-            else
-                skip_test "Stream type 5 (RAW_NV12)" "GMSL camera required"
-                skip_test "Stream type 6 (RAW_NV12 stereo)" "GMSL camera required"
             fi
+        elif [ "$GMSL_CAMERA" = true ]; then
+            # GMSL camera present but zero-copy not available (older SDK)
+            skip_test "Stream type 5 (RAW_NV12)" "Requires ZED SDK 5.2+ with Advanced Capture API"
+            skip_test "Stream type 6 (RAW_NV12 stereo)" "Requires ZED SDK 5.2+ with Advanced Capture API"
+        elif [ "$HARDWARE_AVAILABLE" = true ]; then
+            # USB camera - zero-copy not supported
+            skip_test "Stream type 5 (RAW_NV12)" "USB camera - GMSL camera required"
+            skip_test "Stream type 6 (RAW_NV12 stereo)" "USB camera - GMSL camera required"
         else
-            [ "$VERBOSE" = true ] && log_info "RAW_NV12 stream types not available (requires ZED SDK >= 5.2 on Jetson)"
+            skip_test "Stream type 5 (RAW_NV12)" "No camera detected"
+            skip_test "Stream type 6 (RAW_NV12 stereo)" "No camera detected"
         fi
     fi
     
@@ -821,14 +861,8 @@ test_resolutions() {
     local num_buffers=10
     local output
     
-    # Detect if we have GMSL cameras (ZED X / ZED X Mini) or USB cameras
-    local is_gmsl=false
-    if command -v ZED_Explorer &> /dev/null; then
-        if ZED_Explorer -a 2>&1 | grep -qi "ZED X\|GMSL"; then
-            is_gmsl=true
-        fi
-    fi
-    
+    # Use global GMSL_CAMERA variable from check_hardware()
+
     # Test HD1080 resolution (1920x1080) - supported by ALL cameras
     output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=1 num-buffers=$num_buffers ! fakesink 2>&1)
     if [ $? -eq 0 ]; then
@@ -841,7 +875,7 @@ test_resolutions() {
     sleep $CAMERA_RESET_DELAY
     
     # Test camera-specific resolution
-    if [ "$is_gmsl" = true ]; then
+    if [ "$GMSL_CAMERA" = true ]; then
         # GMSL cameras (ZED X, ZED X Mini): Test HD1200 (1920x1200)
         output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=2 num-buffers=$num_buffers ! fakesink 2>&1)
         if [ $? -eq 0 ]; then
@@ -1672,15 +1706,14 @@ run_benchmarks() {
         echo -e "${YELLOW}[INFO]${NC} Skipping camera open latency test (use --extensive)"
     fi
     
-    # Detect camera type for appropriate resolutions
-    local is_gmsl=false
-    if command -v ZED_Explorer &> /dev/null; then
-        if ZED_Explorer -a 2>&1 | grep -qi "ZED X\|GMSL"; then
-            is_gmsl=true
-            echo -e "${BLUE}[INFO]${NC} Detected GMSL camera (ZED X series)"
-        else
-            echo -e "${BLUE}[INFO]${NC} Detected USB camera"
+    # Detect camera type for appropriate resolutions (use global variable from check_hardware)
+    if [ "$GMSL_CAMERA" = true ]; then
+        echo -e "${BLUE}[INFO]${NC} Detected GMSL camera (ZED X series)"
+        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+            echo -e "${BLUE}[INFO]${NC} Zero-copy NV12 available"
         fi
+    elif [ "$HARDWARE_AVAILABLE" = true ]; then
+        echo -e "${BLUE}[INFO]${NC} Detected USB camera"
     fi
     
     # === CORE BENCHMARKS (always run) ===
@@ -1702,25 +1735,25 @@ run_benchmarks() {
         run_benchmark_pipeline "Stream: Left+Right RGB" "zedsrc stream-type=2"
         sleep $CAMERA_RESET_DELAY
         
-        # NV12 Zero-Copy benchmark (Jetson GMSL only)
-        if [ -f /etc/nv_tegra_release ] && [ "$is_gmsl" = true ]; then
-            if gst-inspect-1.0 zedsrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
-                benchmark_print_section "NV12 Zero-Copy Benchmarks (GMSL)"
-                
-                run_benchmark_pipeline "Stream: RAW_NV12 zero-copy" "zedsrc stream-type=5 ! video/x-raw,format=NV12"
+        # NV12 Zero-Copy benchmark (Jetson with GMSL + SDK 5.2+)
+        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+            benchmark_print_section "NV12 Zero-Copy Benchmarks (GMSL)"
+            
+            run_benchmark_pipeline "Stream: RAW_NV12 zero-copy" "zedsrc stream-type=5 ! 'video/x-raw(memory:NVMM),format=NV12'"
+            sleep $CAMERA_RESET_DELAY
+            
+            run_benchmark_pipeline "Stream: RAW_NV12 stereo zero-copy" "zedsrc stream-type=6 ! 'video/x-raw(memory:NVMM),format=NV12'"
+            sleep $CAMERA_RESET_DELAY
+            
+            # NV12 with hardware encoding benchmark
+            if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
+                benchmark_print_section "NV12 Zero-Copy + Hardware Encoding"
+                run_benchmark_pipeline "NV12 -> H.265 HW encode" \
+                    "zedsrc stream-type=5 ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc ! fakesink"
                 sleep $CAMERA_RESET_DELAY
-                
-                run_benchmark_pipeline "Stream: RAW_NV12 stereo zero-copy" "zedsrc stream-type=6 ! video/x-raw,format=NV12"
-                sleep $CAMERA_RESET_DELAY
-                
-                # NV12 with hardware encoding benchmark
-                if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
-                    benchmark_print_section "NV12 Zero-Copy + Hardware Encoding"
-                    run_benchmark_pipeline "NV12 -> H.265 HW encode" \
-                        "zedsrc stream-type=5 ! video/x-raw,format=NV12 ! nvvidconv ! video/x-raw\(memory:NVMM\),format=NV12 ! nvv4l2h265enc ! fakesink"
-                    sleep $CAMERA_RESET_DELAY
-                fi
             fi
+        elif [ "$GMSL_CAMERA" = true ]; then
+            log_info "Skipping NV12 zero-copy benchmarks (requires ZED SDK 5.2+)"
         fi
         
         # Additional depth modes
@@ -1735,7 +1768,7 @@ run_benchmarks() {
         # Resolution benchmarks
         benchmark_print_section "Resolution Benchmarks"
         
-        if [ "$is_gmsl" = true ]; then
+        if [ "$GMSL_CAMERA" = true ]; then
             run_benchmark_pipeline "Resolution: HD1200 (1920x1200)" "zedsrc stream-type=0 camera-resolution=2"
             sleep $CAMERA_RESET_DELAY
         else
@@ -1935,7 +1968,8 @@ run_benchmarks() {
         echo "{"
         echo "  \"timestamp\": \"$(date -Iseconds)\","
         echo "  \"platform\": \"$platform\","
-        echo "  \"camera_type\": \"$([ "$is_gmsl" = true ] && echo 'GMSL' || echo 'USB')\","
+        echo "  \"camera_type\": \"$([ "$GMSL_CAMERA" = true ] && echo 'GMSL' || echo 'USB')\","
+        echo "  \"zero_copy_available\": $ZERO_COPY_AVAILABLE,"
         echo "  \"camera_open_latency_s\": ${BENCHMARK_RESULTS[camera_open_avg]:-null},"
         echo "  \"baseline\": {"
         echo "    \"ram_mb\": $BASELINE_RAM,"

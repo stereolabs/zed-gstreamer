@@ -3840,9 +3840,41 @@ static void raw_buffer_destroy_notify(gpointer data) {
 static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     GstZedSrc *src = GST_ZED_SRC(psrc);
     
-    // For non-NVMM modes, fall back to the default fill() path
+    // For non-NVMM modes, fall back to the fill() path
+    // We must allocate the buffer ourselves and call fill() directly,
+    // because delegating to parent->create doesn't work correctly when
+    // both create and fill vmethods are set on the class.
     if (src->stream_type != GST_ZEDSRC_RAW_NV12 && src->stream_type != GST_ZEDSRC_RAW_NV12_STEREO) {
-        return GST_PUSH_SRC_CLASS(gst_zedsrc_parent_class)->create(psrc, outbuf);
+        GstBuffer *buf;
+        GstFlowReturn ret;
+        GstBaseSrc *basesrc = GST_BASE_SRC(psrc);
+        GstBufferPool *pool;
+        
+        // Try to use buffer pool if available
+        pool = gst_base_src_get_buffer_pool(basesrc);
+        if (pool) {
+            ret = gst_buffer_pool_acquire_buffer(pool, &buf, NULL);
+            gst_object_unref(pool);
+        } else {
+            // Allocate buffer directly
+            buf = gst_buffer_new_allocate(NULL, src->out_framesize, NULL);
+            ret = (buf != NULL) ? GST_FLOW_OK : GST_FLOW_ERROR;
+        }
+        
+        if (ret != GST_FLOW_OK || buf == NULL) {
+            GST_ERROR_OBJECT(src, "Failed to allocate buffer");
+            return GST_FLOW_ERROR;
+        }
+        
+        // Fill the buffer using our fill function
+        ret = gst_zedsrc_fill(psrc, buf);
+        if (ret != GST_FLOW_OK) {
+            gst_buffer_unref(buf);
+            return ret;
+        }
+        
+        *outbuf = buf;
+        return GST_FLOW_OK;
     }
 
     GST_TRACE_OBJECT(src, "gst_zedsrc_create (NVMM zero-copy)");
