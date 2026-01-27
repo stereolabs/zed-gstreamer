@@ -218,8 +218,8 @@ typedef enum {
     GST_ZEDSRC_DEPTH_16 = 3,
     GST_ZEDSRC_LEFT_DEPTH = 4,
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    GST_ZEDSRC_RAW_NV12 = 5,       // Zero-copy NV12 raw buffer (GMSL cameras only)
-    GST_ZEDSRC_RAW_NV12_STEREO = 6 // Zero-copy NV12 stereo (left + right)
+    GST_ZEDSRC_RAW_NV12 = 5,         // Zero-copy NV12 raw buffer (GMSL cameras only)
+    GST_ZEDSRC_RAW_NV12_STEREO = 6   // Zero-copy NV12 stereo (left + right)
 #endif
 } GstZedSrcStreamType;
 
@@ -779,142 +779,142 @@ static GType gst_zedsrc_3d_meas_ref_frame_get_type(void) {
 }
 
 /* pad templates */
-static GstStaticPadTemplate gst_zedsrc_src_template =
-    GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
-                            GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height = (int)752 , "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height = (int)1440, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)2160, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)2484, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)2400, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw, "   // Color VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth VGA
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD720
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD1080
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD2K
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD1200 (GMSL2)
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth SVGA (GMSL2)
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
+static GstStaticPadTemplate gst_zedsrc_src_template = GST_STATIC_PAD_TEMPLATE(
+    "src", GST_PAD_SRC, GST_PAD_ALWAYS,
+    GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
+                     "format = (string)BGRA, "
+                     "width = (int)672, "
+                     "height = (int)752 , "
+                     "framerate = (fraction) { 15, 30, 60, 100 }"
+                     ";"
+                     "video/x-raw, "   // Double stream HD720
+                     "format = (string)BGRA, "
+                     "width = (int)1280, "
+                     "height = (int)1440, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Double stream HD1080
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)2160, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Double stream HD2K
+                     "format = (string)BGRA, "
+                     "width = (int)2208, "
+                     "height = (int)2484, "
+                     "framerate = (fraction)15"
+                     ";"
+                     "video/x-raw, "   // Double stream HD1200 (GMSL2)
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)2400, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Double stream SVGA (GMSL2)
+                     "format = (string)BGRA, "
+                     "width = (int)960, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw, "   // Color VGA
+                     "format = (string)BGRA, "
+                     "width = (int)672, "
+                     "height =  (int)376, "
+                     "framerate = (fraction) { 15, 30, 60, 100 }"
+                     ";"
+                     "video/x-raw, "   // Color HD720
+                     "format = (string)BGRA, "
+                     "width = (int)1280, "
+                     "height =  (int)720, "
+                     "framerate =  (fraction)  { 15, 30, 60}"
+                     ";"
+                     "video/x-raw, "   // Color HD1080
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Color HD2K
+                     "format = (string)BGRA, "
+                     "width = (int)2208, "
+                     "height = (int)1242, "
+                     "framerate = (fraction)15"
+                     ";"
+                     "video/x-raw, "   // Color HD1200 (GMSL2)
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Color SVGA (GMSL2)
+                     "format = (string)BGRA, "
+                     "width = (int)960, "
+                     "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw, "   // Depth VGA
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)672, "
+                     "height =  (int)376, "
+                     "framerate = (fraction) { 15, 30, 60, 100 }"
+                     ";"
+                     "video/x-raw, "   // Depth HD720
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)1280, "
+                     "height =  (int)720, "
+                     "framerate =  (fraction)  { 15, 30, 60}"
+                     ";"
+                     "video/x-raw, "   // Depth HD1080
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)1920, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Depth HD2K
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)2208, "
+                     "height = (int)1242, "
+                     "framerate = (fraction)15"
+                     ";"
+                     "video/x-raw, "   // Depth HD1200 (GMSL2)
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)1920, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Depth SVGA (GMSL2)
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)960, "
+                     "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-                                             ";"
-                                             "video/x-raw(memory:NVMM), "   // NV12 HD1200 (GMSL2 zero-copy)
-                                             "format = (string)NV12, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw(memory:NVMM), "   // NV12 HD1080 (GMSL2 zero-copy)
-                                             "format = (string)NV12, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw(memory:NVMM), "   // NV12 SVGA (GMSL2 zero-copy)
-                                             "format = (string)NV12, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw(memory:NVMM), "   // NV12 stereo HD1200 (side-by-side)
-                                             "format = (string)NV12, "
-                                             "width = (int)3840, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 HD1200 (GMSL2 zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)1920, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 HD1080 (GMSL2 zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)1920, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 SVGA (GMSL2 zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)960, "
+                     "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 stereo HD1200 (side-by-side)
+                     "format = (string)NV12, "
+                     "width = (int)3840, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60 }"
 #endif
-                                             )));
+                     )));
 
 /* class initialization */
 G_DEFINE_TYPE(GstZedSrc, gst_zedsrc, GST_TYPE_PUSH_SRC);
@@ -2662,7 +2662,8 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
         format = GST_VIDEO_FORMAT_GRAY16_LE;
     }
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    else if (src->stream_type == GST_ZEDSRC_RAW_NV12 || src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+    else if (src->stream_type == GST_ZEDSRC_RAW_NV12 ||
+             src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
         format = GST_VIDEO_FORMAT_NV12;
     }
 #endif
@@ -2677,7 +2678,7 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
     }
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
     else if (src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
-        width *= 2;  // Side-by-side stereo
+        width *= 2;   // Side-by-side stereo
     }
 #endif
 
@@ -2696,7 +2697,8 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
         // Add memory:NVMM feature for zero-copy NV12 modes
-        if (src->stream_type == GST_ZEDSRC_RAW_NV12 || src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        if (src->stream_type == GST_ZEDSRC_RAW_NV12 ||
+            src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
             GstCapsFeatures *features = gst_caps_features_new("memory:NVMM", NULL);
             gst_caps_set_features(src->caps, 0, features);
             GST_INFO_OBJECT(src, "Added memory:NVMM feature for zero-copy");
@@ -3288,7 +3290,8 @@ static gboolean gst_zedsrc_query(GstBaseSrc *bsrc, GstQuery *query) {
     return ret;
 }
 
-static void gst_zedsrc_setup_runtime_parameters(GstZedSrc *src, sl::RuntimeParameters &zedRtParams) {
+static void gst_zedsrc_setup_runtime_parameters(GstZedSrc *src,
+                                                sl::RuntimeParameters &zedRtParams) {
     GST_TRACE_OBJECT(src, "CAMERA RUNTIME PARAMETERS");
     if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
         zedRtParams.enable_depth = false;
@@ -3338,7 +3341,7 @@ static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockT
     ZedSensors sens;
     ZedObjectData *obj_data = new ZedObjectData[GST_ZEDSRC_MAX_OBJECTS];
     memset(obj_data, 0, GST_ZEDSRC_MAX_OBJECTS * sizeof(ZedObjectData));
-    
+
     guint8 obj_count = 0;
     guint64 offset = 0;
     sl::ERROR_CODE ret;
@@ -3640,10 +3643,9 @@ static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockT
     // <---- Timestamp meta-data
 
     offset = GST_BUFFER_OFFSET(buf);
-    gst_buffer_add_zed_src_meta(buf, info, pose, sens,
-                                       src->object_detection | src->body_tracking, obj_count,
-                                       obj_data, offset);
-    
+    gst_buffer_add_zed_src_meta(buf, info, pose, sens, src->object_detection | src->body_tracking,
+                                obj_count, obj_data, offset);
+
     delete[] obj_data;
 }
 
@@ -3818,7 +3820,7 @@ out:
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
 /**
  * @brief Destroy callback for RawBuffer attached to GstBuffer
- * 
+ *
  * This is called when the GstBuffer is unreffed, releasing the RawBuffer
  * back to the ZED SDK capture pipeline.
  */
@@ -3832,14 +3834,14 @@ static void raw_buffer_destroy_notify(gpointer data) {
 
 /**
  * @brief Create function for NVMM zero-copy mode
- * 
+ *
  * Unlike fill(), this creates a new GstBuffer wrapping the DMA-BUF FD
  * from the NvBufSurface directly, enabling true zero-copy to downstream
  * elements like nvvidconv, nv3dsink, nvv4l2h265enc.
  */
 static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     GstZedSrc *src = GST_ZED_SRC(psrc);
-    
+
     // For non-NVMM modes, fall back to the fill() path
     // We must allocate the buffer ourselves and call fill() directly,
     // because delegating to parent->create doesn't work correctly when
@@ -3849,7 +3851,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         GstFlowReturn ret;
         GstBaseSrc *basesrc = GST_BASE_SRC(psrc);
         GstBufferPool *pool;
-        
+
         // Try to use buffer pool if available
         pool = gst_base_src_get_buffer_pool(basesrc);
         if (pool) {
@@ -3860,19 +3862,19 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
             buf = gst_buffer_new_allocate(NULL, src->out_framesize, NULL);
             ret = (buf != NULL) ? GST_FLOW_OK : GST_FLOW_ERROR;
         }
-        
+
         if (ret != GST_FLOW_OK || buf == NULL) {
             GST_ERROR_OBJECT(src, "Failed to allocate buffer");
             return GST_FLOW_ERROR;
         }
-        
+
         // Fill the buffer using our fill function
         ret = gst_zedsrc_fill(psrc, buf);
         if (ret != GST_FLOW_OK) {
             gst_buffer_unref(buf);
             return ret;
         }
-        
+
         *outbuf = buf;
         return GST_FLOW_OK;
     }
@@ -3928,7 +3930,8 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     ret = src->zed.retrieveImage(*raw_buffer);
     if (ret != sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()), (NULL));
+                          ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()),
+                          (NULL));
         delete raw_buffer;
         cuCtxPopCurrent_v2(NULL);
         return GST_FLOW_ERROR;
@@ -3949,20 +3952,21 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         cuCtxPopCurrent_v2(NULL);
         // We cannot return NO_BUFFER here easily without implementing a retry loop.
         // For debugging purposes, let's fail softly.
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("NvBufSurface empty"), (NULL)); 
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("NvBufSurface empty"), (NULL));
         return GST_FLOW_ERROR;
     }
 
     // Log buffer info
     NvBufSurfaceParams *params = &nvbuf->surfaceList[0];
-    GST_DEBUG_OBJECT(src, "NvBufSurface: %p, FD: %ld, size: %d, memType: %d, format: %d",
-                     nvbuf, params->bufferDesc, params->dataSize, nvbuf->memType, params->colorFormat);
+    GST_DEBUG_OBJECT(src, "NvBufSurface: %p, FD: %ld, size: %d, memType: %d, format: %d", nvbuf,
+                     params->bufferDesc, params->dataSize, nvbuf->memType, params->colorFormat);
 
     // Create GstBuffer wrapping the NvBufSurface pointer directly
     // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
     // DeepStream and other NVIDIA elements expect this format
     GstBuffer *buf = gst_buffer_new_wrapped_full(
-        (GstMemoryFlags)0,          // NVIDIA elements require writable memory even for reading   // NVIDIA elements require writable memory even for reading
+        (GstMemoryFlags) 0,         // NVIDIA elements require writable memory even for reading   //
+                                    // NVIDIA elements require writable memory even for reading
         nvbuf,                      // Data pointer is the NvBufSurface*
         sizeof(NvBufSurface),       // Max size
         0,                          // Offset
@@ -3984,7 +3988,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     *outbuf = buf;
     return GST_FLOW_OK;
 }
-#endif // SL_ENABLE_ADVANCED_CAPTURE_API
+#endif   // SL_ENABLE_ADVANCED_CAPTURE_API
 
 static gboolean plugin_init(GstPlugin *plugin) {
     GST_DEBUG_CATEGORY_INIT(gst_zedsrc_debug, "zedsrc", 0, "debug category for zedsrc element");
