@@ -3910,7 +3910,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         GST_INFO_OBJECT(src, "End of SVO file");
         cuCtxPopCurrent_v2(NULL);
         return GST_FLOW_EOS;
-    } else if (ret != sl::ERROR_CODE::SUCCESS) {
+    } else if (ret > sl::ERROR_CODE::SUCCESS) {
         GST_ERROR_OBJECT(src, "grab() failed: %s", sl::toString(ret).c_str());
         cuCtxPopCurrent_v2(NULL);
         return GST_FLOW_ERROR;
