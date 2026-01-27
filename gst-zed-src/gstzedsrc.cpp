@@ -718,12 +718,10 @@ static GType gst_zedsrc_depth_mode_get_type(void) {
              "End to End Neural disparity estimation (light), requires AI module", "NEURAL_LIGHT"},
             {static_cast<gint>(sl::DEPTH_MODE::ULTRA),
              "[DEPRECATED] Computation mode favorising edges and sharpness. Requires more GPU "
-             "memory and "
-             "computation power.",
+             "memory and computation power.",
              "ULTRA"},
             {static_cast<gint>(sl::DEPTH_MODE::QUALITY),
-             "[DEPRECATED] Computation mode designed for challenging areas with untextured "
-             "surfaces.",
+             "[DEPRECATED] Computation mode designed for challenging areas with untextured surfaces.",
              "QUALITY"},
             {static_cast<gint>(sl::DEPTH_MODE::PERFORMANCE),
              "[DEPRECATED] Computation mode optimized for speed.", "PERFORMANCE"},
