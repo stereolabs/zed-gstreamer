@@ -721,7 +721,8 @@ static GType gst_zedsrc_depth_mode_get_type(void) {
              "memory and computation power.",
              "ULTRA"},
             {static_cast<gint>(sl::DEPTH_MODE::QUALITY),
-             "[DEPRECATED] Computation mode designed for challenging areas with untextured surfaces.",
+             "[DEPRECATED] Computation mode designed for challenging areas with untextured "
+             "surfaces.",
              "QUALITY"},
             {static_cast<gint>(sl::DEPTH_MODE::PERFORMANCE),
              "[DEPRECATED] Computation mode optimized for speed.", "PERFORMANCE"},
@@ -870,6 +871,42 @@ static GstStaticPadTemplate gst_zedsrc_src_template =
                                              "video/x-raw, "   // Depth SVGA (GMSL2)
                                              "format = (string)GRAY16_LE, "
                                              "width = (int)960, "
+                                             "height = (int)600, "
+                                             "framerate = (fraction) { 15, 30, 60, 120 }"
+                                             ";"
+                                             "video/x-raw, "   // SBS stream VGA
+                                             "format = (string)BGRA, "
+                                             "width = (int)1344, "
+                                             "height = (int)376, "
+                                             "framerate = (fraction) { 15, 30, 60, 100 }"
+                                             ";"
+                                             "video/x-raw, "   // SBS stream HD720
+                                             "format = (string)BGRA, "
+                                             "width = (int)2560, "
+                                             "height = (int)720, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // SBS stream HD1080
+                                             "format = (string)BGRA, "
+                                             "width = (int)3840, "
+                                             "height = (int)1080, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // SBS stream HD2K
+                                             "format = (string)BGRA, "
+                                             "width = (int)4416, "
+                                             "height = (int)1242, "
+                                             "framerate = (fraction)15"
+                                             ";"
+                                             "video/x-raw, "   // SBS stream HD1200 (GMSL2)
+                                             "format = (string)BGRA, "
+                                             "width = (int)3840, "
+                                             "height = (int)1200, "
+                                             "framerate = (fraction) { 15, 30, 60 }"
+                                             ";"
+                                             "video/x-raw, "   // SBS stream SVGA (GMSL2)
+                                             "format = (string)BGRA, "
+                                             "width = (int)1920, "
                                              "height = (int)600, "
                                              "framerate = (fraction) { 15, 30, 60, 120 }")));
 
