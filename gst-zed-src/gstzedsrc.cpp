@@ -207,7 +207,8 @@ typedef enum {
     GST_ZEDSRC_ONLY_RIGHT = 1,
     GST_ZEDSRC_LEFT_RIGHT = 2,
     GST_ZEDSRC_DEPTH_16 = 3,
-    GST_ZEDSRC_LEFT_DEPTH = 4
+    GST_ZEDSRC_LEFT_DEPTH = 4,
+    GST_ZEDSRC_LEFT_RIGHT_SBS = 5
 } GstZedSrcStreamType;
 
 typedef enum {
@@ -532,6 +533,8 @@ static GType gst_zedsrc_stream_type_get_type(void) {
             {GST_ZEDSRC_DEPTH_16, "16 bits depth", "Depth image [GRAY16_LE]"},
             {GST_ZEDSRC_LEFT_DEPTH, "8 bits- 4 channels Left and Depth(image)",
              "Left and Depth up/down [BGRA]"},
+            {GST_ZEDSRC_LEFT_RIGHT_SBS, "8 bits- 4 channels Left and Right side-by-side",
+             "Stereo couple left/right [BGRA]"},
             {0, NULL, NULL},
         };
 
@@ -714,11 +717,13 @@ static GType gst_zedsrc_depth_mode_get_type(void) {
             {static_cast<gint>(sl::DEPTH_MODE::NEURAL_LIGHT),
              "End to End Neural disparity estimation (light), requires AI module", "NEURAL_LIGHT"},
             {static_cast<gint>(sl::DEPTH_MODE::ULTRA),
-             "[DEPRECATED] Computation mode favorising edges and sharpness. Requires more GPU memory and "
+             "[DEPRECATED] Computation mode favorising edges and sharpness. Requires more GPU "
+             "memory and "
              "computation power.",
              "ULTRA"},
             {static_cast<gint>(sl::DEPTH_MODE::QUALITY),
-             "[DEPRECATED] Computation mode designed for challenging areas with untextured surfaces.",
+             "[DEPRECATED] Computation mode designed for challenging areas with untextured "
+             "surfaces.",
              "QUALITY"},
             {static_cast<gint>(sl::DEPTH_MODE::PERFORMANCE),
              "[DEPRECATED] Computation mode optimized for speed.", "PERFORMANCE"},
@@ -2622,6 +2627,10 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
         height *= 2;
     }
 
+    if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
+        width *= 2;
+    }
+
     fps = static_cast<gint>(cam_info.camera_configuration.fps);
 
     if (format != GST_VIDEO_FORMAT_UNKNOWN) {
@@ -3381,6 +3390,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
         CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU));
+    } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::SIDE_BY_SIDE, sl::MEM::CPU));
     }
 
     /* --- Memory copy into GstBuffer ------------------------------------ */
