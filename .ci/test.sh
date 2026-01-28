@@ -1536,9 +1536,53 @@ run_benchmark_pipeline() {
         return 1
     fi
     
-    # Calculate actual FPS from pipeline output
+    # Calculate actual FPS from buffer timestamps in the log
+    # The identity element logs PTS timestamps in format "pts: H:MM:SS.nnnnnnnnn"
+    # Skip warmup frames and measure only the steady-state FPS
     local actual_fps
-    actual_fps=$(echo "$end_time $start_time $total_buffers" | awk '{printf "%.1f", $3/($1-$2)}')
+    local pts_values
+    # Extract PTS values from identity element output (format: "pts: 0:00:00.033333333")
+    pts_values=$(grep -oP 'pts: \K[0-9:]+\.[0-9]+' "$pipeline_log" 2>/dev/null)
+    
+    if [ -n "$pts_values" ]; then
+        # Calculate number of warmup frames to skip
+        local warmup_frames=$((BENCHMARK_WARMUP * target_fps))
+        local total_pts_count
+        total_pts_count=$(echo "$pts_values" | wc -l)
+        
+        # Skip warmup frames, use only measurement frames
+        local measure_pts
+        if [ "$total_pts_count" -gt "$warmup_frames" ]; then
+            measure_pts=$(echo "$pts_values" | tail -n +$((warmup_frames + 1)))
+        else
+            measure_pts="$pts_values"
+        fi
+        
+        # Parse timestamps and calculate FPS from actual buffer timing
+        local first_pts last_pts num_frames
+        first_pts=$(echo "$measure_pts" | head -1)
+        last_pts=$(echo "$measure_pts" | tail -1)
+        num_frames=$(echo "$measure_pts" | wc -l)
+        
+        if [ "$num_frames" -gt 1 ]; then
+            # Convert H:MM:SS.nnnnnnnnn to seconds
+            local first_secs last_secs duration_secs
+            first_secs=$(echo "$first_pts" | awk -F: '{if(NF==3) print $1*3600+$2*60+$3; else if(NF==2) print $1*60+$2; else print $1}')
+            last_secs=$(echo "$last_pts" | awk -F: '{if(NF==3) print $1*3600+$2*60+$3; else if(NF==2) print $1*60+$2; else print $1}')
+            duration_secs=$(echo "$last_secs $first_secs" | awk '{print $1-$2}')
+            
+            if (( $(echo "$duration_secs > 0" | bc -l) )); then
+                actual_fps=$(echo "$num_frames $duration_secs" | awk '{printf "%.1f", ($1-1)/$2}')
+            else
+                actual_fps="N/A"
+            fi
+        else
+            actual_fps="N/A"
+        fi
+    else
+        # Fallback: no PTS data available (pipeline doesn't have identity element)
+        actual_fps="N/A"
+    fi
     
     # Parse resource usage
     local avg_ram avg_cpu avg_gpu peak_ram peak_cpu peak_gpu
@@ -1820,15 +1864,15 @@ run_zerocopy_comparison() {
             echo ""
             
             # NV12 zero-copy: Direct to nvinfer (nvinfer expects NV12 in NVMM)
-            # Pipeline: zedsrc → nvstreammux → nvinfer → fakesink
+            # Pipeline: zedsrc → nvstreammux → nvinfer → identity → fakesink
             run_benchmark_pipeline "[NV12 zero-copy] DS nvinfer (direct)" \
-                "zedsrc stream-type=5 $common_props ! 'video/x-raw(memory:NVMM),format=NV12' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 ! nvinfer config-file-path=$ds_config ! fakesink"
+                "zedsrc stream-type=5 $common_props ! 'video/x-raw(memory:NVMM),format=NV12' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 ! nvinfer config-file-path=$ds_config ! identity silent=false ! fakesink"
             sleep $CAMERA_RESET_DELAY
             
             # BGRA legacy: Requires videoconvert + nvvideoconvert to get to NVMM NV12
-            # Pipeline: zedsrc (BGRA sysmem) → videoconvert → nvvideoconvert → NV12 NVMM → nvstreammux → nvinfer
+            # Pipeline: zedsrc (BGRA sysmem) → videoconvert → nvvideoconvert → NV12 NVMM → nvstreammux → nvinfer → identity → fakesink
             run_benchmark_pipeline "[BGRA legacy] DS nvinfer (w/ convert)" \
-                "zedsrc stream-type=0 $common_props ! videoconvert ! 'video/x-raw,format=BGRx' ! nvvideoconvert ! 'video/x-raw(memory:NVMM),format=NV12' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 ! nvinfer config-file-path=$ds_config ! fakesink"
+                "zedsrc stream-type=0 $common_props ! videoconvert ! 'video/x-raw,format=BGRx' ! nvvideoconvert ! 'video/x-raw(memory:NVMM),format=NV12' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 ! nvinfer config-file-path=$ds_config ! identity silent=false ! fakesink"
             sleep $CAMERA_RESET_DELAY
         else
             echo -e "    ${YELLOW}[INFO]${NC} Skipping DeepStream nvinfer test (no config file found)"
@@ -1946,6 +1990,10 @@ run_benchmarks() {
         mode_str="Extensive (full benchmark)"
     fi
     
+    # Common camera properties for consistent benchmarks
+    # HD1200 @ 60fps is the highest common resolution for both USB and GMSL cameras
+    local cam_props="camera-resolution=2 camera-fps=60"
+    
     echo -e "${BLUE}[INFO]${NC} Platform: $platform"
     echo -e "${BLUE}[INFO]${NC} Mode: $mode_str"
     echo -e "${BLUE}[INFO]${NC} Benchmark duration: ${BENCHMARK_DURATION}s per test"
@@ -1979,36 +2027,36 @@ run_benchmarks() {
     
     # Basic streaming benchmark
     benchmark_print_section "Basic Streaming (Left Image Only)"
-    run_benchmark_pipeline "Stream: Left RGB" "zedsrc stream-type=0"
+    run_benchmark_pipeline "Stream: Left RGB" "zedsrc stream-type=0 $cam_props"
     sleep $CAMERA_RESET_DELAY
     
     # Depth benchmark (one mode)
     benchmark_print_section "Depth Processing Benchmark"
-    run_benchmark_pipeline "Depth: NEURAL mode" "zedsrc stream-type=4 depth-mode=4"
+    run_benchmark_pipeline "Depth: NEURAL mode" "zedsrc stream-type=4 $cam_props depth-mode=4"
     sleep $CAMERA_RESET_DELAY
     
     # === EXTENSIVE BENCHMARKS (only in extensive mode) ===
     
     if [ "$EXTENSIVE_MODE" = true ]; then
         benchmark_print_section "Stereo Streaming (Left + Right)"
-        run_benchmark_pipeline "Stream: Left+Right RGB" "zedsrc stream-type=2"
+        run_benchmark_pipeline "Stream: Left+Right RGB" "zedsrc stream-type=2 $cam_props"
         sleep $CAMERA_RESET_DELAY
         
         # NV12 Zero-Copy benchmark (Jetson with GMSL + SDK 5.2+)
         if [ "$ZERO_COPY_AVAILABLE" = true ]; then
             benchmark_print_section "NV12 Zero-Copy Benchmarks (GMSL)"
             
-            run_benchmark_pipeline "Stream: RAW_NV12 zero-copy" "zedsrc stream-type=5 ! 'video/x-raw(memory:NVMM),format=NV12'"
+            run_benchmark_pipeline "Stream: RAW_NV12 zero-copy" "zedsrc stream-type=5 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
             sleep $CAMERA_RESET_DELAY
             
-            run_benchmark_pipeline "Stream: RAW_NV12 stereo zero-copy" "zedsrc stream-type=6 ! 'video/x-raw(memory:NVMM),format=NV12'"
+            run_benchmark_pipeline "Stream: RAW_NV12 stereo zero-copy" "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
             sleep $CAMERA_RESET_DELAY
             
             # NV12 with hardware encoding benchmark
             if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
                 benchmark_print_section "NV12 Zero-Copy + Hardware Encoding"
                 run_benchmark_pipeline "NV12 -> H.265 HW encode" \
-                    "zedsrc stream-type=5 ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
+                    "zedsrc stream-type=5 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
                 sleep $CAMERA_RESET_DELAY
             fi
             
@@ -2027,43 +2075,43 @@ run_benchmarks() {
             # Test 1: Basic streaming (no processing)
             echo -e "    ${YELLOW}━━━ Test 1: Basic Streaming ━━━${NC}"
             run_benchmark_pipeline "[NV12] Basic stream" \
-                "zedsrc stream-type=5 ! 'video/x-raw(memory:NVMM),format=NV12'"
+                "zedsrc stream-type=5 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
             sleep $CAMERA_RESET_DELAY
             
             run_benchmark_pipeline "[BGRA] Basic stream" \
-                "zedsrc stream-type=0"
+                "zedsrc stream-type=0 $cam_props"
             sleep $CAMERA_RESET_DELAY
             
             # Test 2: With depth enabled (common use case)
             echo -e "    ${YELLOW}━━━ Test 2: With Depth Processing ━━━${NC}"
             run_benchmark_pipeline "[NV12] With depth (NEURAL)" \
-                "zedsrc stream-type=5 depth-mode=4 ! 'video/x-raw(memory:NVMM),format=NV12'"
+                "zedsrc stream-type=5 $cam_props depth-mode=4 ! 'video/x-raw(memory:NVMM),format=NV12'"
             sleep $CAMERA_RESET_DELAY
             
             run_benchmark_pipeline "[BGRA] With depth (NEURAL)" \
-                "zedsrc stream-type=0 depth-mode=4"
+                "zedsrc stream-type=0 $cam_props depth-mode=4"
             sleep $CAMERA_RESET_DELAY
             
             # Test 3: Stereo streaming
             echo -e "    ${YELLOW}━━━ Test 3: Stereo Streaming ━━━${NC}"
             run_benchmark_pipeline "[NV12] Stereo stream" \
-                "zedsrc stream-type=6 ! 'video/x-raw(memory:NVMM),format=NV12'"
+                "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
             sleep $CAMERA_RESET_DELAY
             
             run_benchmark_pipeline "[BGRA] Stereo stream" \
-                "zedsrc stream-type=2"
+                "zedsrc stream-type=2 $cam_props"
             sleep $CAMERA_RESET_DELAY
             
             # Test 4: Hardware encoding pipeline (real-world use case)
             if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
                 echo -e "    ${YELLOW}━━━ Test 4: H.265 Hardware Encoding ━━━${NC}"
                 run_benchmark_pipeline "[NV12] H.265 encode (direct)" \
-                    "zedsrc stream-type=5 ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
+                    "zedsrc stream-type=5 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
                 sleep $CAMERA_RESET_DELAY
                 
                 # BGRA requires videoconvert + nvvidconv for color space conversion to NV12
                 run_benchmark_pipeline "[BGRA] H.265 encode (w/ convert)" \
-                    "zedsrc stream-type=0 ! videoconvert ! nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
+                    "zedsrc stream-type=0 $cam_props ! videoconvert ! nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
                 sleep $CAMERA_RESET_DELAY
             fi
             
@@ -2080,41 +2128,41 @@ run_benchmarks() {
         # Additional depth modes
         benchmark_print_section "Additional Depth Modes"
         
-        run_benchmark_pipeline "Depth: PERFORMANCE mode" "zedsrc stream-type=4 depth-mode=1"
+        run_benchmark_pipeline "Depth: PERFORMANCE mode" "zedsrc stream-type=4 $cam_props depth-mode=1"
         sleep $CAMERA_RESET_DELAY
         
-        run_benchmark_pipeline "Depth: ULTRA mode" "zedsrc stream-type=4 depth-mode=3"
+        run_benchmark_pipeline "Depth: ULTRA mode" "zedsrc stream-type=4 $cam_props depth-mode=3"
         sleep $CAMERA_RESET_DELAY
         
         # Resolution benchmarks
         benchmark_print_section "Resolution Benchmarks"
         
         if [ "$GMSL_CAMERA" = true ]; then
-            run_benchmark_pipeline "Resolution: HD1200 (1920x1200)" "zedsrc stream-type=0 camera-resolution=2"
+            run_benchmark_pipeline "Resolution: HD1200 (1920x1200)" "zedsrc stream-type=0 camera-resolution=2 camera-fps=60"
             sleep $CAMERA_RESET_DELAY
         else
-            run_benchmark_pipeline "Resolution: HD720 (1280x720)" "zedsrc stream-type=0 camera-resolution=3"
+            run_benchmark_pipeline "Resolution: HD720 (1280x720)" "zedsrc stream-type=0 camera-resolution=3 camera-fps=60"
             sleep $CAMERA_RESET_DELAY
         fi
         
-        run_benchmark_pipeline "Resolution: HD1080 (1920x1080)" "zedsrc stream-type=0 camera-resolution=1"
+        run_benchmark_pipeline "Resolution: HD1080 (1920x1080)" "zedsrc stream-type=0 camera-resolution=1 camera-fps=60"
         sleep $CAMERA_RESET_DELAY
         
         # AI Features benchmarks
         benchmark_print_section "AI Features Benchmarks"
         
         run_benchmark_pipeline "Object Detection: MULTI_CLASS_BOX_FAST" \
-            "zedsrc stream-type=0 depth-mode=4 od-enabled=true od-detection-model=2"
+            "zedsrc stream-type=0 $cam_props depth-mode=4 od-enabled=true od-detection-model=2"
         sleep $CAMERA_RESET_DELAY
         
         run_benchmark_pipeline "Body Tracking: BODY_34_FAST" \
-            "zedsrc stream-type=0 depth-mode=4 bt-enabled=true bt-detection-model=0 bt-format=1"
+            "zedsrc stream-type=0 $cam_props depth-mode=4 bt-enabled=true bt-detection-model=0 bt-format=1"
         sleep $CAMERA_RESET_DELAY
         
         # Positional Tracking benchmark
         benchmark_print_section "Positional Tracking Benchmark"
         run_benchmark_pipeline "Positional Tracking enabled" \
-            "zedsrc stream-type=0 depth-mode=1 enable-positional-tracking=true"
+            "zedsrc stream-type=0 $cam_props depth-mode=1 enable-positional-tracking=true"
         sleep $CAMERA_RESET_DELAY
     else
         echo ""

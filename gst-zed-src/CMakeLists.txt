@@ -42,21 +42,13 @@ if(L4T_FOUND)
     # Add Jetson Multimedia API include path for nvbufsurface.h
     include_directories(/usr/src/jetson_multimedia_api/include)
     
-    # Check ZED SDK version from defines.hpp
-    file(STRINGS "${ZED_INCLUDE_DIRS}/sl_zed/defines.hpp" ZED_VERSION_MAJOR_LINE REGEX "^#define ZED_SDK_MAJOR_VERSION [0-9]+$")
-    file(STRINGS "${ZED_INCLUDE_DIRS}/sl_zed/defines.hpp" ZED_VERSION_MINOR_LINE REGEX "^#define ZED_SDK_MINOR_VERSION [0-9]+$")
+    # ZED_VERSION_MAJOR and ZED_VERSION_MINOR are set by find_package(ZED) in root CMakeLists.txt
+    message(STATUS "ZED SDK version: ${ZED_VERSION} (${ZED_VERSION_MAJOR}.${ZED_VERSION_MINOR})")
     
-    if(ZED_VERSION_MAJOR_LINE AND ZED_VERSION_MINOR_LINE)
-        string(REGEX REPLACE "^#define ZED_SDK_MAJOR_VERSION ([0-9]+)$" "\\1" ZED_VERSION_MAJOR "${ZED_VERSION_MAJOR_LINE}")
-        string(REGEX REPLACE "^#define ZED_SDK_MINOR_VERSION ([0-9]+)$" "\\1" ZED_VERSION_MINOR "${ZED_VERSION_MINOR_LINE}")
-        
-        message(STATUS "Detected ZED SDK version: ${ZED_VERSION_MAJOR}.${ZED_VERSION_MINOR}")
-        
-        # Enable zero-copy API for ZED SDK >= 5.2
-        if((ZED_VERSION_MAJOR GREATER 5) OR (ZED_VERSION_MAJOR EQUAL 5 AND ZED_VERSION_MINOR GREATER_EQUAL 2))
-            message(STATUS "Enabling Advanced Capture API (RawBuffer zero-copy) for GMSL cameras")
-            add_definitions(-DSL_ENABLE_ADVANCED_CAPTURE_API)
-        endif()
+    # Enable zero-copy API for ZED SDK >= 5.2
+    if((ZED_VERSION_MAJOR GREATER 5) OR (ZED_VERSION_MAJOR EQUAL 5 AND ZED_VERSION_MINOR GREATER_EQUAL 2))
+        message(STATUS "Enabling Advanced Capture API (RawBuffer zero-copy) for GMSL cameras")
+        add_definitions(-DSL_ENABLE_ADVANCED_CAPTURE_API)
     endif()
 endif()
 
