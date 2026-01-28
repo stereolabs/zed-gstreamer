@@ -898,7 +898,7 @@ Ready to use scripts are available in the `scripts` folder for Windows, Desktop 
 
 The [`scripts/jetson`](./scripts/jetson) folder contains optimized pipelines for hardware-accelerated streaming on NVIDIA Jetson:
 
-* **Zero-copy NV12** (stream-type=5): For ZED X/X Mini with SDK 5.2+, enables direct memory path to hardware encoder with minimal latency
+* **Zero-copy NV12** (stream-type=6): For ZED X/X Mini with SDK 5.2+, enables direct memory path to hardware encoder with minimal latency
 * **SRT/RTSP/UDP streaming**: Low-latency streaming scripts with automatic camera detection
 * **DeepStream integration**: Object detection pipelines using NVIDIA DeepStream
 

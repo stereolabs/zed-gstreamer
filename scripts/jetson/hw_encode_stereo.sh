@@ -24,18 +24,18 @@ echo " FPS: $FPS"
 echo " Bitrate: $BITRATE bps"
 echo "=============================================="
 
-# stream-type=6 is RAW_NV12_STEREO (side-by-side left+right)
+# stream-type=7 is RAW_NV12_STEREO (side-by-side left+right)
 # Note: implementation supports zero-copy NVMM
 if [ "$DURATION" -gt 0 ]; then
     timeout "${DURATION}s" gst-launch-1.0 -e \
-        zedsrc camera-resolution=2 camera-fps=$FPS stream-type=6 ! \
+        zedsrc camera-resolution=2 camera-fps=$FPS stream-type=7 ! \
         nvvidconv ! "video/x-raw(memory:NVMM),format=I420" ! \
         nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
         h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
         || true
 else
     gst-launch-1.0 -e \
-        zedsrc camera-resolution=2 camera-fps=$FPS stream-type=6 ! \
+        zedsrc camera-resolution=2 camera-fps=$FPS stream-type=7 ! \
         nvvidconv ! "video/x-raw(memory:NVMM),format=I420" ! \
         nvvidconv ! "video/x-raw(memory:NVMM),format=I420" ! \
         nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \

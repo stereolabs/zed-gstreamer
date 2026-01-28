@@ -11,10 +11,10 @@
 #   - Pipeline building helpers that work for both camera types
 # =============================================================================
 
-# Check if zedsrc plugin supports NV12 zero-copy (stream-type=5)
+# Check if zedsrc plugin supports NV12 zero-copy (stream-type=6)
 # This requires ZED SDK 5.2+ with Advanced Capture API compiled in
 zedsrc_supports_nv12() {
-    # Check if stream-type=5 (NV12) is available in zedsrc
+    # Check if stream-type=6 (NV12) is available in zedsrc
     if gst-inspect-1.0 zedsrc 2>/dev/null | grep -q "Raw NV12 zero-copy"; then
         return 0
     fi
@@ -69,14 +69,14 @@ detect_usb_camera() {
 }
 
 # Get the appropriate stream type for the connected camera
-# Returns: stream-type value (0 for USB/BGRA, 5 for GMSL/NV12)
+# Returns: stream-type value (0 for USB/BGRA, 6 for GMSL/NV12)
 # Zero-copy NV12 requires:
 #   1. GMSL camera (ZED X / ZED X Mini)
 #   2. ZED SDK 5.2+ with Advanced Capture API
 #   3. Plugin compiled with SL_ENABLE_ADVANCED_CAPTURE_API
 get_optimal_stream_type() {
     if detect_gmsl_camera && zedsrc_supports_nv12; then
-        echo "5"  # Zero-copy NV12 for GMSL cameras with SDK support
+        echo "6"  # Zero-copy NV12 for GMSL cameras with SDK support
     else
         echo "0"  # BGRA for USB cameras or older SDK
     fi
@@ -107,7 +107,7 @@ print_camera_info() {
     local stream_type=$(get_optimal_stream_type)
     
     echo " Camera Type: $camera_type"
-    if [ "$stream_type" = "5" ]; then
+    if [ "$stream_type" = "6" ]; then
         echo " Stream Mode: Zero-copy NV12 (stream-type=$stream_type)"
     else
         echo " Stream Mode: BGRA with conversion (stream-type=$stream_type)"
@@ -167,7 +167,7 @@ build_encode_source() {
     
     if detect_gmsl_camera; then
         # GMSL: Direct zero-copy path
-        echo "zedsrc stream-type=5 camera-resolution=$resolution camera-fps=$fps"
+        echo "zedsrc stream-type=6 camera-resolution=$resolution camera-fps=$fps"
     else
         # USB: Need conversion to NVMM
         echo "zedsrc stream-type=0 camera-resolution=$resolution camera-fps=$fps ! nvvideoconvert ! 'video/x-raw(memory:NVMM),format=NV12'"

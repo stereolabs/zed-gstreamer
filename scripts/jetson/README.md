@@ -7,7 +7,7 @@ These scripts demonstrate how to use the ZED GStreamer plugin on Jetson platform
 The scripts automatically detect your camera type and SDK version to use the optimal pipeline:
 
 ### GMSL Cameras (ZED X, ZED X Mini) with SDK 5.2+
-- **Zero-copy NV12** (stream-type=5): Direct memory path from camera to encoder
+- **Zero-copy NV12** (stream-type=6): Direct memory path from camera to encoder
 - Maximum performance with minimal CPU overhead
 - Requires ZED SDK 5.2+ with Advanced Capture API
 
@@ -32,8 +32,9 @@ The `zedsrc` plugin supports these stream types:
 - `stream-type=2` - **Stereo BGRA**: Left and right stacked vertically
 - `stream-type=3` - **Depth 16-bit**: Depth map as GRAY16
 - `stream-type=4` - **Left + Depth BGRA**: Left and depth stacked
-- `stream-type=5` - **Raw NV12 zero-copy**: GMSL cameras only, SDK 5.2+
-- `stream-type=6` - **Raw NV12 stereo zero-copy**: Side-by-side stereo, GMSL only
+- `stream-type=5` - **Stereo BGRA SBS**: Left and right side-by-side (for VR)
+- `stream-type=6` - **Raw NV12 zero-copy**: GMSL cameras only, SDK 5.2+
+- `stream-type=7` - **Raw NV12 stereo zero-copy**: Side-by-side stereo, GMSL only
 
 ## Scripts
 
@@ -89,6 +90,6 @@ For zero-copy support with GMSL cameras, ensure you have ZED SDK 5.2+ installed.
 
 ## Notes
 
-- Zero-copy NV12 (stream-type=5/6) is only available for GMSL cameras with SDK 5.2+
+- Zero-copy NV12 (stream-type=6/7) is only available for GMSL cameras with SDK 5.2+
 - USB cameras automatically fall back to BGRA with nvvideoconvert
 - The scripts will display the detected camera type and stream mode at startup

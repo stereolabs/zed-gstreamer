@@ -212,14 +212,16 @@ typedef enum {
 } GstZedSrcFlip;
 
 typedef enum {
+    GST_ZEDSRC_STREAM_AUTO = -1,   // Auto-negotiate: prefer NV12 zero-copy if downstream accepts
     GST_ZEDSRC_ONLY_LEFT = 0,
     GST_ZEDSRC_ONLY_RIGHT = 1,
     GST_ZEDSRC_LEFT_RIGHT = 2,
     GST_ZEDSRC_DEPTH_16 = 3,
     GST_ZEDSRC_LEFT_DEPTH = 4,
+    GST_ZEDSRC_LEFT_RIGHT_SBS = 5,   // Side-by-side stereo (BGRA) for VR/stereo displays
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    GST_ZEDSRC_RAW_NV12 = 5,         // Zero-copy NV12 raw buffer (GMSL cameras only)
-    GST_ZEDSRC_RAW_NV12_STEREO = 6   // Zero-copy NV12 stereo (left + right)
+    GST_ZEDSRC_RAW_NV12 = 6,         // Zero-copy NV12 raw buffer (GMSL cameras only)
+    GST_ZEDSRC_RAW_NV12_STEREO = 7   // Zero-copy NV12 stereo (left + right)
 #endif
 } GstZedSrcStreamType;
 
@@ -538,6 +540,9 @@ static GType gst_zedsrc_stream_type_get_type(void) {
 
     if (!zedsrc_stream_type_type) {
         static GEnumValue pattern_types[] = {
+            {GST_ZEDSRC_STREAM_AUTO,
+             "Auto-negotiate format based on downstream (prefer NV12 zero-copy)",
+             "Auto [prefer NV12 zero-copy]"},
             {GST_ZEDSRC_ONLY_LEFT, "8 bits- 4 channels Left image", "Left image [BGRA]"},
             {GST_ZEDSRC_ONLY_RIGHT, "8 bits- 4 channels Right image", "Right image [BGRA]"},
             {GST_ZEDSRC_LEFT_RIGHT, "8 bits- 4 channels bit Left and Right",
@@ -545,6 +550,8 @@ static GType gst_zedsrc_stream_type_get_type(void) {
             {GST_ZEDSRC_DEPTH_16, "16 bits depth", "Depth image [GRAY16_LE]"},
             {GST_ZEDSRC_LEFT_DEPTH, "8 bits- 4 channels Left and Depth(image)",
              "Left and Depth up/down [BGRA]"},
+            {GST_ZEDSRC_LEFT_RIGHT_SBS, "8 bits- 4 channels Left and Right side-by-side",
+             "Stereo couple left/right [BGRA]"},
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
             {GST_ZEDSRC_RAW_NV12, "Zero-copy NV12 raw buffer (GMSL cameras only)",
              "Raw NV12 zero-copy [NV12]"},
@@ -1730,6 +1737,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 
     src->stream_port = DEFAULT_PROP_STREAM_PORT;
     src->stream_type = DEFAULT_PROP_STREAM_TYPE;
+    src->resolved_stream_type = -1;   // Not resolved yet
     src->depth_min_dist = DEFAULT_PROP_DEPTH_MIN;
     src->depth_max_dist = DEFAULT_PROP_DEPTH_MAX;
     src->depth_mode = DEFAULT_PROP_DEPTH_MODE;
@@ -2650,20 +2658,101 @@ void gst_zedsrc_finalize(GObject *object) {
     G_OBJECT_CLASS(gst_zedsrc_parent_class)->finalize(object);
 }
 
+/* Helper function to check if downstream accepts NV12 NVMM caps */
+static gboolean gst_zedsrc_downstream_accepts_nv12_nvmm(GstZedSrc *src) {
+    GstPad *srcpad = GST_BASE_SRC_PAD(src);
+    GstCaps *peer_caps = gst_pad_peer_query_caps(srcpad, NULL);
+    gboolean accepts_nv12_nvmm = FALSE;
+
+    if (peer_caps) {
+        GST_DEBUG_OBJECT(src, "Peer caps for auto-negotiation: %" GST_PTR_FORMAT, peer_caps);
+
+        // Check if any structure has memory:NVMM feature and NV12 format
+        for (guint i = 0; i < gst_caps_get_size(peer_caps); i++) {
+            GstCapsFeatures *features = gst_caps_get_features(peer_caps, i);
+            GstStructure *structure = gst_caps_get_structure(peer_caps, i);
+
+            if (features && gst_caps_features_contains(features, "memory:NVMM")) {
+                const gchar *format = gst_structure_get_string(structure, "format");
+                if (format && g_strcmp0(format, "NV12") == 0) {
+                    accepts_nv12_nvmm = TRUE;
+                    GST_INFO_OBJECT(src, "Downstream accepts NV12 in NVMM memory");
+                    break;
+                }
+                // Also check if format is not specified (accepts any)
+                if (!format) {
+                    accepts_nv12_nvmm = TRUE;
+                    GST_INFO_OBJECT(src, "Downstream accepts NVMM memory (format unspecified)");
+                    break;
+                }
+            }
+        }
+        gst_caps_unref(peer_caps);
+    } else {
+        GST_DEBUG_OBJECT(src, "No peer caps available for auto-negotiation");
+    }
+
+    return accepts_nv12_nvmm;
+}
+
+/* Resolve stream-type=AUTO to actual stream type based on downstream caps and SDK capability */
+static void gst_zedsrc_resolve_stream_type(GstZedSrc *src) {
+    // If user explicitly set a stream type (not AUTO), use that
+    if (src->stream_type != GST_ZEDSRC_STREAM_AUTO) {
+        src->resolved_stream_type = src->stream_type;
+        GST_DEBUG_OBJECT(src, "Using explicit stream-type=%d", src->resolved_stream_type);
+        return;
+    }
+
+    // AUTO mode: prefer NV12 zero-copy if available
+    GST_INFO_OBJECT(src, "stream-type=AUTO, checking downstream capabilities...");
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    // Check if downstream accepts NV12 NVMM
+    if (gst_zedsrc_downstream_accepts_nv12_nvmm(src)) {
+        // Check if camera is GMSL stereo (ZED X) - NV12 zero-copy only works with GMSL cameras
+        // Note: ZED X One (mono) cameras use zedxonesrc plugin, not zedsrc
+        sl::MODEL model = src->zed.getCameraInformation().camera_model;
+        if (model == sl::MODEL::ZED_X || model == sl::MODEL::ZED_XM) {
+            src->resolved_stream_type = GST_ZEDSRC_RAW_NV12;
+            GST_INFO_OBJECT(src, "Auto-negotiated to NV12 zero-copy (stream-type=%d)",
+                            src->resolved_stream_type);
+            return;
+        } else {
+            GST_INFO_OBJECT(src,
+                            "Camera model %s does not support NV12 zero-copy, "
+                            "falling back to BGRA",
+                            sl::toString(model).c_str());
+        }
+    } else {
+        GST_INFO_OBJECT(src, "Downstream does not accept NV12 NVMM, falling back to BGRA");
+    }
+#else
+    GST_INFO_OBJECT(src, "NV12 zero-copy not available (SDK < 5.2), using BGRA");
+#endif
+
+    // Default fallback: LEFT image in BGRA
+    src->resolved_stream_type = GST_ZEDSRC_ONLY_LEFT;
+    GST_INFO_OBJECT(src, "Auto-negotiated to BGRA LEFT (stream-type=%d)",
+                    src->resolved_stream_type);
+}
+
 static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
     GST_TRACE_OBJECT(src, "gst_zedsrc_calculate_caps");
+
+    // Use resolved_stream_type which accounts for AUTO negotiation
+    gint stream_type = src->resolved_stream_type;
 
     guint32 width, height;
     gint fps;
     GstVideoInfo vinfo;
     GstVideoFormat format = GST_VIDEO_FORMAT_BGRA;
 
-    if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
+    if (stream_type == GST_ZEDSRC_DEPTH_16) {
         format = GST_VIDEO_FORMAT_GRAY16_LE;
     }
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    else if (src->stream_type == GST_ZEDSRC_RAW_NV12 ||
-             src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+    else if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
         format = GST_VIDEO_FORMAT_NV12;
     }
 #endif
@@ -2673,12 +2762,14 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
     width = cam_info.camera_configuration.resolution.width;
     height = cam_info.camera_configuration.resolution.height;
 
-    if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT || src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
+    if (stream_type == GST_ZEDSRC_LEFT_RIGHT || stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         height *= 2;
+    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
+        width *= 2;   // Side-by-side stereo (BGRA)
     }
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    else if (src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
-        width *= 2;   // Side-by-side stereo
+    else if (stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        width *= 2;   // Side-by-side stereo (NV12)
     }
 #endif
 
@@ -2697,8 +2788,7 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
         // Add memory:NVMM feature for zero-copy NV12 modes
-        if (src->stream_type == GST_ZEDSRC_RAW_NV12 ||
-            src->stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
             GstCapsFeatures *features = gst_caps_features_new("memory:NVMM", NULL);
             gst_caps_set_features(src->caps, 0, features);
             GST_INFO_OBJECT(src, "Added memory:NVMM feature for zero-copy");
@@ -3161,6 +3251,9 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     }
     // <---- Body Tracking
 
+    // Resolve stream type (handles AUTO negotiation based on downstream caps)
+    gst_zedsrc_resolve_stream_type(src);
+
     if (!gst_zedsrc_calculate_caps(src)) {
         return FALSE;
     }
@@ -3357,7 +3450,7 @@ static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockT
     // ----> Info metadata
     cam_info = src->zed.getCameraInformation();
     info.cam_model = (gint) cam_info.camera_model;
-    info.stream_type = src->stream_type;
+    info.stream_type = src->resolved_stream_type;   // Use resolved type for metadata
     info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
     info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
     if (info.grab_single_frame_height == 752 || info.grab_single_frame_height == 1440 ||
@@ -3671,6 +3764,9 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     sl::RuntimeParameters zedRtParams;
     CUcontext zctx;
 
+    // Use resolved_stream_type which accounts for AUTO negotiation
+    gint stream_type = src->resolved_stream_type;
+
     sl::Mat left_img;
     sl::Mat right_img;
     sl::Mat depth_data;
@@ -3760,30 +3856,32 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_STEREO) are handled
     // by gst_zedsrc_create() which wraps NvBufSurface directly without memcpy.
     // This fill() function only handles non-NVMM stream types.
-    if (src->stream_type == GST_ZEDSRC_ONLY_LEFT) {
+    if (stream_type == GST_ZEDSRC_ONLY_LEFT) {
         CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_ONLY_RIGHT) {
+    } else if (stream_type == GST_ZEDSRC_ONLY_RIGHT) {
         CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
+    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT) {
         CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
         CHECK_RET_OR_GOTO(src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
+    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::SIDE_BY_SIDE, sl::MEM::CPU));
+    } else if (stream_type == GST_ZEDSRC_DEPTH_16) {
         CHECK_RET_OR_GOTO(
             src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
+    } else if (stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
         CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU));
     }
 
     /* --- Memory copy into GstBuffer ------------------------------------ */
-    if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
+    if (stream_type == GST_ZEDSRC_DEPTH_16) {
         memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
+    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT) {
         /* Left RGB data on half top */
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
         /* Right RGB data on half bottom */
         memcpy(minfo.data + minfo.size / 2, right_img.getPtr<sl::uchar4>(), minfo.size / 2);
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
+    } else if (stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         /* RGB data on half top */
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
 
@@ -3846,7 +3944,10 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     // We must allocate the buffer ourselves and call fill() directly,
     // because delegating to parent->create doesn't work correctly when
     // both create and fill vmethods are set on the class.
-    if (src->stream_type != GST_ZEDSRC_RAW_NV12 && src->stream_type != GST_ZEDSRC_RAW_NV12_STEREO) {
+    // Use resolved_stream_type which accounts for AUTO negotiation
+    gint stream_type = src->resolved_stream_type;
+
+    if (stream_type != GST_ZEDSRC_RAW_NV12 && stream_type != GST_ZEDSRC_RAW_NV12_STEREO) {
         GstBuffer *buf;
         GstFlowReturn ret;
         GstBaseSrc *basesrc = GST_BASE_SRC(psrc);

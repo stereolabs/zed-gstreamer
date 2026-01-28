@@ -1,8 +1,11 @@
 static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     GstZedSrc *src = GST_ZED_SRC(psrc);
-    
+
+    // Use resolved_stream_type which accounts for AUTO negotiation
+    gint stream_type = src->resolved_stream_type;
+
     // For non-NVMM modes, fall back to the default fill() path
-    if (src->stream_type != GST_ZEDSRC_RAW_NV12 && src->stream_type != GST_ZEDSRC_RAW_NV12_STEREO) {
+    if (stream_type != GST_ZEDSRC_RAW_NV12 && stream_type != GST_ZEDSRC_RAW_NV12_STEREO) {
         return GST_PUSH_SRC_CLASS(gst_zedsrc_parent_class)->create(psrc, outbuf);
     }
 
@@ -57,7 +60,8 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     ret = src->zed.retrieveImage(*raw_buffer);
     if (ret != sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()), (NULL));
+                          ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()),
+                          (NULL));
         delete raw_buffer;
         cuCtxPopCurrent_v2(NULL);
         return GST_FLOW_ERROR;
@@ -81,21 +85,21 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
 
     // Log buffer info
     NvBufSurfaceParams *params = &nvbuf->surfaceList[0];
-    GST_DEBUG_OBJECT(src, "NvBufSurface: %p, FD: %ld, size: %d, memType: %d, format: %d",
-                     nvbuf, params->bufferDesc, params->dataSize, nvbuf->memType, params->colorFormat);
+    GST_DEBUG_OBJECT(src, "NvBufSurface: %p, FD: %ld, size: %d, memType: %d, format: %d", nvbuf,
+                     params->bufferDesc, params->dataSize, nvbuf->memType, params->colorFormat);
 
     // Create GstBuffer wrapping the NvBufSurface pointer directly
     // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
     // DeepStream and other NVIDIA elements expect this format
-    GstBuffer *buf = gst_buffer_new_wrapped_full(
-        GST_MEMORY_FLAG_READONLY,   // Memory is read-only
-        nvbuf,                      // Data pointer is the NvBufSurface*
-        sizeof(NvBufSurface),       // Max size
-        0,                          // Offset
-        sizeof(NvBufSurface),       // Size
-        raw_buffer,                 // User data for destroy callback
-        raw_buffer_destroy_notify   // Called when buffer is unreffed
-    );
+    GstBuffer *buf =
+        gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY,   // Memory is read-only
+                                    nvbuf,                      // Data pointer is the NvBufSurface*
+                                    sizeof(NvBufSurface),       // Max size
+                                    0,                          // Offset
+                                    sizeof(NvBufSurface),       // Size
+                                    raw_buffer,                 // User data for destroy callback
+                                    raw_buffer_destroy_notify   // Called when buffer is unreffed
+        );
 
     // Attach Unified Metadata
     gst_zedsrc_attach_metadata(src, buf, clock_time);

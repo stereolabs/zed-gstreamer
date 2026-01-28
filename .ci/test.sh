@@ -258,7 +258,7 @@ check_hardware() {
             log_info "Zero-copy NV12 available (SDK 5.2+ with Advanced Capture API)"
         elif gst-inspect-1.0 zedsrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
             ZERO_COPY_AVAILABLE=true
-            log_info "Zero-copy NV12 available (stream-type=5)"
+            log_info "Zero-copy NV12 available (stream-type=6)"
         fi
     fi
     
@@ -513,46 +513,46 @@ test_hardware_streaming() {
         fi
     fi
     
-    # Test RAW_NV12 stream types (5, 6) - only available on Jetson with GMSL cameras
+    # Test RAW_NV12 stream types (6, 7) - only available on Jetson with GMSL cameras
     # These require SL_ENABLE_ADVANCED_CAPTURE_API which is only enabled for SDK >= 5.2 on Jetson
     if [ -f /etc/nv_tegra_release ]; then
         if [ "$ZERO_COPY_AVAILABLE" = true ]; then
             sleep $CAMERA_RESET_DELAY
             
-            # Test stream-type=5 (single NV12 zero-copy)
-            output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=5 num-buffers=$num_buffers ! \
+            # Test stream-type=6 (single NV12 zero-copy)
+            output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 num-buffers=$num_buffers ! \
                 'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
             if [ $? -eq 0 ]; then
-                test_pass "Stream type 5 (RAW_NV12 zero-copy)"
+                test_pass "Stream type 6 (RAW_NV12 zero-copy)"
             else
-                test_fail "Stream type 5 (RAW_NV12 zero-copy)"
+                test_fail "Stream type 6 (RAW_NV12 zero-copy)"
                 [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
             fi
             
             if [ "$EXTENSIVE_MODE" = true ]; then
                 sleep $CAMERA_RESET_DELAY
                 
-                # Test stream-type=6 (stereo NV12 zero-copy)
-                output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 num-buffers=$num_buffers ! \
+                # Test stream-type=7 (stereo NV12 zero-copy)
+                output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=7 num-buffers=$num_buffers ! \
                     'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
                 if [ $? -eq 0 ]; then
-                    test_pass "Stream type 6 (RAW_NV12 stereo zero-copy)"
+                    test_pass "Stream type 7 (RAW_NV12 stereo zero-copy)"
                 else
-                    test_fail "Stream type 6 (RAW_NV12 stereo zero-copy)"
+                    test_fail "Stream type 7 (RAW_NV12 stereo zero-copy)"
                     [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
                 fi
             fi
         elif [ "$GMSL_CAMERA" = true ]; then
             # GMSL camera present but zero-copy not available (older SDK)
-            skip_test "Stream type 5 (RAW_NV12)" "Requires ZED SDK 5.2+ with Advanced Capture API"
-            skip_test "Stream type 6 (RAW_NV12 stereo)" "Requires ZED SDK 5.2+ with Advanced Capture API"
+            skip_test "Stream type 6 (RAW_NV12)" "Requires ZED SDK 5.2+ with Advanced Capture API"
+            skip_test "Stream type 7 (RAW_NV12 stereo)" "Requires ZED SDK 5.2+ with Advanced Capture API"
         elif [ "$HARDWARE_AVAILABLE" = true ]; then
             # USB camera - zero-copy not supported
-            skip_test "Stream type 5 (RAW_NV12)" "USB camera - GMSL camera required"
-            skip_test "Stream type 6 (RAW_NV12 stereo)" "USB camera - GMSL camera required"
+            skip_test "Stream type 6 (RAW_NV12)" "USB camera - GMSL camera required"
+            skip_test "Stream type 7 (RAW_NV12 stereo)" "USB camera - GMSL camera required"
         else
-            skip_test "Stream type 5 (RAW_NV12)" "No camera detected"
-            skip_test "Stream type 6 (RAW_NV12 stereo)" "No camera detected"
+            skip_test "Stream type 6 (RAW_NV12)" "No camera detected"
+            skip_test "Stream type 7 (RAW_NV12 stereo)" "No camera detected"
         fi
     fi
     
@@ -1822,9 +1822,9 @@ run_zerocopy_comparison() {
     echo ""
     echo -e "    ${CYAN}This comparison runs identical pipelines with multiple modes:${NC}"
     if [ "$nv12_available" = true ]; then
-        echo -e "    ${GREEN}▶ stream-type=5${NC} - ZED NV12 zero-copy (GMSL native, no conversion)"
+        echo -e "    ${GREEN}▶ stream-type=6${NC} - ZED NV12 zero-copy (GMSL native, no conversion)"
     else
-        echo -e "    ${YELLOW}▶ stream-type=5${NC} - ZED NV12 zero-copy ${RED}(SKIPPED - requires SDK 5.2+)${NC}"
+        echo -e "    ${YELLOW}▶ stream-type=6${NC} - ZED NV12 zero-copy ${RED}(SKIPPED - requires SDK 5.2+)${NC}"
     fi
     echo -e "    ${YELLOW}▶ stream-type=0${NC} - ZED BGRA (SDK color conversion)"
     echo -e "    ${MAGENTA}▶ nvarguscamerasrc${NC} - Raw Argus (baseline, no ZED SDK)"
@@ -1849,7 +1849,7 @@ run_zerocopy_comparison() {
     
     if [ "$nv12_available" = true ]; then
         run_benchmark_pipeline "[NV12 zero-copy] Basic stream" \
-            "zedsrc stream-type=5 $common_props depth-mode=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
+            "zedsrc stream-type=6 $common_props depth-mode=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
         sleep $CAMERA_RESET_DELAY
     fi
     
@@ -1861,6 +1861,12 @@ run_zerocopy_comparison() {
         run_benchmark_pipeline "[Argus raw] Basic stream" \
             "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
         sleep $CAMERA_RESET_DELAY
+        
+        # Argus + RGBA conversion: Simulates legacy pipeline where app needs RGBA in CPU memory
+        # Uses videoconvert (CPU) like ZED BGRA path does, for fair comparison
+        run_benchmark_pipeline "[Argus+RGBA] Basic stream (CPU convert)" \
+            "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvvidconv ! 'video/x-raw,format=RGBA' ! videoconvert ! 'video/x-raw,format=I420'"
+        sleep $CAMERA_RESET_DELAY
     fi
     
     # Test 2: With NEURAL depth (common use case) - ZED only, no Argus equivalent
@@ -1868,7 +1874,7 @@ run_zerocopy_comparison() {
     
     if [ "$nv12_available" = true ]; then
         run_benchmark_pipeline "[NV12 zero-copy] NEURAL depth" \
-            "zedsrc stream-type=5 $common_props depth-mode=4 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
+            "zedsrc stream-type=6 $common_props depth-mode=4 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
         sleep $CAMERA_RESET_DELAY
     fi
     
@@ -1877,17 +1883,17 @@ run_zerocopy_comparison() {
     sleep $CAMERA_RESET_DELAY
     
     # Test 3: Stereo streaming (side-by-side: 3840x1200)
-    # Both NV12 (stream-type=6) and BGRA SBS (stream-type=7) use side-by-side layout
+    # Both NV12 (stream-type=7) and BGRA SBS (stream-type=5) use side-by-side layout
     benchmark_print_section "Test 3: Stereo Streaming (Side-by-Side)"
     
     if [ "$nv12_available" = true ]; then
         run_benchmark_pipeline "[NV12 zero-copy] Stereo SBS" \
-            "zedsrc stream-type=6 $common_props ! 'video/x-raw(memory:NVMM),width=3840,height=1200,format=NV12,framerate=60/1'"
+            "zedsrc stream-type=7 $common_props ! 'video/x-raw(memory:NVMM),width=3840,height=1200,format=NV12,framerate=60/1'"
         sleep $CAMERA_RESET_DELAY
     fi
     
     run_benchmark_pipeline "[BGRA legacy] Stereo SBS" \
-        "zedsrc stream-type=7 $common_props ! 'video/x-raw,width=3840,height=1200,format=BGRA,framerate=60/1'"
+        "zedsrc stream-type=5 $common_props ! 'video/x-raw,width=3840,height=1200,format=BGRA,framerate=60/1'"
     sleep $CAMERA_RESET_DELAY
     
     # Test 4: Hardware encoding pipeline (real-world use case)
@@ -1896,7 +1902,7 @@ run_zerocopy_comparison() {
         
         if [ "$nv12_available" = true ]; then
             run_benchmark_pipeline "[NV12 zero-copy] H.265 encode (direct)" \
-                "zedsrc stream-type=5 $common_props ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvv4l2h265enc"
+                "zedsrc stream-type=6 $common_props ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvv4l2h265enc"
             sleep $CAMERA_RESET_DELAY
         fi
         
@@ -1908,6 +1914,12 @@ run_zerocopy_comparison() {
         if [ "$argus_available" = true ]; then
             run_benchmark_pipeline "[Argus raw] H.265 encode" \
                 "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvv4l2h265enc"
+            sleep $CAMERA_RESET_DELAY
+            
+            # Argus + RGBA roundtrip: NV12 → RGBA (CPU mem) → I420 (CPU convert) → NV12 → encode
+            # Uses videoconvert (CPU) like ZED BGRA path does, for fair comparison
+            run_benchmark_pipeline "[Argus+RGBA] H.265 encode (CPU convert)" \
+                "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvvidconv ! 'video/x-raw,format=RGBA' ! videoconvert ! 'video/x-raw,format=I420' ! nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
             sleep $CAMERA_RESET_DELAY
         fi
     fi
@@ -1940,7 +1952,7 @@ run_zerocopy_comparison() {
             # Pipeline: zedsrc → nvstreammux → nvinfer → identity → fakesink
             if [ "$nv12_available" = true ]; then
                 run_benchmark_pipeline "[NV12 zero-copy] DS nvinfer (direct)" \
-                    "zedsrc stream-type=5 $common_props ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
+                    "zedsrc stream-type=6 $common_props ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
                 sleep $CAMERA_RESET_DELAY
             fi
             
@@ -1953,6 +1965,12 @@ run_zerocopy_comparison() {
             if [ "$argus_available" = true ]; then
                 run_benchmark_pipeline "[Argus raw] DS nvinfer" \
                     "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
+                sleep $CAMERA_RESET_DELAY
+                
+                # Argus + RGBA roundtrip: Simulates legacy pipeline with RGBA processing before inference
+                # NV12 → RGBA (custom processing) → back to NV12 NVMM → nvinfer
+                run_benchmark_pipeline "[Argus+RGBA] DS nvinfer (RGBA roundtrip)" \
+                    "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvvidconv ! 'video/x-raw,format=RGBA' ! nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
                 sleep $CAMERA_RESET_DELAY
             fi
         else
@@ -1989,10 +2007,11 @@ run_zerocopy_comparison() {
     echo "    ├────────────────────────────────────────────────────────────────────────────────────────────┤"
     
     for test_name in "${test_pairs[@]}"; do
-        # Find NV12, BGRA, and Argus results for this test
+        # Find NV12, BGRA, Argus raw, and Argus+RGBA results for this test
         local nv12_key=""
         local bgra_key=""
         local argus_key=""
+        local argus_rgba_key=""
         
         for key in "${!BENCHMARK_RESULTS[@]}"; do
             if [[ "$key" == *",ram" ]]; then
@@ -2001,6 +2020,8 @@ run_zerocopy_comparison() {
                     nv12_key="$base"
                 elif [[ "$base" == *"BGRA"* && "$base" == *"$test_name"* ]]; then
                     bgra_key="$base"
+                elif [[ "$base" == *"Argus+RGBA"* && "$base" == *"$test_name"* ]]; then
+                    argus_rgba_key="$base"
                 elif [[ "$base" == *"Argus"* && "$base" == *"$test_name"* ]]; then
                     argus_key="$base"
                 fi
@@ -2033,6 +2054,13 @@ run_zerocopy_comparison() {
         local argus_fps="${BENCHMARK_RESULTS[$argus_key,fps]:-N/A}"
         local argus_lat="${BENCHMARK_RESULTS[$argus_key,latency]:-N/A}"
         
+        # Get Argus+RGBA results (optional - shows cost of color conversion)
+        local argus_rgba_ram="${BENCHMARK_RESULTS[$argus_rgba_key,ram]:-N/A}"
+        local argus_rgba_cpu="${BENCHMARK_RESULTS[$argus_rgba_key,cpu]:-N/A}"
+        local argus_rgba_gpu="${BENCHMARK_RESULTS[$argus_rgba_key,gpu]:-N/A}"
+        local argus_rgba_fps="${BENCHMARK_RESULTS[$argus_rgba_key,fps]:-N/A}"
+        local argus_rgba_lat="${BENCHMARK_RESULTS[$argus_rgba_key,latency]:-N/A}"
+        
         # Calculate GPU delta (BGRA - NV12, positive means NV12 is better)
         local gpu_delta="N/A"
         if [[ -n "$nv12_key" && "$nv12_gpu" != "N/A" && "$bgra_gpu" != "N/A" ]]; then
@@ -2045,6 +2073,12 @@ run_zerocopy_comparison() {
             bgra_argus_delta=$(echo "$bgra_gpu $argus_gpu" | awk '{printf "%.1f", $1-$2}')
         fi
         
+        # Calculate GPU delta Argus+RGBA vs Argus raw (shows conversion cost)
+        local argus_rgba_delta="N/A"
+        if [[ "$argus_gpu" != "N/A" && "$argus_rgba_gpu" != "N/A" ]]; then
+            argus_rgba_delta=$(echo "$argus_rgba_gpu $argus_gpu" | awk '{printf "%.1f", $1-$2}')
+        fi
+        
         # Print test header
         printf "    │ ${CYAN}%-28s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ %7s │\n" "── $test_name ──" "" "" "" "" "" ""
         
@@ -2052,6 +2086,12 @@ run_zerocopy_comparison() {
         if [[ -n "$argus_key" && "$argus_ram" != "N/A" ]]; then
             printf "    │ ${MAGENTA}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ %7s │\n" \
                 "Argus raw (baseline)" "$argus_ram" "$argus_cpu" "$argus_gpu" "$argus_fps" "$argus_lat" "(ref)"
+        fi
+        
+        # Print Argus+RGBA row if available (shows color conversion cost)
+        if [[ -n "$argus_rgba_key" && "$argus_rgba_ram" != "N/A" ]]; then
+            printf "    │ ${MAGENTA}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ ${MAGENTA}%+6s%%${NC} │\n" \
+                "Argus+RGBA (convert)" "$argus_rgba_ram" "$argus_rgba_cpu" "$argus_rgba_gpu" "$argus_rgba_fps" "$argus_rgba_lat" "+$argus_rgba_delta"
         fi
         
         # Print NV12 row if available (green highlight)
@@ -2077,9 +2117,10 @@ run_zerocopy_comparison() {
     echo ""
     echo -e "    ${GREEN}Legend:${NC}"
     echo -e "    ${CYAN}• Δ GPU = GPU usage change (positive = higher GPU usage)${NC}"
-    echo -e "    ${MAGENTA}• Argus raw = nvarguscamerasrc baseline (no ZED SDK)${NC}"
-    echo -e "    ${GREEN}• NV12 zero-copy = stream-type=5 (SDK 5.2+ required)${NC}"
-    echo -e "    ${YELLOW}• BGRA legacy = stream-type=0 (traditional mode)${NC}"
+    echo -e "    ${MAGENTA}• Argus raw    = nvarguscamerasrc baseline (NV12 NVMM, no ZED SDK)${NC}"
+    echo -e "    ${MAGENTA}• Argus+RGBA   = Argus with NV12→RGBA→I420 via CPU videoconvert (simulates legacy)${NC}"
+    echo -e "    ${GREEN}• NV12 zero-copy = stream-type=6 (SDK 5.2+ required)${NC}"
+    echo -e "    ${YELLOW}• BGRA legacy  = stream-type=0 with CPU videoconvert (traditional mode)${NC}"
     echo -e "    ${CYAN}• Lower RAM/CPU/GPU/Latency is better, Higher FPS is better${NC}"
     echo ""
     if [[ "$nv12_available" == true ]]; then
@@ -2170,17 +2211,17 @@ run_benchmarks() {
         if [ "$ZERO_COPY_AVAILABLE" = true ]; then
             benchmark_print_section "NV12 Zero-Copy Benchmarks (GMSL)"
             
-            run_benchmark_pipeline "Stream: RAW_NV12 zero-copy" "zedsrc stream-type=5 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
+            run_benchmark_pipeline "Stream: RAW_NV12 zero-copy" "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
             sleep $CAMERA_RESET_DELAY
             
-            run_benchmark_pipeline "Stream: RAW_NV12 stereo zero-copy" "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
+            run_benchmark_pipeline "Stream: RAW_NV12 stereo zero-copy" "zedsrc stream-type=7 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
             sleep $CAMERA_RESET_DELAY
             
             # NV12 with hardware encoding benchmark
             if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
                 benchmark_print_section "NV12 Zero-Copy + Hardware Encoding"
                 run_benchmark_pipeline "NV12 -> H.265 HW encode" \
-                    "zedsrc stream-type=5 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
+                    "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
                 sleep $CAMERA_RESET_DELAY
             fi
             
@@ -2192,14 +2233,14 @@ run_benchmarks() {
             benchmark_print_section "DEV: NV12 Zero-Copy vs BGRA Comparison"
             echo ""
             echo -e "    ${CYAN}Comparing identical pipelines with different stream modes:${NC}"
-            echo -e "    ${CYAN}  - stream-type=5 (NV12 zero-copy, GMSL native)${NC}"
+            echo -e "    ${CYAN}  - stream-type=6 (NV12 zero-copy, GMSL native)${NC}"
             echo -e "    ${CYAN}  - stream-type=0 (BGRA, requires SDK color conversion)${NC}"
             echo ""
             
             # Test 1: Basic streaming (no processing)
             echo -e "    ${YELLOW}━━━ Test 1: Basic Streaming ━━━${NC}"
             run_benchmark_pipeline "[NV12] Basic stream" \
-                "zedsrc stream-type=5 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
+                "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
             sleep $CAMERA_RESET_DELAY
             
             run_benchmark_pipeline "[BGRA] Basic stream" \
@@ -2209,7 +2250,7 @@ run_benchmarks() {
             # Test 2: With depth enabled (common use case)
             echo -e "    ${YELLOW}━━━ Test 2: With Depth Processing ━━━${NC}"
             run_benchmark_pipeline "[NV12] With depth (NEURAL)" \
-                "zedsrc stream-type=5 $cam_props depth-mode=4 ! 'video/x-raw(memory:NVMM),format=NV12'"
+                "zedsrc stream-type=6 $cam_props depth-mode=4 ! 'video/x-raw(memory:NVMM),format=NV12'"
             sleep $CAMERA_RESET_DELAY
             
             run_benchmark_pipeline "[BGRA] With depth (NEURAL)" \
@@ -2219,7 +2260,7 @@ run_benchmarks() {
             # Test 3: Stereo streaming
             echo -e "    ${YELLOW}━━━ Test 3: Stereo Streaming ━━━${NC}"
             run_benchmark_pipeline "[NV12] Stereo stream" \
-                "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
+                "zedsrc stream-type=7 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
             sleep $CAMERA_RESET_DELAY
             
             run_benchmark_pipeline "[BGRA] Stereo stream" \
@@ -2230,7 +2271,7 @@ run_benchmarks() {
             if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
                 echo -e "    ${YELLOW}━━━ Test 4: H.265 Hardware Encoding ━━━${NC}"
                 run_benchmark_pipeline "[NV12] H.265 encode (direct)" \
-                    "zedsrc stream-type=5 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
+                    "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
                 sleep $CAMERA_RESET_DELAY
                 
                 # BGRA requires videoconvert + nvvidconv for color space conversion to NV12
@@ -2537,7 +2578,7 @@ show_help() {
     echo "  3. Run comparison:         $0 --benchmark --baseline <file.json>"
     echo ""
     echo "Zero-copy comparison (DEV):"
-    echo "  Runs identical pipelines with NV12 zero-copy (stream-type=5) vs"
+    echo "  Runs identical pipelines with NV12 zero-copy (stream-type=6) vs"
     echo "  BGRA legacy mode (stream-type=0) to measure performance difference."
     echo "  Requires: GMSL camera (ZED X) + ZED SDK 5.2+ + Jetson platform"
     echo ""

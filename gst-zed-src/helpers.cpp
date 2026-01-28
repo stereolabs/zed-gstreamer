@@ -1,4 +1,5 @@
-static void gst_zedsrc_setup_runtime_parameters(GstZedSrc *src, sl::RuntimeParameters &zedRtParams) {
+static void gst_zedsrc_setup_runtime_parameters(GstZedSrc *src,
+                                                sl::RuntimeParameters &zedRtParams) {
     GST_TRACE_OBJECT(src, "CAMERA RUNTIME PARAMETERS");
     if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
         zedRtParams.enable_depth = false;
@@ -62,7 +63,7 @@ static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockT
     // ----> Info metadata
     cam_info = src->zed.getCameraInformation();
     info.cam_model = (gint) cam_info.camera_model;
-    info.stream_type = src->stream_type;
+    info.stream_type = src->resolved_stream_type;   // Use resolved type for metadata
     info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
     info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
     if (info.grab_single_frame_height == 752 || info.grab_single_frame_height == 1440 ||
@@ -348,7 +349,6 @@ static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockT
     // <---- Timestamp meta-data
 
     offset = GST_BUFFER_OFFSET(buf);
-    gst_buffer_add_zed_src_meta(buf, info, pose, sens,
-                                       src->object_detection | src->body_tracking, obj_count,
-                                       obj_data, offset);
+    gst_buffer_add_zed_src_meta(buf, info, pose, sens, src->object_detection | src->body_tracking,
+                                obj_count, obj_data, offset);
 }
