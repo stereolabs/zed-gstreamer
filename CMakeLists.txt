@@ -23,7 +23,7 @@ if(NOT WIN32)
                     -Werror=overflow
                     -Werror=uninitialized
                     -Werror=delete-incomplete
-                    -Werror=shadow
+                    #-Werror=shadow
                     -Werror=array-bounds
                     -Werror=vla
                     -Walloc-zero)

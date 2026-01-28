@@ -34,6 +34,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
@@ -163,6 +164,31 @@ detect_platform() {
     else
         echo "unknown"
     fi
+}
+
+# Detect ZED SDK version from the installed library
+detect_sdk_version() {
+    local version=""
+    # Try to get version from ZED SDK's version file
+    if [ -f /usr/local/zed/version ]; then
+        version=$(cat /usr/local/zed/version 2>/dev/null | head -1)
+    fi
+    # Fallback: try to get from cmake config
+    if [ -z "$version" ] && [ -f /usr/local/zed/zed-config-version.cmake ]; then
+        version=$(grep "PACKAGE_VERSION" /usr/local/zed/zed-config-version.cmake | head -1 | grep -oP '"[0-9.]+"' | tr -d '"')
+    fi
+    # Fallback: try running ZED_Diagnostic
+    if [ -z "$version" ] && command -v ZED_Diagnostic &> /dev/null; then
+        version=$(ZED_Diagnostic --version 2>/dev/null | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    fi
+    echo "${version:-unknown}"
+}
+
+# Get major.minor from SDK version
+get_sdk_major_minor() {
+    local version
+    version=$(detect_sdk_version)
+    echo "$version" | grep -oP '^[0-9]+\.[0-9]+' || echo "0.0"
 }
 
 # Source common functions from jetson scripts (if available)
@@ -1499,7 +1525,7 @@ run_benchmark_pipeline() {
         # Pipeline has downstream elements, insert num-buffers before first "!"
         full_pipeline=$(echo "$pipeline" | awk -v nb="num-buffers=$total_buffers" '{sub(/!/, nb " !")} 1')
         # Only append identity+fakesink if pipeline doesn't already end with a sink
-        if ! echo "$pipeline" | grep -qE 'fakesink\s*$|filesink\s*$'; then
+        if ! echo "$pipeline" | grep -qE '(fakesink|filesink)[^!]*$'; then
             full_pipeline="$full_pipeline ! identity silent=false ! fakesink sync=false"
         fi
     else
@@ -1508,7 +1534,8 @@ run_benchmark_pipeline() {
     fi
     
     # Timeout needs to account for: camera open (~6s) + warmup + duration + buffer
-    local timeout_val=$((duration + BENCHMARK_WARMUP + 20))
+    # DeepStream pipelines need extra time for TensorRT engine loading (~6-8s)
+    local timeout_val=$((duration + BENCHMARK_WARMUP + 30))
     
     # Print the exact command for reproducibility
     echo ""
@@ -1765,15 +1792,25 @@ run_zerocopy_comparison() {
         exit 2
     fi
     
-    if [ "$ZERO_COPY_AVAILABLE" != true ]; then
-        echo -e "${RED}ERROR: Zero-copy NV12 not available.${NC}"
-        echo -e "${YELLOW}Requires ZED SDK 5.2+ with Advanced Capture API.${NC}"
-        exit 2
+    # Detect SDK version and NV12 availability
+    local sdk_version
+    sdk_version=$(detect_sdk_version)
+    local sdk_major_minor
+    sdk_major_minor=$(get_sdk_major_minor)
+    local nv12_available=false
+    
+    if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+        nv12_available=true
     fi
     
     echo -e "${BLUE}[INFO]${NC} Platform: $(detect_platform)"
+    echo -e "${BLUE}[INFO]${NC} ZED SDK: ${sdk_version}"
     echo -e "${BLUE}[INFO]${NC} Camera: GMSL (ZED X series)"
-    echo -e "${BLUE}[INFO]${NC} Zero-copy: Available"
+    if [ "$nv12_available" = true ]; then
+        echo -e "${BLUE}[INFO]${NC} NV12 Zero-copy: ${GREEN}Available${NC}"
+    else
+        echo -e "${BLUE}[INFO]${NC} NV12 Zero-copy: ${YELLOW}Not available (SDK 5.2+ required)${NC}"
+    fi
     echo -e "${BLUE}[INFO]${NC} Benchmark duration: ${BENCHMARK_DURATION}s per test"
     echo -e "${BLUE}[INFO]${NC} Warmup period: ${BENCHMARK_WARMUP}s"
     echo ""
@@ -1783,60 +1820,96 @@ run_zerocopy_comparison() {
     get_baseline_stats
     
     echo ""
-    echo -e "    ${CYAN}This comparison runs identical pipelines with two stream modes:${NC}"
-    echo -e "    ${GREEN}▶ stream-type=5${NC} - NV12 zero-copy (GMSL native, no conversion)"
-    echo -e "    ${YELLOW}▶ stream-type=0${NC} - BGRA (SDK color conversion, more overhead)"
-    echo -e "    ${CYAN}All tests use: camera-resolution=2 (HD1200) camera-fps=60${NC}"
+    echo -e "    ${CYAN}This comparison runs identical pipelines with multiple modes:${NC}"
+    if [ "$nv12_available" = true ]; then
+        echo -e "    ${GREEN}▶ stream-type=5${NC} - ZED NV12 zero-copy (GMSL native, no conversion)"
+    else
+        echo -e "    ${YELLOW}▶ stream-type=5${NC} - ZED NV12 zero-copy ${RED}(SKIPPED - requires SDK 5.2+)${NC}"
+    fi
+    echo -e "    ${YELLOW}▶ stream-type=0${NC} - ZED BGRA (SDK color conversion)"
+    echo -e "    ${MAGENTA}▶ nvarguscamerasrc${NC} - Raw Argus (baseline, no ZED SDK)"
+    echo -e "    ${CYAN}All tests use: 1920x1200 @ 60fps${NC}"
     echo ""
     
     # Common settings for all tests: HD1200 @ 60fps (native ZED X resolution)
     local common_props="camera-resolution=2 camera-fps=60"
     
+    # Check if nvarguscamerasrc is available for raw Argus baseline tests
+    local argus_available=false
+    if gst-inspect-1.0 nvarguscamerasrc > /dev/null 2>&1; then
+        argus_available=true
+        echo -e "    ${GREEN}✓ nvarguscamerasrc available for baseline comparison${NC}"
+    else
+        echo -e "    ${YELLOW}✗ nvarguscamerasrc not available, skipping raw Argus tests${NC}"
+    fi
+    echo ""
+    
     # Test 1: Basic streaming (no processing)
     benchmark_print_section "Test 1: Basic Streaming (no depth)"
     
-    run_benchmark_pipeline "[NV12 zero-copy] Basic stream" \
-        "zedsrc stream-type=5 $common_props depth-mode=0 ! 'video/x-raw(memory:NVMM),format=NV12'"
-    sleep $CAMERA_RESET_DELAY
+    if [ "$nv12_available" = true ]; then
+        run_benchmark_pipeline "[NV12 zero-copy] Basic stream" \
+            "zedsrc stream-type=5 $common_props depth-mode=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
+        sleep $CAMERA_RESET_DELAY
+    fi
     
     run_benchmark_pipeline "[BGRA legacy] Basic stream" \
-        "zedsrc stream-type=0 $common_props depth-mode=0"
+        "zedsrc stream-type=0 $common_props depth-mode=0 ! 'video/x-raw,width=1920,height=1200,format=BGRA,framerate=60/1'"
     sleep $CAMERA_RESET_DELAY
     
-    # Test 2: With NEURAL depth (common use case)
+    if [ "$argus_available" = true ]; then
+        run_benchmark_pipeline "[Argus raw] Basic stream" \
+            "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
+        sleep $CAMERA_RESET_DELAY
+    fi
+    
+    # Test 2: With NEURAL depth (common use case) - ZED only, no Argus equivalent
     benchmark_print_section "Test 2: With NEURAL Depth"
     
-    run_benchmark_pipeline "[NV12 zero-copy] NEURAL depth" \
-        "zedsrc stream-type=5 $common_props depth-mode=4 ! 'video/x-raw(memory:NVMM),format=NV12'"
-    sleep $CAMERA_RESET_DELAY
+    if [ "$nv12_available" = true ]; then
+        run_benchmark_pipeline "[NV12 zero-copy] NEURAL depth" \
+            "zedsrc stream-type=5 $common_props depth-mode=4 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
+        sleep $CAMERA_RESET_DELAY
+    fi
     
     run_benchmark_pipeline "[BGRA legacy] NEURAL depth" \
-        "zedsrc stream-type=0 $common_props depth-mode=4"
+        "zedsrc stream-type=0 $common_props depth-mode=4 ! 'video/x-raw,width=1920,height=1200,format=BGRA,framerate=60/1'"
     sleep $CAMERA_RESET_DELAY
     
-    # Test 3: Stereo streaming
-    benchmark_print_section "Test 3: Stereo Streaming"
+    # Test 3: Stereo streaming (side-by-side: 3840x1200)
+    # Both NV12 (stream-type=6) and BGRA SBS (stream-type=7) use side-by-side layout
+    benchmark_print_section "Test 3: Stereo Streaming (Side-by-Side)"
     
-    run_benchmark_pipeline "[NV12 zero-copy] Stereo" \
-        "zedsrc stream-type=6 $common_props ! 'video/x-raw(memory:NVMM),format=NV12'"
-    sleep $CAMERA_RESET_DELAY
+    if [ "$nv12_available" = true ]; then
+        run_benchmark_pipeline "[NV12 zero-copy] Stereo SBS" \
+            "zedsrc stream-type=6 $common_props ! 'video/x-raw(memory:NVMM),width=3840,height=1200,format=NV12,framerate=60/1'"
+        sleep $CAMERA_RESET_DELAY
+    fi
     
-    run_benchmark_pipeline "[BGRA legacy] Stereo" \
-        "zedsrc stream-type=2 $common_props"
+    run_benchmark_pipeline "[BGRA legacy] Stereo SBS" \
+        "zedsrc stream-type=7 $common_props ! 'video/x-raw,width=3840,height=1200,format=BGRA,framerate=60/1'"
     sleep $CAMERA_RESET_DELAY
     
     # Test 4: Hardware encoding pipeline (real-world use case)
     if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
         benchmark_print_section "Test 4: H.265 Hardware Encoding Pipeline"
         
-        run_benchmark_pipeline "[NV12 zero-copy] H.265 encode (direct)" \
-            "zedsrc stream-type=5 $common_props ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
-        sleep $CAMERA_RESET_DELAY
+        if [ "$nv12_available" = true ]; then
+            run_benchmark_pipeline "[NV12 zero-copy] H.265 encode (direct)" \
+                "zedsrc stream-type=5 $common_props ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvv4l2h265enc"
+            sleep $CAMERA_RESET_DELAY
+        fi
         
         # BGRA needs explicit caps for nvvidconv and videoconvert for color space
         run_benchmark_pipeline "[BGRA legacy] H.265 encode (w/ convert)" \
-            "zedsrc stream-type=0 $common_props ! videoconvert ! nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
+            "zedsrc stream-type=0 $common_props ! videoconvert ! 'video/x-raw,format=I420' ! nvvidconv ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvv4l2h265enc"
         sleep $CAMERA_RESET_DELAY
+        
+        if [ "$argus_available" = true ]; then
+            run_benchmark_pipeline "[Argus raw] H.265 encode" \
+                "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvv4l2h265enc"
+            sleep $CAMERA_RESET_DELAY
+        fi
     fi
     
     # Test 5: DeepStream with nvinfer (actual AI inference)
@@ -1865,15 +1938,23 @@ run_zerocopy_comparison() {
             
             # NV12 zero-copy: Direct to nvinfer (nvinfer expects NV12 in NVMM)
             # Pipeline: zedsrc → nvstreammux → nvinfer → identity → fakesink
-            run_benchmark_pipeline "[NV12 zero-copy] DS nvinfer (direct)" \
-                "zedsrc stream-type=5 $common_props ! 'video/x-raw(memory:NVMM),format=NV12' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 ! nvinfer config-file-path=$ds_config ! identity silent=false ! fakesink"
-            sleep $CAMERA_RESET_DELAY
+            if [ "$nv12_available" = true ]; then
+                run_benchmark_pipeline "[NV12 zero-copy] DS nvinfer (direct)" \
+                    "zedsrc stream-type=5 $common_props ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
+                sleep $CAMERA_RESET_DELAY
+            fi
             
             # BGRA legacy: Requires videoconvert + nvvideoconvert to get to NVMM NV12
             # Pipeline: zedsrc (BGRA sysmem) → videoconvert → nvvideoconvert → NV12 NVMM → nvstreammux → nvinfer → identity → fakesink
             run_benchmark_pipeline "[BGRA legacy] DS nvinfer (w/ convert)" \
-                "zedsrc stream-type=0 $common_props ! videoconvert ! 'video/x-raw,format=BGRx' ! nvvideoconvert ! 'video/x-raw(memory:NVMM),format=NV12' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 ! nvinfer config-file-path=$ds_config ! identity silent=false ! fakesink"
+                "zedsrc stream-type=0 $common_props ! videoconvert ! 'video/x-raw,format=I420' ! nvvideoconvert ! 'video/x-raw(memory:NVMM),format=NV12' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
             sleep $CAMERA_RESET_DELAY
+            
+            if [ "$argus_available" = true ]; then
+                run_benchmark_pipeline "[Argus raw] DS nvinfer" \
+                    "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
+                sleep $CAMERA_RESET_DELAY
+            fi
         else
             echo -e "    ${YELLOW}[INFO]${NC} Skipping DeepStream nvinfer test (no config file found)"
         fi
@@ -1885,6 +1966,13 @@ run_zerocopy_comparison() {
     
     # Summary - grouped by test pairs for easy comparison
     benchmark_print_section "COMPARISON SUMMARY"
+    echo ""
+    echo -e "    ${CYAN}ZED SDK Version: ${sdk_version}${NC}"
+    if [ "$nv12_available" = true ]; then
+        echo -e "    ${GREEN}NV12 Zero-copy: Available${NC}"
+    else
+        echo -e "    ${YELLOW}NV12 Zero-copy: Not available (BGRA vs Argus comparison only)${NC}"
+    fi
     echo ""
     
     # Define test pairs in order
@@ -1901,9 +1989,10 @@ run_zerocopy_comparison() {
     echo "    ├────────────────────────────────────────────────────────────────────────────────────────────┤"
     
     for test_name in "${test_pairs[@]}"; do
-        # Find NV12 and BGRA results for this test
+        # Find NV12, BGRA, and Argus results for this test
         local nv12_key=""
         local bgra_key=""
+        local argus_key=""
         
         for key in "${!BENCHMARK_RESULTS[@]}"; do
             if [[ "$key" == *",ram" ]]; then
@@ -1912,16 +2001,18 @@ run_zerocopy_comparison() {
                     nv12_key="$base"
                 elif [[ "$base" == *"BGRA"* && "$base" == *"$test_name"* ]]; then
                     bgra_key="$base"
+                elif [[ "$base" == *"Argus"* && "$base" == *"$test_name"* ]]; then
+                    argus_key="$base"
                 fi
             fi
         done
         
-        # Skip if we don't have both results
-        if [[ -z "$nv12_key" || -z "$bgra_key" ]]; then
+        # Skip if we don't have at least BGRA results (NV12 is optional for SDK 5.1)
+        if [[ -z "$bgra_key" ]]; then
             continue
         fi
         
-        # Get NV12 results
+        # Get NV12 results (may be empty on SDK 5.1)
         local nv12_ram="${BENCHMARK_RESULTS[$nv12_key,ram]:-N/A}"
         local nv12_cpu="${BENCHMARK_RESULTS[$nv12_key,cpu]:-N/A}"
         local nv12_gpu="${BENCHMARK_RESULTS[$nv12_key,gpu]:-N/A}"
@@ -1935,22 +2026,48 @@ run_zerocopy_comparison() {
         local bgra_fps="${BENCHMARK_RESULTS[$bgra_key,fps]:-N/A}"
         local bgra_lat="${BENCHMARK_RESULTS[$bgra_key,latency]:-N/A}"
         
+        # Get Argus results (optional)
+        local argus_ram="${BENCHMARK_RESULTS[$argus_key,ram]:-N/A}"
+        local argus_cpu="${BENCHMARK_RESULTS[$argus_key,cpu]:-N/A}"
+        local argus_gpu="${BENCHMARK_RESULTS[$argus_key,gpu]:-N/A}"
+        local argus_fps="${BENCHMARK_RESULTS[$argus_key,fps]:-N/A}"
+        local argus_lat="${BENCHMARK_RESULTS[$argus_key,latency]:-N/A}"
+        
         # Calculate GPU delta (BGRA - NV12, positive means NV12 is better)
         local gpu_delta="N/A"
-        if [[ "$nv12_gpu" != "N/A" && "$bgra_gpu" != "N/A" ]]; then
+        if [[ -n "$nv12_key" && "$nv12_gpu" != "N/A" && "$bgra_gpu" != "N/A" ]]; then
             gpu_delta=$(echo "$bgra_gpu $nv12_gpu" | awk '{printf "%.1f", $1-$2}')
+        fi
+        
+        # Calculate GPU delta BGRA vs Argus (shows ZED SDK overhead)
+        local bgra_argus_delta="N/A"
+        if [[ "$argus_gpu" != "N/A" && "$bgra_gpu" != "N/A" ]]; then
+            bgra_argus_delta=$(echo "$bgra_gpu $argus_gpu" | awk '{printf "%.1f", $1-$2}')
         fi
         
         # Print test header
         printf "    │ ${CYAN}%-28s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ %7s │\n" "── $test_name ──" "" "" "" "" "" ""
         
-        # Print NV12 row (green highlight)
-        printf "    │ ${GREEN}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ ${GREEN}%+6s%%${NC} │\n" \
-            "NV12 zero-copy" "$nv12_ram" "$nv12_cpu" "$nv12_gpu" "$nv12_fps" "$nv12_lat" "-$gpu_delta"
+        # Print Argus row if available (magenta - baseline)
+        if [[ -n "$argus_key" && "$argus_ram" != "N/A" ]]; then
+            printf "    │ ${MAGENTA}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ %7s │\n" \
+                "Argus raw (baseline)" "$argus_ram" "$argus_cpu" "$argus_gpu" "$argus_fps" "$argus_lat" "(ref)"
+        fi
         
-        # Print BGRA row (yellow)
-        printf "    │ ${YELLOW}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ %7s │\n" \
-            "BGRA legacy" "$bgra_ram" "$bgra_cpu" "$bgra_gpu" "$bgra_fps" "$bgra_lat" "(base)"
+        # Print NV12 row if available (green highlight)
+        if [[ -n "$nv12_key" && "$nv12_ram" != "N/A" ]]; then
+            printf "    │ ${GREEN}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ ${GREEN}%+6s%%${NC} │\n" \
+                "NV12 zero-copy" "$nv12_ram" "$nv12_cpu" "$nv12_gpu" "$nv12_fps" "$nv12_lat" "-$gpu_delta"
+        fi
+        
+        # Print BGRA row (yellow) - show delta vs Argus if we have Argus data
+        if [[ -n "$argus_key" && "$bgra_argus_delta" != "N/A" ]]; then
+            printf "    │ ${YELLOW}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ ${YELLOW}%+6s%%${NC} │\n" \
+                "BGRA legacy" "$bgra_ram" "$bgra_cpu" "$bgra_gpu" "$bgra_fps" "$bgra_lat" "+$bgra_argus_delta"
+        else
+            printf "    │ ${YELLOW}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ %7s │\n" \
+                "BGRA legacy" "$bgra_ram" "$bgra_cpu" "$bgra_gpu" "$bgra_fps" "$bgra_lat" "(base)"
+        fi
         
         echo "    ├────────────────────────────────────────────────────────────────────────────────────────────┤"
     done
@@ -1959,14 +2076,21 @@ run_zerocopy_comparison() {
     echo "    └────────────────────────────────────────────────────────────────────────────────────────────┘"
     echo ""
     echo -e "    ${GREEN}Legend:${NC}"
-    echo -e "    ${CYAN}• Δ GPU = GPU reduction with NV12 (positive = NV12 saves GPU)${NC}"
-    echo -e "    ${CYAN}• Lower RAM/CPU/GPU/Latency is better${NC}"
-    echo -e "    ${CYAN}• Higher FPS is better${NC}"
+    echo -e "    ${CYAN}• Δ GPU = GPU usage change (positive = higher GPU usage)${NC}"
+    echo -e "    ${MAGENTA}• Argus raw = nvarguscamerasrc baseline (no ZED SDK)${NC}"
+    echo -e "    ${GREEN}• NV12 zero-copy = stream-type=5 (SDK 5.2+ required)${NC}"
+    echo -e "    ${YELLOW}• BGRA legacy = stream-type=0 (traditional mode)${NC}"
+    echo -e "    ${CYAN}• Lower RAM/CPU/GPU/Latency is better, Higher FPS is better${NC}"
     echo ""
-    echo -e "    ${GREEN}Expected Benefits of NV12 Zero-Copy:${NC}"
-    echo -e "    ${CYAN}• Lower GPU usage (no CUDA color conversion)${NC}"
-    echo -e "    ${CYAN}• Lower CPU usage (less data movement)${NC}"
-    echo -e "    ${CYAN}• H.265 encoding: Major improvement (direct to encoder, no nvvidconv)${NC}"
+    if [[ "$nv12_available" == true ]]; then
+        echo -e "    ${GREEN}Expected Benefits of NV12 Zero-Copy:${NC}"
+        echo -e "    ${CYAN}• Lower GPU usage (no CUDA color conversion)${NC}"
+        echo -e "    ${CYAN}• Lower CPU usage (less data movement)${NC}"
+        echo -e "    ${CYAN}• H.265 encoding: Major improvement (direct to encoder, no nvvidconv)${NC}"
+    else
+        echo -e "    ${YELLOW}Note: NV12 zero-copy requires ZED SDK 5.2+. Currently running SDK ${sdk_version}${NC}"
+        echo -e "    ${CYAN}Showing BGRA vs Argus comparison for SDK overhead analysis.${NC}"
+    fi
     echo ""
 }
 
@@ -2149,14 +2273,17 @@ run_benchmarks() {
         sleep $CAMERA_RESET_DELAY
         
         # AI Features benchmarks
+        # Note: OD and Body Tracking require positional tracking to be enabled
         benchmark_print_section "AI Features Benchmarks"
         
         run_benchmark_pipeline "Object Detection: MULTI_CLASS_BOX_FAST" \
-            "zedsrc stream-type=0 $cam_props depth-mode=4 od-enabled=true od-detection-model=2"
+            "zedsrc stream-type=0 $cam_props depth-mode=4 enable-positional-tracking=true od-enabled=true od-detection-model=2" || \
+            echo -e "    ${YELLOW}[SKIP] Object Detection failed${NC}"
         sleep $CAMERA_RESET_DELAY
         
         run_benchmark_pipeline "Body Tracking: BODY_34_FAST" \
-            "zedsrc stream-type=0 $cam_props depth-mode=4 bt-enabled=true bt-detection-model=0 bt-format=1"
+            "zedsrc stream-type=0 $cam_props depth-mode=4 enable-positional-tracking=true bt-enabled=true bt-detection-model=0 bt-format=1" || \
+            echo -e "    ${YELLOW}[SKIP] Body Tracking failed${NC}"
         sleep $CAMERA_RESET_DELAY
         
         # Positional Tracking benchmark
