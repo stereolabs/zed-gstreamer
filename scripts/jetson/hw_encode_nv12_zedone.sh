@@ -1,25 +1,24 @@
 #!/bin/bash
 # =============================================================================
-# ZED X One Hardware H.265/HEVC Encoding Pipeline
+# ZED X One Hardware Encoding Pipeline
 # =============================================================================
-# This script demonstrates hardware H.265 encoding from ZED X One cameras on
-# NVIDIA Jetson platforms.
+# Records or previews ZED X One camera feed with hardware H.265 encoding.
 #
-# For ZED X One GS / ZED X One 4K (GMSL cameras):
-#   - Uses zero-copy NV12 for maximum performance
-#   - Direct path to hardware encoder (no CPU copy)
+# For ZED X One with SDK 5.2+:
+#   - Uses zero-copy NV12 for maximum performance (stream-type=1)
 #
-# Requirements:
-#   - NVIDIA Jetson platform (Orin, Xavier, etc.)
-#   - ZED SDK 5.2+ (with Advanced Capture API for zero-copy)
-#   - GStreamer 1.0 with NVIDIA plugins
+# For older SDK:
+#   - Uses BGRA with nvvideoconvert to NVMM (stream-type=0)
+#
+# For Orin Nano (no NVENC):
+#   - Falls back to software encoding (x265enc/x264enc)
 #
 # Usage:
 #   ./hw_encode_nv12_zedone.sh [OPTIONS] [output_file] [duration_seconds]
 #
 # Options:
 #   --resolution RES    Camera resolution (4K, QHDPLUS, 1200, 1080, SVGA)
-#   --fps FPS           Frame rate (15, 30, 60, 120)
+#   --fps FPS           Frame rate (15, 30, 60, 120 for SVGA)
 #   --bitrate BITRATE   Encoding bitrate in bps (default: 8000000)
 #
 # Examples:
@@ -27,7 +26,6 @@
 #   ./hw_encode_nv12_zedone.sh output.mp4                   # Record to file
 #   ./hw_encode_nv12_zedone.sh output.mp4 60                # Record 60 seconds
 #   ./hw_encode_nv12_zedone.sh --resolution 4K output.mp4   # 4K recording
-#   ./hw_encode_nv12_zedone.sh --resolution 1200 --fps 60 output.mp4
 # =============================================================================
 
 set -e
@@ -41,221 +39,173 @@ OUTPUT_FILE=""
 DURATION=0
 RESOLUTION="1200"
 FPS="30"
-BITRATE="8000000"  # 8 Mbps default
+BITRATE="8000000"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --resolution)
-            RESOLUTION="$2"
-            shift 2
-            ;;
-        --fps)
-            FPS="$2"
-            shift 2
-            ;;
-        --bitrate)
-            BITRATE="$2"
-            shift 2
-            ;;
+        --resolution) RESOLUTION="$2"; shift 2 ;;
+        --fps) FPS="$2"; shift 2 ;;
+        --bitrate) BITRATE="$2"; shift 2 ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS] [output_file] [duration_seconds]"
-            echo ""
-            echo "Options:"
-            echo "  --resolution RES    Camera resolution (4K, QHDPLUS, 1200, 1080, SVGA)"
-            echo "  --fps FPS           Frame rate (15, 30, 60, 120 for SVGA)"
-            echo "  --bitrate BITRATE   Encoding bitrate in bps (default: 8000000)"
-            echo ""
-            echo "Examples:"
-            echo "  $0 output.mp4                     # Record to file"
-            echo "  $0 output.mp4 60                  # Record 60 seconds"
-            echo "  $0 --resolution 4K output.mp4    # 4K recording"
+            echo "Options: --resolution, --fps, --bitrate"
             exit 0
             ;;
         *)
-            # Positional arguments
-            if [ -z "$OUTPUT_FILE" ]; then
-                OUTPUT_FILE="$1"
-            elif [ "$DURATION" -eq 0 ]; then
-                DURATION="$1"
+            if [ -z "$OUTPUT_FILE" ]; then OUTPUT_FILE="$1"
+            elif [ "$DURATION" -eq 0 ]; then DURATION="$1"
             fi
             shift
             ;;
     esac
 done
 
-# UX: If no output file is provided and we are on a headless system, 
-# default to a file instead of failing to open a window.
+# Auto-set output for headless
 if [ -z "$OUTPUT_FILE" ] && [ -z "$DISPLAY" ]; then
-    OUTPUT_FILE="output_zedone_h265.mp4"
-    echo "Info: No output file specified and no display detected. Defaulting to recording to '$OUTPUT_FILE'"
+    OUTPUT_FILE="output_zedone.mp4"
+    echo "Info: No display detected, defaulting to: $OUTPUT_FILE"
 fi
 
-# Map resolution to zedxonesrc resolution property
-# ZED X One resolutions: SVGA (0), HD1080 (1), HD1200 (2), QHDPLUS (3), 4K (4)
+# Map resolution
 case "$RESOLUTION" in
-    4K|4k|3840|2160)
-        RES_PROP=4
-        RES_NAME="4K (3840x2160)"
-        ;;
-    QHDPLUS|qhdplus|3200|1800)
-        RES_PROP=3
-        RES_NAME="QHD+ (3200x1800)"
-        ;;
-    1200|HD1200)
-        RES_PROP=2
-        RES_NAME="HD1200 (1920x1200)"
-        ;;
-    1080|HD1080)
-        RES_PROP=1
-        RES_NAME="HD1080 (1920x1080)"
-        ;;
-    SVGA|svga|600)
-        RES_PROP=0
-        RES_NAME="SVGA (960x600)"
-        ;;
-    *)
-        RES_PROP=2  # Default: HD1200
-        RES_NAME="HD1200 (1920x1200)"
-        ;;
+    4K|4k|3840|2160) RES_PROP=4; RES_NAME="4K (3840x2160)" ;;
+    QHDPLUS|qhdplus|3200|1800) RES_PROP=3; RES_NAME="QHD+ (3200x1800)" ;;
+    1200|HD1200) RES_PROP=2; RES_NAME="HD1200 (1920x1200)" ;;
+    1080|HD1080) RES_PROP=1; RES_NAME="HD1080 (1920x1080)" ;;
+    SVGA|svga|600) RES_PROP=0; RES_NAME="SVGA (960x600)" ;;
+    *) RES_PROP=2; RES_NAME="HD1200 (1920x1200)" ;;
 esac
 
 echo "=============================================="
-echo " ZED X One Hardware H.265/HEVC Encoding"
+echo " ZED X One Recording Pipeline"
 echo "=============================================="
-echo " Camera: ZED X One (zedxonesrc)"
+echo " Encoder: $(get_encoder_info)"
 echo " Resolution: $RES_NAME"
 echo " FPS: $FPS"
-echo " Bitrate: $BITRATE bps"
+echo " Bitrate: $((BITRATE / 1000000)) Mbps"
 if [ -n "$OUTPUT_FILE" ]; then
     echo " Output: $OUTPUT_FILE"
-    if [ "$DURATION" -gt 0 ]; then
-        echo " Duration: ${DURATION}s"
-    else
-        echo " Duration: Until Ctrl+C"
-    fi
+    [ "$DURATION" -gt 0 ] && echo " Duration: ${DURATION}s" || echo " Duration: Until Ctrl+C"
 else
-    echo " Mode: Preview only (no recording)"
+    echo " Mode: Preview only"
 fi
 echo "=============================================="
 
-# Check if zedxonesrc plugin is available
+# Check for zedxonesrc
 if ! gst-inspect-1.0 zedxonesrc > /dev/null 2>&1; then
     echo "ERROR: zedxonesrc plugin not found!"
-    echo "Please build and install the zed-gstreamer plugin."
     exit 1
 fi
 
-# Check if this is a Jetson platform
 warn_if_not_jetson
 
-# Check if NV12 zero-copy is available for ZED X One
-if gst-inspect-1.0 zedxonesrc 2>/dev/null | grep -q "Raw NV12 zero-copy"; then
-    ZERO_COPY_AVAILABLE=true
-    # stream-type=1 for NV12 zero-copy in zedxonesrc
-    STREAM_TYPE=1
-    echo "Using NV12 zero-copy mode (stream-type=$STREAM_TYPE)"
-else
-    ZERO_COPY_AVAILABLE=false
-    # stream-type=0 for BGRA image
-    STREAM_TYPE=0
-    echo "Zero-copy not available, using BGRA mode (stream-type=$STREAM_TYPE)"
+# Check encoder availability
+if ! has_hw_h265_encoder && ! has_hw_h264_encoder && ! has_sw_h265_encoder && ! has_sw_h264_encoder; then
+    echo "ERROR: No video encoder available!"
+    echo "Install software encoders: sudo apt install gstreamer1.0-plugins-ugly x265"
+    exit 1
 fi
 
-# Build the pipeline based on zero-copy availability
-if [ -n "$OUTPUT_FILE" ]; then
-    # Recording pipeline
-    # Check if we have a display for preview
-    if [ -n "$DISPLAY" ] && xset q &>/dev/null 2>&1; then
-        # Recording with preview (has display)
-        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
-            # Zero-copy path - direct to encoder
-            if [ "$DURATION" -gt 0 ]; then
-                timeout "${DURATION}s" gst-launch-1.0 -e \
-                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=$STREAM_TYPE ! \
-                    tee name=t \
-                    t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                        h265parse ! mp4mux ! filesink location="$OUTPUT_FILE" \
-                    t. ! queue ! nv3dsink sync=false \
-                    || true
-            else
-                gst-launch-1.0 -e \
-                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=$STREAM_TYPE ! \
-                    tee name=t \
-                    t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                        h265parse ! mp4mux ! filesink location="$OUTPUT_FILE" \
-                    t. ! queue ! nv3dsink sync=false
-            fi
-        else
-            # BGRA: Need conversion to NVMM NV12
-            if [ "$DURATION" -gt 0 ]; then
-                timeout "${DURATION}s" gst-launch-1.0 -e \
-                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=$STREAM_TYPE ! \
-                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
-                    tee name=t \
-                    t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                        h265parse ! mp4mux ! filesink location="$OUTPUT_FILE" \
-                    t. ! queue ! nv3dsink sync=false \
-                    || true
-            else
-                gst-launch-1.0 -e \
-                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=$STREAM_TYPE ! \
-                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
-                    tee name=t \
-                    t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                        h265parse ! mp4mux ! filesink location="$OUTPUT_FILE" \
-                    t. ! queue ! nv3dsink sync=false
-            fi
-        fi
-    else
-        # Recording only (no display / SSH session)
-        echo "No display detected - recording without preview"
-        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
-            # Zero-copy path
-            if [ "$DURATION" -gt 0 ]; then
-                timeout "${DURATION}s" gst-launch-1.0 -e \
-                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=$STREAM_TYPE ! \
-                    nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                    h265parse ! mp4mux ! filesink location="$OUTPUT_FILE" \
-                    || true
-            else
-                gst-launch-1.0 -e \
-                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=$STREAM_TYPE ! \
-                    nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                    h265parse ! mp4mux ! filesink location="$OUTPUT_FILE"
-            fi
-        else
-            # Need conversion to NVMM
-            if [ "$DURATION" -gt 0 ]; then
-                timeout "${DURATION}s" gst-launch-1.0 -e \
-                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=$STREAM_TYPE ! \
-                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
-                    nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                    h265parse ! mp4mux ! filesink location="$OUTPUT_FILE" \
-                    || true
-            else
-                gst-launch-1.0 -e \
-                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=$STREAM_TYPE ! \
-                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
-                    nvv4l2h265enc bitrate=$BITRATE preset-level=1 ! \
-                    h265parse ! mp4mux ! filesink location="$OUTPUT_FILE"
-            fi
-        fi
-    fi
+# Check for zero-copy support in zedxonesrc
+ZERO_COPY_AVAILABLE=false
+if gst-inspect-1.0 zedxonesrc 2>/dev/null | grep -q "Raw NV12 zero-copy"; then
+    ZERO_COPY_AVAILABLE=true
+    STREAM_TYPE=1
+    echo "Using NV12 zero-copy mode (stream-type=1)"
 else
-    # Preview only pipeline
-    if [ "$ZERO_COPY_AVAILABLE" = true ]; then
-        # Zero-copy: NVMM directly to nv3dsink
-        gst-launch-1.0 \
-            zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=$STREAM_TYPE ! \
-            nv3dsink sync=false
-    else
-        # Need conversion to NVMM for display
-        gst-launch-1.0 \
-            zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=$STREAM_TYPE ! \
-            nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
-            nv3dsink sync=false
+    STREAM_TYPE=0
+    echo "Using BGRA mode (stream-type=0)"
+fi
+
+# Determine if using software encoder
+if ! has_hw_h265_encoder && ! has_hw_h264_encoder; then
+    echo "WARNING: Using software encoder - expect higher CPU usage"
+fi
+
+# Run the appropriate pipeline
+run_pipeline() {
+    if [ -z "$OUTPUT_FILE" ]; then
+        # Preview only
+        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+            gst-launch-1.0 zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=1 ! \
+                nv3dsink sync=false
+        else
+            gst-launch-1.0 zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+                nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! nv3dsink sync=false
+        fi
+        return
     fi
+    
+    # Recording pipelines
+    if has_hw_h265_encoder; then
+        # Hardware H.265
+        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+            if [ -n "$DISPLAY" ] && xset q &>/dev/null 2>&1; then
+                gst-launch-1.0 -e \
+                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=1 ! \
+                    tee name=t \
+                    t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
+                        h265parse ! mp4mux ! filesink location="$OUTPUT_FILE" \
+                    t. ! queue ! nv3dsink sync=false
+            else
+                gst-launch-1.0 -e \
+                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=1 ! \
+                    nvv4l2h265enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
+                    h265parse ! mp4mux ! filesink location="$OUTPUT_FILE"
+            fi
+        else
+            if [ -n "$DISPLAY" ] && xset q &>/dev/null 2>&1; then
+                gst-launch-1.0 -e \
+                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                    tee name=t \
+                    t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
+                        h265parse ! mp4mux ! filesink location="$OUTPUT_FILE" \
+                    t. ! queue ! nv3dsink sync=false
+            else
+                gst-launch-1.0 -e \
+                    zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                    nvv4l2h265enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
+                    h265parse ! mp4mux ! filesink location="$OUTPUT_FILE"
+            fi
+        fi
+    elif has_hw_h264_encoder; then
+        # Hardware H.264
+        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+            gst-launch-1.0 -e \
+                zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=1 ! \
+                nvv4l2h264enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
+                h264parse ! mp4mux ! filesink location="$OUTPUT_FILE"
+        else
+            gst-launch-1.0 -e \
+                zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+                nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                nvv4l2h264enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
+                h264parse ! mp4mux ! filesink location="$OUTPUT_FILE"
+        fi
+    elif has_sw_h265_encoder; then
+        # Software H.265 (Orin Nano)
+        gst-launch-1.0 -e \
+            zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+            videoconvert ! \
+            x265enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency ! \
+            h265parse ! mp4mux ! filesink location="$OUTPUT_FILE"
+    elif has_sw_h264_encoder; then
+        # Software H.264
+        gst-launch-1.0 -e \
+            zedxonesrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
+            videoconvert ! video/x-raw,format=I420 ! \
+            x264enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency ! \
+            h264parse ! mp4mux ! filesink location="$OUTPUT_FILE"
+    fi
+}
+
+if [ "$DURATION" -gt 0 ]; then
+    timeout "${DURATION}s" bash -c "$(declare -f run_pipeline has_hw_h265_encoder has_hw_h264_encoder has_sw_h265_encoder has_sw_h264_encoder); RES_PROP=$RES_PROP FPS=$FPS BITRATE=$BITRATE OUTPUT_FILE='$OUTPUT_FILE' ZERO_COPY_AVAILABLE=$ZERO_COPY_AVAILABLE DISPLAY='$DISPLAY' run_pipeline" || true
+else
+    run_pipeline || true
 fi
 
 echo ""

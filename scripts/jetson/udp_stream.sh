@@ -59,10 +59,20 @@ declare -A RES_NAMES=(
 
 IP_ADDR=$(hostname -I | awk '{print $1}')
 
+# Determine codec for client instructions
+if has_hw_h265_encoder || has_sw_h265_encoder; then
+    CODEC="H265"
+    CODEC_LOWER="h265"
+else
+    CODEC="H264"
+    CODEC_LOWER="h264"
+fi
+
 echo "=============================================="
 echo " ZED UDP Streaming (Lowest Latency)"
 echo "=============================================="
 print_camera_info
+echo " Encoder: $(get_encoder_info)"
 echo " Sending to: $CLIENT_IP:$PORT"
 echo " Resolution: ${RES_NAMES[$RESOLUTION]:-$RESOLUTION}"
 echo " FPS: $FPS"
@@ -72,7 +82,7 @@ echo ""
 echo " Client command (run on $CLIENT_IP):"
 echo ""
 echo " GStreamer (recommended):"
-echo "   gst-launch-1.0 udpsrc port=$PORT ! 'application/x-rtp,encoding-name=H265' ! rtph265depay ! h265parse ! avdec_h265 ! autovideosink sync=false"
+echo "   gst-launch-1.0 udpsrc port=$PORT ! 'application/x-rtp,encoding-name=$CODEC' ! rtp${CODEC_LOWER}depay ! ${CODEC_LOWER}parse ! avdec_${CODEC_LOWER} ! autovideosink sync=false"
 echo ""
 echo " FFplay:"
 echo "   ffplay -fflags nobuffer -flags low_delay -framedrop -protocol_whitelist file,udp,rtp -i udp://@:$PORT"
@@ -81,41 +91,50 @@ echo "=============================================="
 
 echo "Starting UDP stream..."
 
-# Generate SDP file for client
-SDP_CONTENT="v=0
-o=- 0 0 IN IP4 $CLIENT_IP
-s=ZED Stream
-c=IN IP4 $CLIENT_IP
-t=0 0
-m=video $PORT RTP/AVP 96
-a=rtpmap:96 H265/90000"
-
-echo ""
-echo " If using ffplay, create this SDP file on client:"
-echo "-----"
-echo "$SDP_CONTENT"
-echo "-----"
-echo " Save as stream.sdp and run:"
-echo "   ffplay -fflags nobuffer -flags low_delay -framedrop -protocol_whitelist file,udp,rtp stream.sdp"
-echo ""
-
-# Direct UDP/RTP stream - absolute minimum latency
-# No RTSP session, no MPEG-TS muxing, just raw RTP packets
+# Build source pipeline based on camera type
 if is_zero_copy_available; then
-    # Zero-copy NV12 path
+    SOURCE="zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS"
+else
+    SOURCE="zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! nvvideoconvert ! video/x-raw(memory:NVMM),format=NV12"
+fi
+
+# Select encoder based on hardware availability
+if has_hw_h265_encoder; then
+    # Hardware H.265
     gst-launch-1.0 -e \
-        zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        $SOURCE ! \
         nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
         h265parse config-interval=1 ! \
         rtph265pay config-interval=1 ! \
         udpsink host=$CLIENT_IP port=$PORT sync=false async=false
-else
-    # BGRA with conversion path (USB or older SDK)
+elif has_hw_h264_encoder; then
+    # Hardware H.264
+    gst-launch-1.0 -e \
+        $SOURCE ! \
+        nvv4l2h264enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
+        h264parse config-interval=1 ! \
+        rtph264pay config-interval=1 ! \
+        udpsink host=$CLIENT_IP port=$PORT sync=false async=false
+elif has_sw_h265_encoder; then
+    # Software H.265 (Orin Nano)
+    echo "WARNING: Using software encoder - expect higher CPU usage"
     gst-launch-1.0 -e \
         zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
-        nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
-        nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
+        x265enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency key-int-max=$FPS ! \
         h265parse config-interval=1 ! \
         rtph265pay config-interval=1 ! \
         udpsink host=$CLIENT_IP port=$PORT sync=false async=false
+elif has_sw_h264_encoder; then
+    # Software H.264
+    echo "WARNING: Using software encoder - expect higher CPU usage"
+    gst-launch-1.0 -e \
+        zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        videoconvert ! video/x-raw,format=I420 ! \
+        x264enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency key-int-max=$FPS ! \
+        h264parse config-interval=1 ! \
+        rtph264pay config-interval=1 ! \
+        udpsink host=$CLIENT_IP port=$PORT sync=false async=false
+else
+    echo "ERROR: No video encoder available!"
+    exit 1
 fi

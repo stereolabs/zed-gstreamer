@@ -62,6 +62,7 @@ echo "=============================================="
 echo " ZED RTSP Streaming (Low Latency)"
 echo "=============================================="
 print_camera_info
+echo " Encoder: $(get_encoder_info)"
 echo " Stream URL: rtsp://$IP_ADDR:$PORT/zed-stream"
 echo " Resolution: ${RES_NAMES[$RESOLUTION]:-$RESOLUTION}"
 echo " FPS: $FPS"
@@ -69,34 +70,64 @@ echo " Bitrate: $((BITRATE / 1000000)) Mbps"
 echo "=============================================="
 echo ""
 echo " Client command (copy & paste):"
-echo " ffplay -probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay -framedrop -sync ext -rtsp_transport udp rtsp://$IP_ADDR:$PORT/zed-stream"
+if has_hw_h265_encoder || has_sw_h265_encoder; then
+    echo " ffplay -probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay -framedrop -sync ext -rtsp_transport udp rtsp://$IP_ADDR:$PORT/zed-stream"
+else
+    echo " ffplay -probesize 32 -analyzeduration 0 -fflags nobuffer -flags low_delay -framedrop -sync ext rtsp://$IP_ADDR:$PORT/zed-stream"
+fi
 echo ""
 echo "=============================================="
 
 # gst-zed-rtsp-launch is installed to /usr/bin by 'make install'
-if command -v gst-zed-rtsp-launch > /dev/null 2>&1; then
-    # Low-latency encoder settings:
-    # - preset-level=4 (UltraFast) for minimum encoding latency
-    # - maxperf-enable=true for maximum encoder performance
-    # - iframeinterval=$FPS for 1 keyframe per second
-    if is_zero_copy_available; then
-        # Zero-copy NV12 path
-        gst-zed-rtsp-launch -p $PORT -a 0.0.0.0 \
-            zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
-            nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
-            h265parse config-interval=1 ! \
-            rtph265pay name=pay0 pt=96
-    else
-        # BGRA with conversion path (USB or older SDK)
-        gst-zed-rtsp-launch -p $PORT -a 0.0.0.0 \
-            zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
-            nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
-            nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
-            h265parse config-interval=1 ! \
-            rtph265pay name=pay0 pt=96
-    fi
-else
+if ! command -v gst-zed-rtsp-launch > /dev/null 2>&1; then
     echo "ERROR: gst-zed-rtsp-launch not found."
     echo "Run 'sudo make install' in the zed-gstreamer build directory."
+    exit 1
+fi
+
+# Build source pipeline based on camera type
+if is_zero_copy_available; then
+    SOURCE="zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS"
+else
+    SOURCE="zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! nvvideoconvert ! video/x-raw(memory:NVMM),format=NV12"
+fi
+
+# Select encoder based on hardware availability
+# Priority: HW H.265 > HW H.264 > SW H.265 > SW H.264
+if has_hw_h265_encoder; then
+    # Hardware H.265 (Orin, Xavier, etc.)
+    gst-zed-rtsp-launch -p $PORT -a 0.0.0.0 \
+        $SOURCE ! \
+        nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
+        h265parse config-interval=1 ! \
+        rtph265pay name=pay0 pt=96
+elif has_hw_h264_encoder; then
+    # Hardware H.264 (fallback if no H.265)
+    gst-zed-rtsp-launch -p $PORT -a 0.0.0.0 \
+        $SOURCE ! \
+        nvv4l2h264enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
+        h264parse config-interval=1 ! \
+        rtph264pay name=pay0 pt=96
+elif has_sw_h265_encoder; then
+    # Software H.265 (Orin Nano - no NVENC)
+    echo "WARNING: Using software encoder - expect higher CPU usage and latency"
+    # Need to convert from NVMM to system memory for software encoder
+    gst-zed-rtsp-launch -p $PORT -a 0.0.0.0 \
+        zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        x265enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency key-int-max=$FPS ! \
+        h265parse config-interval=1 ! \
+        rtph265pay name=pay0 pt=96
+elif has_sw_h264_encoder; then
+    # Software H.264 (last resort)
+    echo "WARNING: Using software encoder - expect higher CPU usage and latency"
+    gst-zed-rtsp-launch -p $PORT -a 0.0.0.0 \
+        zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        videoconvert ! video/x-raw,format=I420 ! \
+        x264enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency key-int-max=$FPS ! \
+        h264parse config-interval=1 ! \
+        rtph264pay name=pay0 pt=96
+else
+    echo "ERROR: No video encoder available!"
+    echo "Install software encoders: sudo apt install gstreamer1.0-plugins-ugly"
     exit 1
 fi

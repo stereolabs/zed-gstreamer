@@ -390,6 +390,104 @@ test_zedsrc_enums() {
             test_fail "zedsrc has depth mode '$mode'"
         fi
     done
+    
+    # Test stream-type enum values
+    local stream_types=("Left image" "Right image" "Stereo couple" "Depth image")
+    for stype in "${stream_types[@]}"; do
+        if gst-inspect-1.0 zedsrc 2>&1 | grep -q "$stype"; then
+            test_pass "zedsrc has stream-type '$stype'"
+        else
+            test_fail "zedsrc has stream-type '$stype'"
+        fi
+    done
+}
+
+test_zedsrc_nv12() {
+    print_subheader "ZedSrc NV12 Zero-Copy Tests"
+    
+    # Check if zedsrc is available
+    if ! gst-inspect-1.0 zedsrc > /dev/null 2>&1; then
+        skip_test "ZedSrc NV12 tests" "zedsrc not available"
+        return 0
+    fi
+    
+    # Check if NV12 zero-copy is available for zedsrc
+    local zedsrc_zerocopy_available=false
+    if gst-inspect-1.0 zedsrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
+        zedsrc_zerocopy_available=true
+        test_pass "zedsrc supports NV12 zero-copy (stream-type=6/7)"
+    else
+        skip_test "zedsrc NV12 zero-copy" "SDK < 5.2 or not built with Advanced Capture API"
+    fi
+    
+    # Check for AUTO stream type with NV12 preference
+    if gst-inspect-1.0 zedsrc 2>&1 | grep -q "Auto.*NV12 zero-copy\|prefer NV12 zero-copy"; then
+        test_pass "zedsrc has STREAM_AUTO with NV12 preference"
+    else
+        # May not have zero-copy but should still have AUTO
+        if gst-inspect-1.0 zedsrc 2>&1 | grep -q "Auto-negotiate"; then
+            test_pass "zedsrc has STREAM_AUTO"
+        else
+            test_fail "zedsrc has STREAM_AUTO"
+        fi
+    fi
+    
+    # Hardware test for NV12 zero-copy
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "ZedSrc NV12 hardware test" "No camera detected"
+        return 2
+    fi
+    
+    # Only test on Jetson with zero-copy available
+    if [ ! -f /etc/nv_tegra_release ]; then
+        skip_test "ZedSrc NV12 hardware test" "Not a Jetson platform"
+        return 0
+    fi
+    
+    if [ "$zedsrc_zerocopy_available" = false ]; then
+        skip_test "ZedSrc NV12 hardware test" "Zero-copy not available"
+        return 0
+    fi
+    
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        local timeout_val=30
+        local num_buffers=10
+        local output
+        
+        # Test stream-type=6 (single NV12 zero-copy)
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 num-buffers=$num_buffers ! \
+            'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
+        if [ $? -eq 0 ]; then
+            test_pass "ZedSrc NV12 zero-copy pipeline (stream-type=6)"
+        else
+            if echo "$output" | grep -qi "no camera\|not found\|failed to open\|not supported"; then
+                skip_test "ZedSrc NV12 zero-copy pipeline" "Not supported on this camera model"
+            else
+                test_fail "ZedSrc NV12 zero-copy pipeline (stream-type=6)"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+            fi
+        fi
+        
+        sleep $CAMERA_RESET_DELAY
+        
+        # Test stream-type=7 (stereo NV12 zero-copy)
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=7 num-buffers=$num_buffers ! \
+            'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
+        if [ $? -eq 0 ]; then
+            test_pass "ZedSrc NV12 stereo zero-copy pipeline (stream-type=7)"
+        else
+            if echo "$output" | grep -qi "no camera\|not found\|failed to open\|not supported"; then
+                skip_test "ZedSrc NV12 stereo zero-copy pipeline" "Not supported on this camera model"
+            else
+                test_fail "ZedSrc NV12 stereo zero-copy pipeline (stream-type=7)"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+            fi
+        fi
+        
+        sleep $CAMERA_RESET_DELAY
+    else
+        skip_test "ZedSrc NV12 hardware test" "Extensive mode required"
+    fi
 }
 
 test_element_pads() {
@@ -2785,6 +2883,7 @@ main() {
     test_plugin_properties
     test_plugin_factory
     test_zedsrc_enums
+    test_zedsrc_nv12
     test_element_pads
     test_zedxone
     test_zedxone_nv12

@@ -61,6 +61,7 @@ echo "=============================================="
 echo " ZED SRT Streaming (Ultra Low Latency)"
 echo "=============================================="
 print_camera_info
+echo " Encoder: $(get_encoder_info)"
 echo " Stream URL: srt://$IP_ADDR:$PORT"
 echo " Resolution: ${RES_NAMES[$RESOLUTION]:-$RESOLUTION}"
 echo " FPS: $FPS"
@@ -82,22 +83,50 @@ fi
 
 echo "Starting SRT server (listener mode)..."
 
-# SRT streaming with MPEG-TS container
+# Build source pipeline based on camera type
 if is_zero_copy_available; then
-    # Zero-copy NV12 path
+    SOURCE="zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS"
+else
+    SOURCE="zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! nvvideoconvert ! video/x-raw(memory:NVMM),format=NV12"
+fi
+
+# Select encoder based on hardware availability
+if has_hw_h265_encoder; then
+    # Hardware H.265
     gst-launch-1.0 -e \
-        zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        $SOURCE ! \
         nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
         h265parse config-interval=1 ! \
+        mpegtsmux alignment=7 ! \
+        srtsink uri="srt://:$PORT" latency=$SRT_LATENCY mode=listener wait-for-connection=true
+elif has_hw_h264_encoder; then
+    # Hardware H.264
+    gst-launch-1.0 -e \
+        $SOURCE ! \
+        nvv4l2h264enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
+        h264parse config-interval=1 ! \
+        mpegtsmux alignment=7 ! \
+        srtsink uri="srt://:$PORT" latency=$SRT_LATENCY mode=listener wait-for-connection=true
+elif has_sw_h265_encoder; then
+    # Software H.265 (Orin Nano)
+    echo "WARNING: Using software encoder - expect higher CPU usage"
+    gst-launch-1.0 -e \
+        zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        x265enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency key-int-max=$FPS ! \
+        h265parse config-interval=1 ! \
+        mpegtsmux alignment=7 ! \
+        srtsink uri="srt://:$PORT" latency=$SRT_LATENCY mode=listener wait-for-connection=true
+elif has_sw_h264_encoder; then
+    # Software H.264
+    echo "WARNING: Using software encoder - expect higher CPU usage"
+    gst-launch-1.0 -e \
+        zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        videoconvert ! video/x-raw,format=I420 ! \
+        x264enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency key-int-max=$FPS ! \
+        h264parse config-interval=1 ! \
         mpegtsmux alignment=7 ! \
         srtsink uri="srt://:$PORT" latency=$SRT_LATENCY mode=listener wait-for-connection=true
 else
-    # BGRA with conversion path (USB or older SDK)
-    gst-launch-1.0 -e \
-        zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
-        nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
-        nvv4l2h265enc bitrate=$BITRATE preset-level=4 iframeinterval=$FPS insert-sps-pps=true maxperf-enable=true ! \
-        h265parse config-interval=1 ! \
-        mpegtsmux alignment=7 ! \
-        srtsink uri="srt://:$PORT" latency=$SRT_LATENCY mode=listener wait-for-connection=true
+    echo "ERROR: No video encoder available!"
+    exit 1
 fi

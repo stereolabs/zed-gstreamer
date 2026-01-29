@@ -201,6 +201,60 @@ check_gst_plugin() {
     return 0
 }
 
+# Check if hardware H.265 encoder is available
+# Orin Nano only has NVDEC (decoder), no NVENC (encoder)
+has_hw_h265_encoder() {
+    if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
+        # Plugin exists, but check if it actually works (Orin Nano has the plugin but no HW)
+        # Try a quick encode test
+        if timeout 2 gst-launch-1.0 videotestsrc num-buffers=1 ! \
+            "video/x-raw,width=320,height=240" ! nvvideoconvert ! \
+            "video/x-raw(memory:NVMM),format=NV12" ! nvv4l2h265enc ! \
+            fakesink > /dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Check if hardware H.264 encoder is available
+has_hw_h264_encoder() {
+    if gst-inspect-1.0 nvv4l2h264enc > /dev/null 2>&1; then
+        if timeout 2 gst-launch-1.0 videotestsrc num-buffers=1 ! \
+            "video/x-raw,width=320,height=240" ! nvvideoconvert ! \
+            "video/x-raw(memory:NVMM),format=NV12" ! nvv4l2h264enc ! \
+            fakesink > /dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Check if software x265 encoder is available
+has_sw_h265_encoder() {
+    gst-inspect-1.0 x265enc > /dev/null 2>&1
+}
+
+# Check if software x264 encoder is available
+has_sw_h264_encoder() {
+    gst-inspect-1.0 x264enc > /dev/null 2>&1
+}
+
+# Get encoder info string for display
+get_encoder_info() {
+    if has_hw_h265_encoder; then
+        echo "Hardware H.265 (nvv4l2h265enc)"
+    elif has_hw_h264_encoder; then
+        echo "Hardware H.264 (nvv4l2h264enc)"
+    elif has_sw_h265_encoder; then
+        echo "Software H.265 (x265enc) - slower"
+    elif has_sw_h264_encoder; then
+        echo "Software H.264 (x264enc) - slower"
+    else
+        echo "No encoder available!"
+    fi
+}
+
 # Validate all required plugins for encoding pipelines
 check_encoding_plugins() {
     local missing=0
@@ -215,8 +269,10 @@ check_encoding_plugins() {
         missing=1
     fi
     
-    if ! check_gst_plugin nvv4l2h265enc; then
-        echo "       NVIDIA V4L2 encoder plugins may not be installed."
+    # Check for at least one encoder
+    if ! has_hw_h265_encoder && ! has_hw_h264_encoder && ! has_sw_h265_encoder && ! has_sw_h264_encoder; then
+        echo "       No video encoder available!"
+        echo "       For software encoding: sudo apt install gstreamer1.0-plugins-ugly"
         missing=1
     fi
     
