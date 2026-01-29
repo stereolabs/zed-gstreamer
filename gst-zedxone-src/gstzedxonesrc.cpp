@@ -25,6 +25,11 @@
 #include <math.h>
 #include <unistd.h>
 
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+#include <gst/allocators/gstdmabuf.h>
+#include <nvbufsurface.h>
+#endif
+
 #include "gst-zed-meta/gstzedmeta.h"
 #include "gstzedxonesrc.h"
 
@@ -50,6 +55,10 @@ static gboolean gst_zedxonesrc_unlock_stop(GstBaseSrc *src);
 static gboolean gst_zedxonesrc_query(GstBaseSrc *src, GstQuery *query);
 
 static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *src, GstBuffer *buf);
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *src, GstBuffer **buf);
+#endif
 
 enum {
     PROP_0,
@@ -91,8 +100,18 @@ enum {
     PROP_DIGITAL_GAIN_RANGE_MAX,
     PROP_DENOISING,
     PROP_OUTPUT_RECTIFIED_IMAGE,
+    PROP_STREAM_TYPE,
     N_PROPERTIES
 };
+
+typedef enum {
+    GST_ZEDXONESRC_STREAM_AUTO =
+        -1,   // Auto-negotiate: prefer NV12 zero-copy if downstream accepts
+    GST_ZEDXONESRC_STREAM_IMAGE = 0,   // Single image (BGRA)
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    GST_ZEDXONESRC_RAW_NV12 = 1,   // Zero-copy NV12 raw buffer
+#endif
+} GstZedXOneSrcStreamType;
 
 typedef enum {
     GST_ZEDXONESRC_SVGA,      // 960 x 600
@@ -167,7 +186,31 @@ typedef enum {
 #define DEFAULT_PROP_DIGITAL_GAIN_RANGE_MAX 256
 #define DEFAULT_PROP_DENOISING 50
 #define DEFAULT_PROP_OUTPUT_RECTIFIED_IMAGE TRUE
+#define DEFAULT_PROP_STREAM_TYPE GST_ZEDXONESRC_STREAM_AUTO
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define GST_TYPE_ZEDXONE_STREAM_TYPE (gst_zedxonesrc_stream_type_get_type())
+static GType gst_zedxonesrc_stream_type_get_type(void) {
+    static GType zedxonesrc_stream_type_type = 0;
+
+    if (!zedxonesrc_stream_type_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDXONESRC_STREAM_AUTO,
+             "Auto-negotiate format based on downstream (prefer NV12 zero-copy)",
+             "Auto [prefer NV12 zero-copy]"},
+            {GST_ZEDXONESRC_STREAM_IMAGE, "8 bits- 4 channels image", "Image [BGRA]"},
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+            {GST_ZEDXONESRC_RAW_NV12, "Zero-copy NV12 raw buffer", "Raw NV12 zero-copy [NV12]"},
+#endif
+            {0, NULL, NULL},
+        };
+
+        zedxonesrc_stream_type_type =
+            g_enum_register_static("GstZedXOneSrcStreamType", pattern_types);
+    }
+
+    return zedxonesrc_stream_type_type;
+}
 
 #define GST_TYPE_ZEDXONE_RESOL (gst_zedxonesrc_resol_get_type())
 static GType gst_zedxonesrc_resol_get_type(void) {
@@ -256,37 +299,70 @@ static GType gst_zedxonesrc_coord_sys_get_type(void) {
 }
 
 /* pad templates */
-static GstStaticPadTemplate gst_zedxonesrc_src_template =
-    GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
-                            GST_STATIC_CAPS(("video/x-raw, "   // Color 4K
-                                             "format = (string)BGRA, "
-                                             "width = (int)3840, "
-                                             "height = (int)2160, "
-                                             "framerate = (fraction) { 15, 30 }"
-                                             ";"
-                                             "video/x-raw, "   // Color QHDPLUS
-                                             "format = (string)BGRA, "
-                                             "width = (int)3200, "
-                                             "height = (int)1800, "
-                                             "framerate = (fraction) { 15, 30 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1200
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color SVGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }")));
+static GstStaticPadTemplate gst_zedxonesrc_src_template = GST_STATIC_PAD_TEMPLATE(
+    "src", GST_PAD_SRC, GST_PAD_ALWAYS,
+    GST_STATIC_CAPS(("video/x-raw, "   // Color 4K
+                     "format = (string)BGRA, "
+                     "width = (int)3840, "
+                     "height = (int)2160, "
+                     "framerate = (fraction) { 15, 30 }"
+                     ";"
+                     "video/x-raw, "   // Color QHDPLUS
+                     "format = (string)BGRA, "
+                     "width = (int)3200, "
+                     "height = (int)1800, "
+                     "framerate = (fraction) { 15, 30 }"
+                     ";"
+                     "video/x-raw, "   // Color HD1200
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Color HD1080
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Color SVGA
+                     "format = (string)BGRA, "
+                     "width = (int)960, "
+                     "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 4K (zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)3840, "
+                     "height = (int)2160, "
+                     "framerate = (fraction) { 15, 30 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 QHDPLUS (zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)3200, "
+                     "height = (int)1800, "
+                     "framerate = (fraction) { 15, 30 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 HD1200 (zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)1920, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 HD1080 (zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)1920, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 SVGA (zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)960, "
+                     "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+#endif
+                     )));
 
 /* Tools */
 bool resol_to_w_h(const GstZedXOneSrcRes &resol, guint32 &out_w, guint32 &out_h) {
@@ -355,6 +431,9 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
     gstbasesrc_class->query = GST_DEBUG_FUNCPTR(gst_zedxonesrc_query);
 
     gstpushsrc_class->fill = GST_DEBUG_FUNCPTR(gst_zedxonesrc_fill);
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    gstpushsrc_class->create = GST_DEBUG_FUNCPTR(gst_zedxonesrc_create);
+#endif
 
     /* Install GObject properties */
     g_object_class_install_property(
@@ -367,6 +446,12 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
         gobject_class, PROP_CAM_FPS,
         g_param_spec_enum("camera-fps", "Camera frame rate", "Camera frame rate", GST_TYPE_ZED_FPS,
                           DEFAULT_PROP_CAM_FPS,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_STREAM_TYPE,
+        g_param_spec_enum("stream-type", "Image stream type", "Image stream type",
+                          GST_TYPE_ZEDXONE_STREAM_TYPE, DEFAULT_PROP_STREAM_TYPE,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -679,6 +764,8 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
 
     src->_denoising = DEFAULT_PROP_DENOISING;
     src->_outputRectifiedImage = DEFAULT_PROP_OUTPUT_RECTIFIED_IMAGE;
+    src->_streamType = DEFAULT_PROP_STREAM_TYPE;
+    src->_resolvedStreamType = -1;   // Not resolved yet
     // <---- Parameters initialization
 
     src->_stopRequested = FALSE;
@@ -820,6 +907,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
     case PROP_OUTPUT_RECTIFIED_IMAGE:
         src->_outputRectifiedImage = g_value_get_boolean(value);
         break;
+    case PROP_STREAM_TYPE:
+        src->_streamType = g_value_get_enum(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
@@ -950,6 +1040,9 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
     case PROP_OUTPUT_RECTIFIED_IMAGE:
         g_value_set_boolean(value, src->_outputRectifiedImage);
         break;
+    case PROP_STREAM_TYPE:
+        g_value_set_enum(value, src->_streamType);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
@@ -1002,13 +1095,93 @@ void gst_zedxonesrc_finalize(GObject *object) {
     G_OBJECT_CLASS(gst_zedxonesrc_parent_class)->finalize(object);
 }
 
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+/* Helper function to check if downstream accepts NV12 NVMM caps */
+static gboolean gst_zedxonesrc_downstream_accepts_nv12_nvmm(GstZedXOneSrc *src) {
+    GstPad *srcpad = GST_BASE_SRC_PAD(src);
+    GstCaps *peer_caps = gst_pad_peer_query_caps(srcpad, NULL);
+    gboolean accepts_nv12_nvmm = FALSE;
+
+    if (peer_caps) {
+        GST_DEBUG_OBJECT(src, "Peer caps for auto-negotiation: %" GST_PTR_FORMAT, peer_caps);
+
+        // Check if any structure has memory:NVMM feature and NV12 format
+        for (guint i = 0; i < gst_caps_get_size(peer_caps); i++) {
+            GstCapsFeatures *features = gst_caps_get_features(peer_caps, i);
+            GstStructure *structure = gst_caps_get_structure(peer_caps, i);
+
+            if (features && gst_caps_features_contains(features, "memory:NVMM")) {
+                const gchar *format = gst_structure_get_string(structure, "format");
+                if (format && g_strcmp0(format, "NV12") == 0) {
+                    accepts_nv12_nvmm = TRUE;
+                    GST_INFO_OBJECT(src, "Downstream accepts NV12 in NVMM memory");
+                    break;
+                }
+                // Also check if format is not specified (accepts any)
+                if (!format) {
+                    accepts_nv12_nvmm = TRUE;
+                    GST_INFO_OBJECT(src, "Downstream accepts NVMM memory (format unspecified)");
+                    break;
+                }
+            }
+        }
+        gst_caps_unref(peer_caps);
+    } else {
+        GST_DEBUG_OBJECT(src, "No peer caps available for auto-negotiation");
+    }
+
+    return accepts_nv12_nvmm;
+}
+#endif
+
+/* Resolve stream-type=AUTO to actual stream type based on downstream caps and SDK capability */
+static void gst_zedxonesrc_resolve_stream_type(GstZedXOneSrc *src) {
+    // If user explicitly set a stream type (not AUTO), use that
+    if (src->_streamType != GST_ZEDXONESRC_STREAM_AUTO) {
+        src->_resolvedStreamType = src->_streamType;
+        GST_DEBUG_OBJECT(src, "Using explicit stream-type=%d", src->_resolvedStreamType);
+        return;
+    }
+
+    // AUTO mode: prefer NV12 zero-copy if available
+    GST_INFO_OBJECT(src, "stream-type=AUTO, checking downstream capabilities...");
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    // Check if downstream accepts NV12 NVMM
+    if (gst_zedxonesrc_downstream_accepts_nv12_nvmm(src)) {
+        src->_resolvedStreamType = GST_ZEDXONESRC_RAW_NV12;
+        GST_INFO_OBJECT(src, "Auto-negotiated to NV12 zero-copy (stream-type=%d)",
+                        src->_resolvedStreamType);
+        return;
+    } else {
+        GST_INFO_OBJECT(src, "Downstream does not accept NV12 NVMM, falling back to BGRA");
+    }
+#else
+    GST_INFO_OBJECT(src, "NV12 zero-copy not available (SDK < 5.2), using BGRA");
+#endif
+
+    // Default fallback: Image in BGRA
+    src->_resolvedStreamType = GST_ZEDXONESRC_STREAM_IMAGE;
+    GST_INFO_OBJECT(src, "Auto-negotiated to BGRA Image (stream-type=%d)",
+                    src->_resolvedStreamType);
+}
+
 static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_calculate_caps");
+
+    // Use resolved stream type which accounts for AUTO negotiation
+    gint stream_type = src->_resolvedStreamType;
 
     guint32 width, height;
     gint fps;
     GstVideoInfo vinfo;
     GstVideoFormat format = GST_VIDEO_FORMAT_BGRA;
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    if (stream_type == GST_ZEDXONESRC_RAW_NV12) {
+        format = GST_VIDEO_FORMAT_NV12;
+    }
+#endif
 
     if (!resol_to_w_h(static_cast<GstZedXOneSrcRes>(src->_cameraResolution), width, height)) {
         return FALSE;
@@ -1026,6 +1199,15 @@ static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
         vinfo.fps_n = fps;
         vinfo.fps_d = 1;
         src->_caps = gst_video_info_to_caps(&vinfo);
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+        // Add memory:NVMM feature for zero-copy NV12 mode
+        if (stream_type == GST_ZEDXONESRC_RAW_NV12) {
+            GstCapsFeatures *features = gst_caps_features_new("memory:NVMM", NULL);
+            gst_caps_set_features(src->_caps, 0, features);
+            GST_INFO_OBJECT(src, "Added memory:NVMM feature for zero-copy");
+        }
+#endif
     }
 
     gst_base_src_set_blocksize(GST_BASE_SRC(src), src->_outFramesize);
@@ -1310,6 +1492,9 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Denoising: %d", src->_denoising);
     // <---- Camera Controls
 
+    // Resolve stream type (AUTO -> actual type based on downstream caps)
+    gst_zedxonesrc_resolve_stream_type(src);
+
     if (!gst_zedxonesrc_calculate_caps(src)) {
         return FALSE;
     }
@@ -1425,6 +1610,156 @@ static gboolean gst_zedxonesrc_query(GstBaseSrc *bsrc, GstQuery *query) {
     return res;
 }
 
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+/* Callback to release the RawBuffer when GstBuffer is unreffed */
+static void raw_buffer_destroy_notify(gpointer data) {
+    sl::RawBuffer *raw_buffer = static_cast<sl::RawBuffer *>(data);
+    if (raw_buffer) {
+        delete raw_buffer;
+    }
+}
+
+/* Create function for zero-copy NV12 mode */
+static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
+    GstZedXOneSrc *src = GST_ZED_X_ONE_SRC(psrc);
+
+    // Use resolved stream type which accounts for AUTO negotiation
+    gint stream_type = src->_resolvedStreamType;
+
+    // For non-NVMM modes, fall back to the default fill() path
+    if (stream_type != GST_ZEDXONESRC_RAW_NV12) {
+        return GST_PUSH_SRC_CLASS(gst_zedxonesrc_parent_class)->create(psrc, outbuf);
+    }
+
+    GST_TRACE_OBJECT(src, "gst_zedxonesrc_create (NVMM zero-copy)");
+
+    sl::ERROR_CODE ret;
+    GstClock *clock = nullptr;
+    GstClockTime clock_time = GST_CLOCK_TIME_NONE;
+
+    // Acquisition start time
+    if (!src->_isStarted) {
+        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (start_clock) {
+            src->_acqStartTime = gst_clock_get_time(start_clock);
+            gst_object_unref(start_clock);
+        }
+        src->_isStarted = TRUE;
+    }
+
+    // Grab frame
+    ret = src->_zed->grab();
+    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
+        GST_INFO_OBJECT(src, "End of SVO file");
+        return GST_FLOW_EOS;
+    } else if (ret != sl::ERROR_CODE::SUCCESS) {
+        GST_ERROR_OBJECT(src, "grab() failed: %s", sl::toString(ret).c_str());
+        return GST_FLOW_ERROR;
+    }
+
+    // Get clock for timestamp
+    clock = gst_element_get_clock(GST_ELEMENT(src));
+    if (clock) {
+        clock_time = gst_clock_get_time(clock);
+        gst_object_unref(clock);
+    }
+
+    // Retrieve RawBuffer - allocate on heap for GstBuffer lifecycle
+    sl::RawBuffer *raw_buffer = new sl::RawBuffer();
+    ret = src->_zed->retrieveImage(*raw_buffer);
+    if (ret != sl::ERROR_CODE::SUCCESS) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()),
+                          (NULL));
+        delete raw_buffer;
+        return GST_FLOW_ERROR;
+    }
+
+    // Get NvBufSurface
+    NvBufSurface *nvbuf = static_cast<NvBufSurface *>(raw_buffer->getRawBuffer());
+    if (!nvbuf) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("RawBuffer returned null NvBufSurface"), (NULL));
+        delete raw_buffer;
+        return GST_FLOW_ERROR;
+    }
+
+    if (nvbuf->numFilled == 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("NvBufSurface has no filled surfaces"), (NULL));
+        delete raw_buffer;
+        return GST_FLOW_ERROR;
+    }
+
+    // Log buffer info
+    NvBufSurfaceParams *params = &nvbuf->surfaceList[0];
+    GST_DEBUG_OBJECT(src, "NvBufSurface: %p, FD: %ld, size: %d, memType: %d, format: %d", nvbuf,
+                     params->bufferDesc, params->dataSize, nvbuf->memType, params->colorFormat);
+
+    // Create GstBuffer wrapping the NvBufSurface pointer directly
+    GstBuffer *buf =
+        gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY, nvbuf, sizeof(NvBufSurface), 0,
+                                    sizeof(NvBufSurface), raw_buffer, raw_buffer_destroy_notify);
+
+    // ----> Info metadata
+    sl::CameraOneInformation cam_info = src->_zed->getCameraInformation();
+    ZedInfo info;
+    info.cam_model = (gint) cam_info.camera_model;
+    info.stream_type = src->_resolvedStreamType;
+    info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
+    info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
+
+    // ----> Sensors metadata
+    ZedSensors sens;
+    sens.sens_avail = TRUE;
+    sl::SensorsData sens_data;
+    src->_zed->getSensorsData(sens_data, sl::TIME_REFERENCE::IMAGE);
+
+    sens.imu.imu_avail = TRUE;
+    sens.imu.acc[0] = sens_data.imu.linear_acceleration.x;
+    sens.imu.acc[1] = sens_data.imu.linear_acceleration.y;
+    sens.imu.acc[2] = sens_data.imu.linear_acceleration.z;
+    sens.imu.gyro[0] = sens_data.imu.angular_velocity.x;
+    sens.imu.gyro[1] = sens_data.imu.angular_velocity.y;
+    sens.imu.gyro[2] = sens_data.imu.angular_velocity.z;
+
+    float temp;
+    sens_data.temperature.get(sl::SensorsData::TemperatureData::SENSOR_LOCATION::IMU, temp);
+    sens.temp.temp_avail = TRUE;
+    sens.temp.temp_cam_left = temp;
+    sens.temp.temp_cam_right = temp;
+
+    sens.mag.mag_avail = FALSE;
+    sens.env.env_avail = FALSE;
+
+    // ----> Positional Tracking metadata
+    ZedPose pose;
+    pose.pose_avail = FALSE;
+    pose.pos_tracking_state = static_cast<int>(sl::POSITIONAL_TRACKING_STATE::OFF);
+    pose.pos[0] = 0.0;
+    pose.pos[1] = 0.0;
+    pose.pos[2] = 0.0;
+    pose.orient[0] = 0.0;
+    pose.orient[1] = 0.0;
+    pose.orient[2] = 0.0;
+
+    // ----> Timestamp meta-data
+    GST_BUFFER_TIMESTAMP(buf) =
+        GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+    GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    GST_BUFFER_OFFSET(buf) = src->_bufferIndex++;
+
+    guint64 offset = GST_BUFFER_OFFSET(buf);
+    gst_buffer_add_zed_src_meta(buf, info, pose, sens, false, 0, NULL, offset);
+
+    if (src->_stopRequested) {
+        gst_buffer_unref(buf);
+        return GST_FLOW_FLUSHING;
+    }
+
+    *outbuf = buf;
+    return GST_FLOW_OK;
+}
+#endif
+
 static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstZedXOneSrc *src = GST_ZED_X_ONE_SRC(psrc);
 
@@ -1500,7 +1835,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     sl::CameraOneInformation cam_info = src->_zed->getCameraInformation();
     ZedInfo info;
     info.cam_model = (gint) cam_info.camera_model;
-    info.stream_type = 0;   // "Only left image"
+    info.stream_type = src->_resolvedStreamType;   // Use resolved type for metadata
     info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
     info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
     // <---- Info metadata

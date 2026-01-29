@@ -715,6 +715,87 @@ test_zedxone() {
     else
         test_fail "zedxonesrc has ctrl-exposure-time property"
     fi
+    
+    if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "stream-type"; then
+        test_pass "zedxonesrc has stream-type property"
+    else
+        test_fail "zedxonesrc has stream-type property"
+    fi
+}
+
+test_zedxone_nv12() {
+    print_subheader "ZED X One NV12 Zero-Copy Tests"
+    
+    # Check if zedxonesrc is available
+    if ! gst-inspect-1.0 zedxonesrc > /dev/null 2>&1; then
+        skip_test "ZED X One NV12 tests" "zedxonesrc not available"
+        return 0
+    fi
+    
+    # Check if NV12 zero-copy is available for zedxonesrc
+    local zedxone_zerocopy_available=false
+    if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
+        zedxone_zerocopy_available=true
+        test_pass "zedxonesrc supports NV12 zero-copy (stream-type=1)"
+    else
+        skip_test "zedxonesrc NV12 zero-copy" "SDK < 5.2 or not built with Advanced Capture API"
+    fi
+    
+    # Check for AUTO stream type
+    if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "Auto.*NV12 zero-copy"; then
+        test_pass "zedxonesrc has STREAM_AUTO with NV12 preference"
+    else
+        # May not have zero-copy but should still have AUTO
+        if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "Auto-negotiate"; then
+            test_pass "zedxonesrc has STREAM_AUTO"
+        else
+            test_fail "zedxonesrc has STREAM_AUTO"
+        fi
+    fi
+    
+    # Hardware test for NV12 zero-copy
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "ZED X One NV12 hardware test" "No camera detected"
+        return 2
+    fi
+    
+    # Only test on Jetson with zero-copy available
+    if [ ! -f /etc/nv_tegra_release ]; then
+        skip_test "ZED X One NV12 hardware test" "Not a Jetson platform"
+        return 0
+    fi
+    
+    if [ "$zedxone_zerocopy_available" = false ]; then
+        skip_test "ZED X One NV12 hardware test" "Zero-copy not available"
+        return 0
+    fi
+    
+    # NOTE: This test will only work if a ZED X One camera is connected
+    # Skip if only stereo cameras are available
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        local timeout_val=30
+        local num_buffers=10
+        
+        # Test stream-type=1 (NV12 zero-copy for ZED X One)
+        local output
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc stream-type=1 num-buffers=$num_buffers ! \
+            'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
+        if [ $? -eq 0 ]; then
+            test_pass "ZED X One NV12 zero-copy pipeline (stream-type=1)"
+        else
+            # May fail if no ZED X One camera is connected (which is OK)
+            if echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
+                skip_test "ZED X One NV12 zero-copy pipeline" "No ZED X One camera detected"
+            else
+                test_fail "ZED X One NV12 zero-copy pipeline (stream-type=1)"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+            fi
+        fi
+        
+        sleep $CAMERA_RESET_DELAY
+    else
+        skip_test "ZED X One NV12 hardware test" "Extensive mode required"
+    fi
 }
 
 test_latency_query() {
@@ -2706,6 +2787,7 @@ main() {
     test_zedsrc_enums
     test_element_pads
     test_zedxone
+    test_zedxone_nv12
     
     # Hardware tests (if available)
     if [ "$HARDWARE_AVAILABLE" = true ]; then
