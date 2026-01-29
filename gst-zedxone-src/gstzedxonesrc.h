@@ -106,6 +106,12 @@ struct _GstZedXOneSrc {
 
     GstCaps *_caps;        // Stream caps
     guint _outFramesize;   // Output frame size in byte
+
+    // Resolution tracking for flexible output caps
+    guint _cameraWidth;    // Native camera resolution width
+    guint _cameraHeight;   // Native camera resolution height
+    guint _outputWidth;    // Negotiated output resolution width
+    guint _outputHeight;   // Negotiated output resolution height
 };
 
 struct _GstZedXOneSrcClass {

@@ -185,6 +185,14 @@ struct _GstZedSrc {
     GstCaps *caps;
     guint out_framesize;
 
+    // Camera native resolution (set after open)
+    guint camera_width;
+    guint camera_height;
+
+    // Output resolution (negotiated via caps, used for retrieveImage)
+    guint output_width;
+    guint output_height;
+
     gboolean stop_requested;
 };
 

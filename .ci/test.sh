@@ -490,6 +490,50 @@ test_zedsrc_nv12() {
     fi
 }
 
+test_ranged_caps() {
+    print_subheader "Ranged Caps Tests (flexible output resolution)"
+    
+    # Test zedsrc pad template has ranged caps
+    if gst-inspect-1.0 zedsrc 2>&1 | grep -q "width: \[ 32,"; then
+        test_pass "zedsrc has ranged width caps [32, max]"
+    else
+        test_fail "zedsrc has ranged width caps [32, max]"
+    fi
+    
+    if gst-inspect-1.0 zedsrc 2>&1 | grep -q "height: \[ 32,"; then
+        test_pass "zedsrc has ranged height caps [32, max]"
+    else
+        test_fail "zedsrc has ranged height caps [32, max]"
+    fi
+    
+    # Check zedxonesrc too (if available)
+    if gst-inspect-1.0 zedxonesrc > /dev/null 2>&1; then
+        if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "width: \[ 32,"; then
+            test_pass "zedxonesrc has ranged width caps [32, max]"
+        else
+            test_fail "zedxonesrc has ranged width caps [32, max]"
+        fi
+        
+        if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "height: \[ 32,"; then
+            test_pass "zedxonesrc has ranged height caps [32, max]"
+        else
+            test_fail "zedxonesrc has ranged height caps [32, max]"
+        fi
+    fi
+    
+    # NV12 zero-copy should still have fixed caps (not ranged)
+    if gst-inspect-1.0 zedsrc 2>&1 | grep -A2 "memory:NVMM" | grep -q "width: {"; then
+        test_pass "zedsrc NV12 zero-copy has fixed caps (not ranged)"
+    else
+        # May not have NV12 zero-copy at all on non-Jetson
+        if gst-inspect-1.0 zedsrc 2>&1 | grep -q "memory:NVMM"; then
+            test_fail "zedsrc NV12 zero-copy has fixed caps"
+        else
+            skip_test "zedsrc NV12 fixed caps check" "NV12 zero-copy not available"
+        fi
+    fi
+}
+
 test_element_pads() {
     print_subheader "Element Pad Tests"
     
@@ -1115,6 +1159,75 @@ test_resolutions() {
     fi
     
     sleep $CAMERA_RESET_DELAY
+}
+
+test_flexible_output_resolution() {
+    print_subheader "Flexible Output Resolution Tests (requires camera)"
+    
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "Flexible resolution zedsrc 960x540" "No camera detected"
+        skip_test "Flexible resolution zedsrc 640x360" "No camera detected"
+        skip_test "Flexible resolution zedxonesrc" "No camera detected"
+        return 2
+    fi
+    
+    local timeout_val=60
+    local num_buffers=10
+    local output
+    
+    # Test zedsrc with 960x540 output (half of 1920x1080)
+    # This tests the ranged caps negotiation and retrieveImage with sl::Resolution
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=1 num-buffers=$num_buffers ! "video/x-raw,width=960,height=540" ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "Flexible resolution zedsrc 960x540 (half 1080p)"
+    else
+        test_fail "Flexible resolution zedsrc 960x540 (half 1080p)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+    fi
+    
+    sleep $CAMERA_RESET_DELAY
+    
+    # Test zedsrc with 640x360 output (third of 1920x1080)
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=1 num-buffers=$num_buffers ! "video/x-raw,width=640,height=360" ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "Flexible resolution zedsrc 640x360 (third 1080p)"
+    else
+        test_fail "Flexible resolution zedsrc 640x360 (third 1080p)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+    fi
+    
+    sleep $CAMERA_RESET_DELAY
+    
+    # Test zedsrc with minimum allowed resolution (32x32)
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=1 num-buffers=$num_buffers ! "video/x-raw,width=32,height=32" ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "Flexible resolution zedsrc 32x32 (minimum)"
+    else
+        test_fail "Flexible resolution zedsrc 32x32 (minimum)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+    fi
+    
+    sleep $CAMERA_RESET_DELAY
+    
+    # Test zedxonesrc flexible resolution (if available)
+    if gst-inspect-1.0 zedxonesrc &>/dev/null; then
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc camera-resolution=2 num-buffers=$num_buffers ! "video/x-raw,width=960,height=540" ! fakesink 2>&1)
+        local exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+            test_pass "Flexible resolution zedxonesrc 960x540"
+        else
+            # Check for timeout (124) or camera-not-found error messages
+            if [ $exit_code -eq 124 ] || echo "$output" | grep -qi "no camera detected\|camera not found\|open failed\|No ZED X One\|failed to open camera\|Camera detection failed\|Unable to open"; then
+                skip_test "Flexible resolution zedxonesrc" "No ZED X One camera detected (timeout or error)"
+            else
+                test_fail "Flexible resolution zedxonesrc 960x540"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|sigsegv\|crash" | head -3
+            fi
+        fi
+        sleep $CAMERA_RESET_DELAY
+    else
+        skip_test "Flexible resolution zedxonesrc" "zedxonesrc plugin not available"
+    fi
 }
 
 test_depth_modes() {
@@ -2884,6 +2997,7 @@ main() {
     test_plugin_factory
     test_zedsrc_enums
     test_zedsrc_nv12
+    test_ranged_caps
     test_element_pads
     test_zedxone
     test_zedxone_nv12
@@ -2900,6 +3014,7 @@ main() {
             test_buffer_metadata
             test_datamux
             test_resolutions
+            test_flexible_output_resolution
             test_depth_modes
             test_positional_tracking
             test_camera_controls
@@ -2923,6 +3038,7 @@ main() {
             test_buffer_metadata
             test_datamux
             test_resolutions
+            test_flexible_output_resolution
             test_depth_modes
             test_positional_tracking
             test_camera_controls
