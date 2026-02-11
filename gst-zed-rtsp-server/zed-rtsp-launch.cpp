@@ -167,9 +167,14 @@ int main(int argc, char *argv[]) {
     g_print(" * Initializing camera (this may take a few seconds)...\n");
     
     GstRTSPUrl *url = NULL;
-    gst_rtsp_url_parse(("rtsp://" + std::string(host) + ":" + std::string(port) + "/zed-stream").c_str(), &url);
-    GstRTSPMedia *media = gst_rtsp_media_factory_construct(factory, url);
-    gst_rtsp_url_free(url);
+    GstRTSPResult parse_result = gst_rtsp_url_parse(("rtsp://" + std::string(host) + ":" + std::string(port) + "/zed-stream").c_str(), &url);
+    GstRTSPMedia *media = NULL;
+    if (parse_result != GST_RTSP_OK || url == NULL) {
+        g_printerr(" * Warning: Failed to parse RTSP URL, media will not be pre-created\n");
+    } else {
+        media = gst_rtsp_media_factory_construct(factory, url);
+        gst_rtsp_url_free(url);
+    }
     
     if (media) {
         GstRTSPThread *thread = gst_rtsp_thread_pool_get_thread(
@@ -186,7 +191,6 @@ int main(int argc, char *argv[]) {
     
     g_print(" * Stream ready at rtsp://%s:%s/zed-stream\n", host, port);
     g_print("-----------------\n");
-    g_print(" * Stream ready at rtsp://%s:%s/zed-stream\n", host, port);
     g_main_loop_run(loop);
     
     /* Cleanup */

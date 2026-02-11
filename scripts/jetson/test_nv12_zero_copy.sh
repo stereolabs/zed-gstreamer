@@ -158,7 +158,7 @@ echo ""
 log_info "Test 1: Basic NVMM pipeline with fakesink..."
 
 TEST1_OUTPUT="$TEST_DIR/test1.log"
-if timeout 10 gst-launch-1.0 zedsrc stream-type=5 num-buffers=10 ! fakesink > "$TEST1_OUTPUT" 2>&1; then
+if timeout 10 gst-launch-1.0 zedsrc stream-type=6 num-buffers=10 ! fakesink > "$TEST1_OUTPUT" 2>&1; then
     if grep -q "Setting pipeline to NULL" "$TEST1_OUTPUT"; then
         log_pass "Basic NVMM pipeline completed successfully"
         log_verbose "Pipeline ran and terminated cleanly"
@@ -182,7 +182,7 @@ log_info "Test 2: Zero-copy to nvv4l2h265enc..."
 TEST2_H265="$TEST_DIR/test2.h265"
 TEST2_OUTPUT="$TEST_DIR/test2.log"
 
-if timeout 30 gst-launch-1.0 zedsrc stream-type=5 num-buffers=30 ! \
+if timeout 30 gst-launch-1.0 zedsrc stream-type=6 num-buffers=30 ! \
     nvv4l2h265enc bitrate=4000000 ! filesink location="$TEST2_H265" > "$TEST2_OUTPUT" 2>&1; then
     
     if [ -f "$TEST2_H265" ]; then
@@ -221,7 +221,7 @@ log_info "Test 3: Zero-copy to MP4 container..."
 TEST3_MP4="$TEST_DIR/test3.mp4"
 TEST3_OUTPUT="$TEST_DIR/test3.log"
 
-if timeout 45 gst-launch-1.0 -e zedsrc stream-type=5 num-buffers=45 ! \
+if timeout 45 gst-launch-1.0 -e zedsrc stream-type=6 num-buffers=45 ! \
     nvv4l2h265enc bitrate=4000000 ! h265parse ! mp4mux ! \
     filesink location="$TEST3_MP4" > "$TEST3_OUTPUT" 2>&1; then
     
@@ -269,7 +269,7 @@ log_info "Test 4: Buffer lifecycle management..."
 TEST4_OUTPUT="$TEST_DIR/test4.log"
 
 # Run with debug to check destroy_notify is called
-GST_DEBUG=zedsrc:5 timeout 20 gst-launch-1.0 zedsrc stream-type=5 num-buffers=10 ! \
+GST_DEBUG=zedsrc:5 timeout 20 gst-launch-1.0 zedsrc stream-type=6 num-buffers=10 ! \
     nvv4l2h265enc ! fakesink > "$TEST4_OUTPUT" 2>&1 || true
 
 # Count buffer releases
@@ -315,7 +315,7 @@ log_info "Test 6: Verify buffer pointer identity (zero-copy proof)..."
 TEST6_OUTPUT="$TEST_DIR/test6.log"
 
 # Run with high debug to capture NvBufSurface addresses
-GST_DEBUG=zedsrc:5 timeout 15 gst-launch-1.0 zedsrc stream-type=5 num-buffers=5 ! \
+GST_DEBUG=zedsrc:5 timeout 15 gst-launch-1.0 zedsrc stream-type=6 num-buffers=5 ! \
     nvv4l2h265enc ! fakesink > "$TEST6_OUTPUT" 2>&1 || true
 
 # Extract unique NvBufSurface pointers
@@ -365,13 +365,13 @@ echo ""
 echo "Example pipelines:"
 echo ""
 echo "  # Direct H.265 encoding:"
-echo "  gst-launch-1.0 zedsrc stream-type=5 ! nvv4l2h265enc ! filesink location=out.h265"
+echo "  gst-launch-1.0 zedsrc stream-type=6 ! nvv4l2h265enc ! filesink location=out.h265"
 echo ""
 echo "  # MP4 recording:"
-echo "  gst-launch-1.0 -e zedsrc stream-type=5 ! nvv4l2h265enc ! h265parse ! mp4mux ! filesink location=out.mp4"
+echo "  gst-launch-1.0 -e zedsrc stream-type=6 ! nvv4l2h265enc ! h265parse ! mp4mux ! filesink location=out.mp4"
 echo ""
 echo "  # With display (requires X11):"
-echo "  gst-launch-1.0 zedsrc stream-type=5 ! nv3dsink"
+echo "  gst-launch-1.0 zedsrc stream-type=6 ! nv3dsink"
 echo ""
 
 exit 0

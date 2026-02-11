@@ -17,7 +17,7 @@ print_camera_info
 
 if is_zero_copy_available; then
     # Zero-copy NV12 path - direct to display
-    gst-launch-1.0 zedsrc stream-type=5 ! queue ! nv3dsink sync=false
+    gst-launch-1.0 zedsrc stream-type=6 ! queue ! nv3dsink sync=false
 else
     # BGRA path with conversion to NVMM for display
     gst-launch-1.0 zedsrc stream-type=0 ! queue ! nvvideoconvert ! \

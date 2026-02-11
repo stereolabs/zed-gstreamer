@@ -26,12 +26,10 @@ import sys
 import time
 import threading
 from collections import deque
-from datetime import datetime
 
 import gi
 gi.require_version('Gst', '1.0')
-gi.require_version('GstApp', '1.0')
-from gi.repository import Gst, GstApp, GLib
+from gi.repository import Gst, GLib
 
 # Initialize GStreamer
 Gst.init(None)
@@ -209,9 +207,11 @@ class BufferHoldTest:
             
         elif t == Gst.MessageType.QOS:
             # Quality of Service - indicates dropped buffers
-            qos_vals = message.parse_qos()
+            qos_type, proportion, diff, timestamp = message.parse_qos()
             if self.verbose:
-                print(f"  [QOS] Dropped buffer reported")
+                print(f"  [QOS] Dropped buffer reported "
+                      f"(type={qos_type}, proportion={proportion}, "
+                      f"diff={diff}, timestamp={timestamp})")
                 
         elif t == Gst.MessageType.STATE_CHANGED:
             if message.src == self.pipeline:

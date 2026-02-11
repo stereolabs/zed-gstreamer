@@ -99,7 +99,7 @@ run_pipeline() {
     if [ -z "$OUTPUT_FILE" ]; then
         # Preview only
         if is_zero_copy_available; then
-            gst-launch-1.0 zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
+            gst-launch-1.0 zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=6 ! \
                 nv3dsink sync=false
         else
             gst-launch-1.0 zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
@@ -115,14 +115,14 @@ run_pipeline() {
             # Zero-copy NV12 path
             if [ -n "$DISPLAY" ] && xset q &>/dev/null 2>&1; then
                 $duration_opt gst-launch-1.0 -e \
-                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
+                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=6 ! \
                     tee name=t \
                     t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
                         h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
                     t. ! queue ! nv3dsink sync=false
             else
                 $duration_opt gst-launch-1.0 -e \
-                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
+                    zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=6 ! \
                     nvv4l2h265enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
                     h265parse ! mp4mux ! filesink location=$OUTPUT_FILE
             fi
@@ -148,7 +148,7 @@ run_pipeline() {
         # Hardware H.264 encoder
         if is_zero_copy_available; then
             $duration_opt gst-launch-1.0 -e \
-                zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=5 ! \
+                zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=6 ! \
                 nvv4l2h264enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
                 h264parse ! mp4mux ! filesink location=$OUTPUT_FILE
         else
@@ -162,7 +162,7 @@ run_pipeline() {
         # Software H.265 (Orin Nano)
         $duration_opt gst-launch-1.0 -e \
             zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
-            videoconvert ! \
+            videoconvert ! video/x-raw,format=I420 ! \
             x265enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency ! \
             h265parse ! mp4mux ! filesink location=$OUTPUT_FILE
     elif has_sw_h264_encoder; then

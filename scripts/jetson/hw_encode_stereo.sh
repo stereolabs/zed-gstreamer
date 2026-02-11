@@ -102,7 +102,7 @@ run_pipeline() {
         echo "Using software H.265 (stereo not supported, recording left only)..."
         gst-launch-1.0 -e \
             zedsrc camera-resolution=2 camera-fps=$FPS stream-type=0 ! \
-            videoconvert ! \
+            videoconvert ! video/x-raw,format=I420 ! \
             x265enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency ! \
             h265parse ! mp4mux ! filesink location=$OUTPUT_FILE
     elif has_sw_h264_encoder; then

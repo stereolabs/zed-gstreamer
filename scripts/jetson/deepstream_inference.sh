@@ -172,7 +172,7 @@ if [ -n "$OUTPUT_FILE" ]; then
     if is_zero_copy_available; then
         # Zero-copy NV12 path
         gst-launch-1.0 -e \
-            zedsrc camera-resolution=2 camera-fps=$FPS stream-type=5 ! \
+            zedsrc camera-resolution=2 camera-fps=$FPS stream-type=6 ! \
             "video/x-raw(memory:NVMM),format=NV12" ! \
             nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
             m.sink_0 nvstreammux name=m batch-size=1 width=1920 height=1200 ! \
@@ -198,7 +198,7 @@ else
     if is_zero_copy_available; then
         # Zero-copy NV12 path
         gst-launch-1.0 \
-            zedsrc camera-resolution=2 camera-fps=$FPS stream-type=5 ! \
+            zedsrc camera-resolution=2 camera-fps=$FPS stream-type=6 ! \
             "video/x-raw(memory:NVMM),format=NV12" ! \
             nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
             m.sink_0 nvstreammux name=m batch-size=1 width=1920 height=1200 ! \

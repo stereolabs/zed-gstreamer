@@ -85,7 +85,7 @@ echo "Starting SRT server (listener mode)..."
 
 # Build source pipeline based on camera type
 if is_zero_copy_available; then
-    SOURCE="zedsrc stream-type=5 camera-resolution=$RESOLUTION camera-fps=$FPS"
+    SOURCE="zedsrc stream-type=6 camera-resolution=$RESOLUTION camera-fps=$FPS"
 else
     SOURCE="zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! nvvideoconvert ! video/x-raw(memory:NVMM),format=NV12"
 fi
@@ -112,6 +112,7 @@ elif has_sw_h265_encoder; then
     echo "WARNING: Using software encoder - expect higher CPU usage"
     gst-launch-1.0 -e \
         zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! \
+        videoconvert ! video/x-raw,format=I420 ! \
         x265enc bitrate=$((BITRATE / 1000)) speed-preset=ultrafast tune=zerolatency key-int-max=$FPS ! \
         h265parse config-interval=1 ! \
         mpegtsmux alignment=7 ! \
