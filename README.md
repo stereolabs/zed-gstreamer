@@ -20,7 +20,7 @@
 
 GStreamer package for ZED Cameras. The package is composed of several elements:
 
-* [`zedsrc`](./gst-zed-src): acquires camera color image and depth map and pushes them in a GStreamer pipeline.
+* [`zedsrc`](./gst-zed-src): acquires camera color image and depth map and pushes them in a GStreamer pipeline. Supports zero-copy NV12 output on Jetson for GMSL cameras (ZED X, ZED X Mini) with SDK 5.2+.
 * [`zedxonesrc`](./gst-zedxone-src): acquires camera color image from a ZED X One GS or ZED X One 4K camera and pushes them in a GStreamer pipeline. Note: this element does not use the ZED SDK, but a porting of the [zedx-one-capture](https://github.com/stereolabs/zedx-one-capture) library.
 * [`zedmeta`](./gst-zed-meta): GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data).
 * [`zeddemux`](./gst-zed-demux): receives a composite `zedsrc` stream (`color left + color right` data or `color left + depth map` + metadata),
@@ -295,9 +295,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (6): NEURAL_PLUS      - More accurate Neural disparity estimation, Requires AI module.
                            (5): NEURAL           - End to End Neural disparity estimation, requires AI module
                            (4): NEURAL_LIGHT     - End to End Neural disparity estimation (light), requires AI module
-                           (3): ULTRA            - [DEPRECATED] Computation mode favorising edges and sharpness. Requires more GPU memory and computation power.
-                           (2): QUALITY          - [DEPRECATED] Computation mode designed for challenging areas with untextured surfaces.
-                           (1): PERFORMANCE      - [DEPRECATED] Computation mode optimized for speed.
+                           (3): ULTRA            - Computation mode favorising edges and sharpness. Requires more GPU memory and computation power.
+                           (2): QUALITY          - Computation mode designed for challenging areas with untextured surfaces.
+                           (1): PERFORMANCE      - Computation mode optimized for speed.
                            (0): NONE             - This mode does not compute any depth map. Only rectified stereo images will be available.
   depth-stabilization : Enable depth stabilization
                         flags: readable, writable
@@ -893,6 +893,16 @@ Ready to use scripts are available in the `scripts` folder for Windows, Desktop 
 * local-rgb-skel_fast-overlay : Left/Right in top/bottom image rendering with human body pose FAST overlay
 
 * [Linux only] udp and rtsp sender/receiver.
+
+### Jetson Low-Latency, zero copy buffers for ZED X
+
+The [`scripts/jetson`](./scripts/jetson) folder contains optimized pipelines for hardware-accelerated streaming on NVIDIA Jetson:
+
+* **Zero-copy NV12** (stream-type=6): For ZED X/X Mini with SDK 5.2+, enables direct memory path to hardware encoder with minimal latency
+* **SRT/RTSP/UDP streaming**: Low-latency streaming scripts with automatic camera detection
+* **DeepStream integration**: Object detection pipelines using NVIDIA DeepStream
+
+Scripts auto-detect camera type (GMSL vs USB) and SDK version to select the optimal pipeline.
 
 ## Related
 

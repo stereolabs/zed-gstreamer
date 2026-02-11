@@ -34,6 +34,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
@@ -41,10 +42,13 @@ NC='\033[0m' # No Color
 FAST_MODE=true
 EXTENSIVE_MODE=false
 BENCHMARK_MODE=false
+COMPARE_ZEROCOPY_MODE=false  # DEV: Compare NV12 zero-copy vs BGRA only
 BENCHMARK_BASELINE=""  # Path to baseline JSON for comparison
 VERBOSE=false
 HARDWARE_AVAILABLE=false
 HARDWARE_CHECK_DONE=false
+GMSL_CAMERA=false
+ZERO_COPY_AVAILABLE=false
 
 # Counters
 TESTS_RUN=0
@@ -68,7 +72,8 @@ FAST_PIPELINE_TIMEOUT=15
 EXTENSIVE_PIPELINE_TIMEOUT=60
 
 # Delay between hardware tests to allow camera reset (seconds)
-CAMERA_RESET_DELAY=5
+# GMSL cameras need longer reset time to avoid Argus socket errors
+CAMERA_RESET_DELAY=8
 
 # Benchmark configuration (will be adjusted based on mode)
 BENCHMARK_DURATION=10      # Duration in seconds for each benchmark (extensive)
@@ -161,6 +166,42 @@ detect_platform() {
     fi
 }
 
+# Detect ZED SDK version from the installed library
+detect_sdk_version() {
+    local version=""
+    # Try to get version from ZED SDK's version file
+    if [ -f /usr/local/zed/version ]; then
+        version=$(cat /usr/local/zed/version 2>/dev/null | head -1)
+    fi
+    # Fallback: try to get from cmake config
+    if [ -z "$version" ] && [ -f /usr/local/zed/zed-config-version.cmake ]; then
+        version=$(grep "PACKAGE_VERSION" /usr/local/zed/zed-config-version.cmake | head -1 | grep -oP '"[0-9.]+"' | tr -d '"')
+    fi
+    # Fallback: try running ZED_Diagnostic
+    if [ -z "$version" ] && command -v ZED_Diagnostic &> /dev/null; then
+        version=$(ZED_Diagnostic --version 2>/dev/null | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    fi
+    echo "${version:-unknown}"
+}
+
+# Get major.minor from SDK version
+get_sdk_major_minor() {
+    local version
+    version=$(detect_sdk_version)
+    echo "$version" | grep -oP '^[0-9]+\.[0-9]+' || echo "0.0"
+}
+
+# Source common functions from jetson scripts (if available)
+# This provides: detect_gmsl_camera, zedsrc_supports_nv12, is_zero_copy_available, etc.
+SOURCE_COMMON_SH="$(dirname "${BASH_SOURCE[0]}")/../scripts/jetson/common.sh"
+if [ -f "$SOURCE_COMMON_SH" ]; then
+    # Only source on Jetson platforms where these functions are relevant
+    if [ -f /etc/nv_tegra_release ]; then
+        source "$SOURCE_COMMON_SH"
+        COMMON_SOURCED=true
+    fi
+fi
+
 check_hardware() {
     if [ "$HARDWARE_CHECK_DONE" = true ]; then
         return
@@ -179,21 +220,51 @@ check_hardware() {
             local cam_count
             cam_count=$(echo "$zed_output" | grep -ci "AVAILABLE" || echo "0")
             log_info "ZED camera(s) detected via ZED_Explorer ($cam_count available)"
-            return
+            
+            # Check if it's a GMSL camera (ZED X / ZED X Mini)
+            if echo "$zed_output" | grep -qi "ZED X\|GMSL"; then
+                GMSL_CAMERA=true
+                log_info "GMSL camera detected (ZED X / ZED X Mini)"
+            fi
         fi
     fi
     
     # Method 2: Try to detect ZED camera via USB (for USB cameras like ZED 2, ZED 2i, ZED Mini)
-    if command -v lsusb &> /dev/null; then
+    if [ "$HARDWARE_AVAILABLE" = false ] && command -v lsusb &> /dev/null; then
         if lsusb 2>/dev/null | grep -qi "stereolabs\|2b03:"; then
             HARDWARE_AVAILABLE=true
-            log_info "ZED camera detected via USB"
-            return
+            GMSL_CAMERA=false
+            log_info "ZED USB camera detected"
         fi
     fi
     
-    log_warning "No ZED camera hardware detected - hardware tests will be skipped"
-    HARDWARE_AVAILABLE=false
+    # Method 3: Use common.sh functions if available (Jetson only)
+    if [ "$HARDWARE_AVAILABLE" = false ] && [ "${COMMON_SOURCED:-false}" = true ]; then
+        if detect_gmsl_camera 2>/dev/null; then
+            HARDWARE_AVAILABLE=true
+            GMSL_CAMERA=true
+            log_info "GMSL camera detected via driver check"
+        elif detect_usb_camera 2>/dev/null; then
+            HARDWARE_AVAILABLE=true
+            GMSL_CAMERA=false
+            log_info "USB camera detected via lsusb"
+        fi
+    fi
+    
+    # Check zero-copy availability (Jetson + GMSL + SDK 5.2+)
+    if [ "$GMSL_CAMERA" = true ]; then
+        if [ "${COMMON_SOURCED:-false}" = true ] && is_zero_copy_available 2>/dev/null; then
+            ZERO_COPY_AVAILABLE=true
+            log_info "Zero-copy NV12 available (SDK 5.2+ with Advanced Capture API)"
+        elif gst-inspect-1.0 zedsrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
+            ZERO_COPY_AVAILABLE=true
+            log_info "Zero-copy NV12 available (stream-type=6)"
+        fi
+    fi
+    
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        log_warning "No ZED camera hardware detected - hardware tests will be skipped"
+    fi
 }
 
 # =============================================================================
@@ -319,6 +390,104 @@ test_zedsrc_enums() {
             test_fail "zedsrc has depth mode '$mode'"
         fi
     done
+    
+    # Test stream-type enum values
+    local stream_types=("Left image" "Right image" "Stereo couple" "Depth image")
+    for stype in "${stream_types[@]}"; do
+        if gst-inspect-1.0 zedsrc 2>&1 | grep -q "$stype"; then
+            test_pass "zedsrc has stream-type '$stype'"
+        else
+            test_fail "zedsrc has stream-type '$stype'"
+        fi
+    done
+}
+
+test_zedsrc_nv12() {
+    print_subheader "ZedSrc NV12 Zero-Copy Tests"
+    
+    # Check if zedsrc is available
+    if ! gst-inspect-1.0 zedsrc > /dev/null 2>&1; then
+        skip_test "ZedSrc NV12 tests" "zedsrc not available"
+        return 0
+    fi
+    
+    # Check if NV12 zero-copy is available for zedsrc
+    local zedsrc_zerocopy_available=false
+    if gst-inspect-1.0 zedsrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
+        zedsrc_zerocopy_available=true
+        test_pass "zedsrc supports NV12 zero-copy (stream-type=6/7)"
+    else
+        skip_test "zedsrc NV12 zero-copy" "SDK < 5.2 or not built with Advanced Capture API"
+    fi
+    
+    # Check for AUTO stream type with NV12 preference
+    if gst-inspect-1.0 zedsrc 2>&1 | grep -q "Auto.*NV12 zero-copy\|prefer NV12 zero-copy"; then
+        test_pass "zedsrc has STREAM_AUTO with NV12 preference"
+    else
+        # May not have zero-copy but should still have AUTO
+        if gst-inspect-1.0 zedsrc 2>&1 | grep -q "Auto-negotiate"; then
+            test_pass "zedsrc has STREAM_AUTO"
+        else
+            test_fail "zedsrc has STREAM_AUTO"
+        fi
+    fi
+    
+    # Hardware test for NV12 zero-copy
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "ZedSrc NV12 hardware test" "No camera detected"
+        return 2
+    fi
+    
+    # Only test on Jetson with zero-copy available
+    if [ ! -f /etc/nv_tegra_release ]; then
+        skip_test "ZedSrc NV12 hardware test" "Not a Jetson platform"
+        return 0
+    fi
+    
+    if [ "$zedsrc_zerocopy_available" = false ]; then
+        skip_test "ZedSrc NV12 hardware test" "Zero-copy not available"
+        return 0
+    fi
+    
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        local timeout_val=30
+        local num_buffers=10
+        local output
+        
+        # Test stream-type=6 (single NV12 zero-copy)
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 num-buffers=$num_buffers ! \
+            'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
+        if [ $? -eq 0 ]; then
+            test_pass "ZedSrc NV12 zero-copy pipeline (stream-type=6)"
+        else
+            if echo "$output" | grep -qi "no camera\|not found\|failed to open\|not supported"; then
+                skip_test "ZedSrc NV12 zero-copy pipeline" "Not supported on this camera model"
+            else
+                test_fail "ZedSrc NV12 zero-copy pipeline (stream-type=6)"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+            fi
+        fi
+        
+        sleep $CAMERA_RESET_DELAY
+        
+        # Test stream-type=7 (stereo NV12 zero-copy)
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=7 num-buffers=$num_buffers ! \
+            'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
+        if [ $? -eq 0 ]; then
+            test_pass "ZedSrc NV12 stereo zero-copy pipeline (stream-type=7)"
+        else
+            if echo "$output" | grep -qi "no camera\|not found\|failed to open\|not supported"; then
+                skip_test "ZedSrc NV12 stereo zero-copy pipeline" "Not supported on this camera model"
+            else
+                test_fail "ZedSrc NV12 stereo zero-copy pipeline (stream-type=7)"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+            fi
+        fi
+        
+        sleep $CAMERA_RESET_DELAY
+    else
+        skip_test "ZedSrc NV12 hardware test" "Extensive mode required"
+    fi
 }
 
 test_element_pads() {
@@ -439,6 +608,49 @@ test_hardware_streaming() {
         else
             test_fail "Stream type 4 (left+depth)"
             [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+        fi
+    fi
+    
+    # Test RAW_NV12 stream types (6, 7) - only available on Jetson with GMSL cameras
+    # These require SL_ENABLE_ADVANCED_CAPTURE_API which is only enabled for SDK >= 5.2 on Jetson
+    if [ -f /etc/nv_tegra_release ]; then
+        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+            sleep $CAMERA_RESET_DELAY
+            
+            # Test stream-type=6 (single NV12 zero-copy)
+            output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 num-buffers=$num_buffers ! \
+                'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
+            if [ $? -eq 0 ]; then
+                test_pass "Stream type 6 (RAW_NV12 zero-copy)"
+            else
+                test_fail "Stream type 6 (RAW_NV12 zero-copy)"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+            fi
+            
+            if [ "$EXTENSIVE_MODE" = true ]; then
+                sleep $CAMERA_RESET_DELAY
+                
+                # Test stream-type=7 (stereo NV12 zero-copy)
+                output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=7 num-buffers=$num_buffers ! \
+                    'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
+                if [ $? -eq 0 ]; then
+                    test_pass "Stream type 7 (RAW_NV12 stereo zero-copy)"
+                else
+                    test_fail "Stream type 7 (RAW_NV12 stereo zero-copy)"
+                    [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+                fi
+            fi
+        elif [ "$GMSL_CAMERA" = true ]; then
+            # GMSL camera present but zero-copy not available (older SDK)
+            skip_test "Stream type 6 (RAW_NV12)" "Requires ZED SDK 5.2+ with Advanced Capture API"
+            skip_test "Stream type 7 (RAW_NV12 stereo)" "Requires ZED SDK 5.2+ with Advanced Capture API"
+        elif [ "$HARDWARE_AVAILABLE" = true ]; then
+            # USB camera - zero-copy not supported
+            skip_test "Stream type 6 (RAW_NV12)" "USB camera - GMSL camera required"
+            skip_test "Stream type 7 (RAW_NV12 stereo)" "USB camera - GMSL camera required"
+        else
+            skip_test "Stream type 6 (RAW_NV12)" "No camera detected"
+            skip_test "Stream type 7 (RAW_NV12 stereo)" "No camera detected"
         fi
     fi
     
@@ -600,6 +812,87 @@ test_zedxone() {
         test_pass "zedxonesrc has ctrl-exposure-time property"
     else
         test_fail "zedxonesrc has ctrl-exposure-time property"
+    fi
+    
+    if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "stream-type"; then
+        test_pass "zedxonesrc has stream-type property"
+    else
+        test_fail "zedxonesrc has stream-type property"
+    fi
+}
+
+test_zedxone_nv12() {
+    print_subheader "ZED X One NV12 Zero-Copy Tests"
+    
+    # Check if zedxonesrc is available
+    if ! gst-inspect-1.0 zedxonesrc > /dev/null 2>&1; then
+        skip_test "ZED X One NV12 tests" "zedxonesrc not available"
+        return 0
+    fi
+    
+    # Check if NV12 zero-copy is available for zedxonesrc
+    local zedxone_zerocopy_available=false
+    if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "Raw NV12 zero-copy"; then
+        zedxone_zerocopy_available=true
+        test_pass "zedxonesrc supports NV12 zero-copy (stream-type=1)"
+    else
+        skip_test "zedxonesrc NV12 zero-copy" "SDK < 5.2 or not built with Advanced Capture API"
+    fi
+    
+    # Check for AUTO stream type
+    if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "Auto.*NV12 zero-copy"; then
+        test_pass "zedxonesrc has STREAM_AUTO with NV12 preference"
+    else
+        # May not have zero-copy but should still have AUTO
+        if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "Auto-negotiate"; then
+            test_pass "zedxonesrc has STREAM_AUTO"
+        else
+            test_fail "zedxonesrc has STREAM_AUTO"
+        fi
+    fi
+    
+    # Hardware test for NV12 zero-copy
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "ZED X One NV12 hardware test" "No camera detected"
+        return 2
+    fi
+    
+    # Only test on Jetson with zero-copy available
+    if [ ! -f /etc/nv_tegra_release ]; then
+        skip_test "ZED X One NV12 hardware test" "Not a Jetson platform"
+        return 0
+    fi
+    
+    if [ "$zedxone_zerocopy_available" = false ]; then
+        skip_test "ZED X One NV12 hardware test" "Zero-copy not available"
+        return 0
+    fi
+    
+    # NOTE: This test will only work if a ZED X One camera is connected
+    # Skip if only stereo cameras are available
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        local timeout_val=30
+        local num_buffers=10
+        
+        # Test stream-type=1 (NV12 zero-copy for ZED X One)
+        local output
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc stream-type=1 num-buffers=$num_buffers ! \
+            'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
+        if [ $? -eq 0 ]; then
+            test_pass "ZED X One NV12 zero-copy pipeline (stream-type=1)"
+        else
+            # May fail if no ZED X One camera is connected (which is OK)
+            if echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
+                skip_test "ZED X One NV12 zero-copy pipeline" "No ZED X One camera detected"
+            else
+                test_fail "ZED X One NV12 zero-copy pipeline (stream-type=1)"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+            fi
+        fi
+        
+        sleep $CAMERA_RESET_DELAY
+    else
+        skip_test "ZED X One NV12 hardware test" "Extensive mode required"
     fi
 }
 
@@ -775,14 +1068,8 @@ test_resolutions() {
     local num_buffers=10
     local output
     
-    # Detect if we have GMSL cameras (ZED X / ZED X Mini) or USB cameras
-    local is_gmsl=false
-    if command -v ZED_Explorer &> /dev/null; then
-        if ZED_Explorer -a 2>&1 | grep -qi "ZED X\|GMSL"; then
-            is_gmsl=true
-        fi
-    fi
-    
+    # Use global GMSL_CAMERA variable from check_hardware()
+
     # Test HD1080 resolution (1920x1080) - supported by ALL cameras
     output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=1 num-buffers=$num_buffers ! fakesink 2>&1)
     if [ $? -eq 0 ]; then
@@ -795,7 +1082,7 @@ test_resolutions() {
     sleep $CAMERA_RESET_DELAY
     
     # Test camera-specific resolution
-    if [ "$is_gmsl" = true ]; then
+    if [ "$GMSL_CAMERA" = true ]; then
         # GMSL cameras (ZED X, ZED X Mini): Test HD1200 (1920x1200)
         output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=2 num-buffers=$num_buffers ! fakesink 2>&1)
         if [ $? -eq 0 ]; then
@@ -834,7 +1121,7 @@ test_depth_modes() {
     print_subheader "Depth Mode Tests (requires camera)"
     
     if [ "$HARDWARE_AVAILABLE" = false ]; then
-        skip_test "Depth mode NEURAL_LIGHT" "No camera detected"
+        skip_test "Depth mode NEURAL" "No camera detected"
         skip_test "Depth mode ULTRA" "No camera detected"
         return 2
     fi
@@ -848,12 +1135,12 @@ test_depth_modes() {
     local num_buffers=10
     local output
     
-    # Test NEURAL_LIGHT depth mode (mode 4) - neural depth estimation
+    # Test NEURAL depth mode (mode 4) - most computationally intensive
     output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=4 depth-mode=4 num-buffers=$num_buffers ! fakesink 2>&1)
     if [ $? -eq 0 ]; then
-        test_pass "Depth mode NEURAL_LIGHT"
+        test_pass "Depth mode NEURAL"
     else
-        test_fail "Depth mode NEURAL_LIGHT"
+        test_fail "Depth mode NEURAL"
         [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
     fi
     
@@ -1395,8 +1682,13 @@ run_benchmark_pipeline() {
         local monitor_pid=$!
     fi
     
-    # Calculate total buffers needed (assuming 30fps)
-    local total_buffers=$(( (duration + BENCHMARK_WARMUP) * 30 ))
+    # Calculate total buffers needed
+    # Extract camera-fps from pipeline if specified, default to 60fps
+    local target_fps=60
+    if echo "$pipeline" | grep -qo 'camera-fps=[0-9]*'; then
+        target_fps=$(echo "$pipeline" | grep -oP 'camera-fps=\K[0-9]+')
+    fi
+    local total_buffers=$(( (duration + BENCHMARK_WARMUP) * target_fps ))
     
     # Run pipeline with identity element to capture timestamps
     # The identity element logs buffer timestamps for latency calculation
@@ -1404,13 +1696,34 @@ run_benchmark_pipeline() {
     start_time=$(date +%s.%N)
     
     # Run pipeline - add num-buffers to the zedsrc element
-    # Pipeline format: "zedsrc <props>" -> "zedsrc <props> num-buffers=N ! identity ! fakesink"
-    local full_pipeline="$pipeline num-buffers=$total_buffers ! identity silent=false ! fakesink sync=false"
+    # Pipeline format: "zedsrc <props>" or "zedsrc <props> ! <capsfilter>"
+    # Insert num-buffers right after zedsrc properties, before any "!" 
+    local full_pipeline
+    # Use awk to insert num-buffers before the first "!" if present
+    if echo "$pipeline" | grep -q '!'; then
+        # Pipeline has downstream elements, insert num-buffers before first "!"
+        full_pipeline=$(echo "$pipeline" | awk -v nb="num-buffers=$total_buffers" '{sub(/!/, nb " !")} 1')
+        # Only append identity+fakesink if pipeline doesn't already end with a sink
+        if ! echo "$pipeline" | grep -qE '(fakesink|filesink)[^!]*$'; then
+            full_pipeline="$full_pipeline ! identity silent=false ! fakesink sync=false"
+        fi
+    else
+        # Simple pipeline with just zedsrc
+        full_pipeline="$pipeline num-buffers=$total_buffers ! identity silent=false ! fakesink sync=false"
+    fi
     
     # Timeout needs to account for: camera open (~6s) + warmup + duration + buffer
-    local timeout_val=$((duration + BENCHMARK_WARMUP + 20))
+    # DeepStream pipelines need extra time for TensorRT engine loading (~6-8s)
+    local timeout_val=$((duration + BENCHMARK_WARMUP + 30))
     
-    timeout $timeout_val gst-launch-1.0 -v $full_pipeline > "$pipeline_log" 2>&1
+    # Print the exact command for reproducibility
+    echo ""
+    echo -e "    ${CYAN}Command:${NC}"
+    echo -e "    ${YELLOW}gst-launch-1.0 $full_pipeline${NC}"
+    echo ""
+    
+    # Use eval to properly handle caps filters with special characters like (memory:NVMM)
+    eval "timeout $timeout_val gst-launch-1.0 -v $full_pipeline" > "$pipeline_log" 2>&1
     local pipeline_status=$?
     
     local end_time
@@ -1422,14 +1735,60 @@ run_benchmark_pipeline() {
     
     if [ $pipeline_status -ne 0 ]; then
         echo -e "    ${RED}Pipeline failed!${NC}"
-        [ "$VERBOSE" = true ] && cat "$pipeline_log" | tail -10
+        # Always show error output for failed pipelines
+        echo -e "    ${RED}Error output:${NC}"
+        cat "$pipeline_log" | grep -i "error\|failed\|cannot\|unable" | head -5
         rm -f "$stats_file" "$latency_file" "$pipeline_log"
         return 1
     fi
     
-    # Calculate actual FPS from pipeline output
+    # Calculate actual FPS from buffer timestamps in the log
+    # The identity element logs PTS timestamps in format "pts: H:MM:SS.nnnnnnnnn"
+    # Skip warmup frames and measure only the steady-state FPS
     local actual_fps
-    actual_fps=$(echo "$end_time $start_time $total_buffers" | awk '{printf "%.1f", $3/($1-$2)}')
+    local pts_values
+    # Extract PTS values from identity element output (format: "pts: 0:00:00.033333333")
+    pts_values=$(grep -oP 'pts: \K[0-9:]+\.[0-9]+' "$pipeline_log" 2>/dev/null)
+    
+    if [ -n "$pts_values" ]; then
+        # Calculate number of warmup frames to skip
+        local warmup_frames=$((BENCHMARK_WARMUP * target_fps))
+        local total_pts_count
+        total_pts_count=$(echo "$pts_values" | wc -l)
+        
+        # Skip warmup frames, use only measurement frames
+        local measure_pts
+        if [ "$total_pts_count" -gt "$warmup_frames" ]; then
+            measure_pts=$(echo "$pts_values" | tail -n +$((warmup_frames + 1)))
+        else
+            measure_pts="$pts_values"
+        fi
+        
+        # Parse timestamps and calculate FPS from actual buffer timing
+        local first_pts last_pts num_frames
+        first_pts=$(echo "$measure_pts" | head -1)
+        last_pts=$(echo "$measure_pts" | tail -1)
+        num_frames=$(echo "$measure_pts" | wc -l)
+        
+        if [ "$num_frames" -gt 1 ]; then
+            # Convert H:MM:SS.nnnnnnnnn to seconds
+            local first_secs last_secs duration_secs
+            first_secs=$(echo "$first_pts" | awk -F: '{if(NF==3) print $1*3600+$2*60+$3; else if(NF==2) print $1*60+$2; else print $1}')
+            last_secs=$(echo "$last_pts" | awk -F: '{if(NF==3) print $1*3600+$2*60+$3; else if(NF==2) print $1*60+$2; else print $1}')
+            duration_secs=$(echo "$last_secs $first_secs" | awk '{print $1-$2}')
+            
+            if (( $(echo "$duration_secs > 0" | bc -l) )); then
+                actual_fps=$(echo "$num_frames $duration_secs" | awk '{printf "%.1f", ($1-1)/$2}')
+            else
+                actual_fps="N/A"
+            fi
+        else
+            actual_fps="N/A"
+        fi
+    else
+        # Fallback: no PTS data available (pipeline doesn't have identity element)
+        actual_fps="N/A"
+    fi
     
     # Parse resource usage
     local avg_ram avg_cpu avg_gpu peak_ram peak_cpu peak_gpu
@@ -1587,6 +1946,374 @@ benchmark_camera_open_latency() {
     sleep 5
 }
 
+# =============================================================================
+# DEV: Run zero-copy comparison benchmarks only
+# =============================================================================
+# Quick benchmark to compare NV12 zero-copy vs BGRA performance.
+# Usage: ./test.sh --compare-zerocopy
+run_zerocopy_comparison() {
+    benchmark_print_header
+    
+    echo ""
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║         DEV: NV12 Zero-Copy vs BGRA Performance Comparison       ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        echo -e "${RED}ERROR: No ZED camera detected. Benchmarks require hardware.${NC}"
+        exit 2
+    fi
+    
+    if [ "$GMSL_CAMERA" != true ]; then
+        echo -e "${RED}ERROR: This comparison requires a GMSL camera (ZED X / ZED X Mini).${NC}"
+        echo -e "${YELLOW}USB cameras don't support zero-copy NV12.${NC}"
+        exit 2
+    fi
+    
+    # Detect SDK version and NV12 availability
+    local sdk_version
+    sdk_version=$(detect_sdk_version)
+    local sdk_major_minor
+    sdk_major_minor=$(get_sdk_major_minor)
+    local nv12_available=false
+    
+    if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+        nv12_available=true
+    fi
+    
+    echo -e "${BLUE}[INFO]${NC} Platform: $(detect_platform)"
+    echo -e "${BLUE}[INFO]${NC} ZED SDK: ${sdk_version}"
+    echo -e "${BLUE}[INFO]${NC} Camera: GMSL (ZED X series)"
+    if [ "$nv12_available" = true ]; then
+        echo -e "${BLUE}[INFO]${NC} NV12 Zero-copy: ${GREEN}Available${NC}"
+    else
+        echo -e "${BLUE}[INFO]${NC} NV12 Zero-copy: ${YELLOW}Not available (SDK 5.2+ required)${NC}"
+    fi
+    echo -e "${BLUE}[INFO]${NC} Benchmark duration: ${BENCHMARK_DURATION}s per test"
+    echo -e "${BLUE}[INFO]${NC} Warmup period: ${BENCHMARK_WARMUP}s"
+    echo ""
+    
+    # Get baseline measurements
+    benchmark_print_section "Baseline Measurements (Idle System)"
+    get_baseline_stats
+    
+    echo ""
+    echo -e "    ${CYAN}This comparison runs identical pipelines with multiple modes:${NC}"
+    if [ "$nv12_available" = true ]; then
+        echo -e "    ${GREEN}▶ stream-type=6${NC} - ZED NV12 zero-copy (GMSL native, no conversion)"
+    else
+        echo -e "    ${YELLOW}▶ stream-type=6${NC} - ZED NV12 zero-copy ${RED}(SKIPPED - requires SDK 5.2+)${NC}"
+    fi
+    echo -e "    ${YELLOW}▶ stream-type=0${NC} - ZED BGRA (SDK color conversion)"
+    echo -e "    ${MAGENTA}▶ nvarguscamerasrc${NC} - Raw Argus (baseline, no ZED SDK)"
+    echo -e "    ${CYAN}All tests use: 1920x1200 @ 60fps${NC}"
+    echo ""
+    
+    # Common settings for all tests: HD1200 @ 60fps (native ZED X resolution)
+    local common_props="camera-resolution=2 camera-fps=60"
+    
+    # Check if nvarguscamerasrc is available for raw Argus baseline tests
+    local argus_available=false
+    if gst-inspect-1.0 nvarguscamerasrc > /dev/null 2>&1; then
+        argus_available=true
+        echo -e "    ${GREEN}✓ nvarguscamerasrc available for baseline comparison${NC}"
+    else
+        echo -e "    ${YELLOW}✗ nvarguscamerasrc not available, skipping raw Argus tests${NC}"
+    fi
+    echo ""
+    
+    # Test 1: Basic streaming (no processing)
+    benchmark_print_section "Test 1: Basic Streaming (no depth)"
+    
+    if [ "$nv12_available" = true ]; then
+        run_benchmark_pipeline "[NV12 zero-copy] Basic stream" \
+            "zedsrc stream-type=6 $common_props depth-mode=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
+        sleep $CAMERA_RESET_DELAY
+    fi
+    
+    run_benchmark_pipeline "[BGRA legacy] Basic stream" \
+        "zedsrc stream-type=0 $common_props depth-mode=0 ! 'video/x-raw,width=1920,height=1200,format=BGRA,framerate=60/1'"
+    sleep $CAMERA_RESET_DELAY
+    
+    if [ "$argus_available" = true ]; then
+        run_benchmark_pipeline "[Argus raw] Basic stream" \
+            "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
+        sleep $CAMERA_RESET_DELAY
+        
+        # Argus + RGBA conversion: Simulates legacy pipeline where app needs RGBA in CPU memory
+        # Uses videoconvert (CPU) like ZED BGRA path does, for fair comparison
+        run_benchmark_pipeline "[Argus+RGBA] Basic stream (CPU convert)" \
+            "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvvidconv ! 'video/x-raw,format=RGBA' ! videoconvert ! 'video/x-raw,format=I420'"
+        sleep $CAMERA_RESET_DELAY
+    fi
+    
+    # Test 2: With NEURAL depth (common use case) - ZED only, no Argus equivalent
+    benchmark_print_section "Test 2: With NEURAL Depth"
+    
+    if [ "$nv12_available" = true ]; then
+        run_benchmark_pipeline "[NV12 zero-copy] NEURAL depth" \
+            "zedsrc stream-type=6 $common_props depth-mode=4 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1'"
+        sleep $CAMERA_RESET_DELAY
+    fi
+    
+    run_benchmark_pipeline "[BGRA legacy] NEURAL depth" \
+        "zedsrc stream-type=0 $common_props depth-mode=4 ! 'video/x-raw,width=1920,height=1200,format=BGRA,framerate=60/1'"
+    sleep $CAMERA_RESET_DELAY
+    
+    # Test 3: Stereo streaming (side-by-side: 3840x1200)
+    # Both NV12 (stream-type=7) and BGRA SBS (stream-type=5) use side-by-side layout
+    benchmark_print_section "Test 3: Stereo Streaming (Side-by-Side)"
+    
+    if [ "$nv12_available" = true ]; then
+        run_benchmark_pipeline "[NV12 zero-copy] Stereo SBS" \
+            "zedsrc stream-type=7 $common_props ! 'video/x-raw(memory:NVMM),width=3840,height=1200,format=NV12,framerate=60/1'"
+        sleep $CAMERA_RESET_DELAY
+    fi
+    
+    run_benchmark_pipeline "[BGRA legacy] Stereo SBS" \
+        "zedsrc stream-type=5 $common_props ! 'video/x-raw,width=3840,height=1200,format=BGRA,framerate=60/1'"
+    sleep $CAMERA_RESET_DELAY
+    
+    # Test 4: Hardware encoding pipeline (real-world use case)
+    if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
+        benchmark_print_section "Test 4: H.265 Hardware Encoding Pipeline"
+        
+        if [ "$nv12_available" = true ]; then
+            run_benchmark_pipeline "[NV12 zero-copy] H.265 encode (direct)" \
+                "zedsrc stream-type=6 $common_props ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvv4l2h265enc"
+            sleep $CAMERA_RESET_DELAY
+        fi
+        
+        # BGRA needs explicit caps for nvvidconv and videoconvert for color space
+        run_benchmark_pipeline "[BGRA legacy] H.265 encode (w/ convert)" \
+            "zedsrc stream-type=0 $common_props ! videoconvert ! 'video/x-raw,format=I420' ! nvvidconv ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvv4l2h265enc"
+        sleep $CAMERA_RESET_DELAY
+        
+        if [ "$argus_available" = true ]; then
+            run_benchmark_pipeline "[Argus raw] H.265 encode" \
+                "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvv4l2h265enc"
+            sleep $CAMERA_RESET_DELAY
+            
+            # Argus + RGBA roundtrip: NV12 → RGBA (CPU mem) → I420 (CPU convert) → NV12 → encode
+            # Uses videoconvert (CPU) like ZED BGRA path does, for fair comparison
+            run_benchmark_pipeline "[Argus+RGBA] H.265 encode (CPU convert)" \
+                "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvvidconv ! 'video/x-raw,format=RGBA' ! videoconvert ! 'video/x-raw,format=I420' ! nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
+            sleep $CAMERA_RESET_DELAY
+        fi
+    fi
+    
+    # Test 5: DeepStream with nvinfer (actual AI inference)
+    # This is the most important real-world use case for zero-copy
+    if gst-inspect-1.0 nvinfer > /dev/null 2>&1; then
+        # Find a valid nvinfer config file
+        local ds_config=""
+        local ds_paths=(
+            "/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_infer_primary.txt"
+            "/opt/nvidia/deepstream/deepstream-6.0/samples/configs/deepstream-app/config_infer_primary.txt"
+            "/opt/nvidia/deepstream/deepstream-6.2/samples/configs/deepstream-app/config_infer_primary.txt"
+            "/opt/nvidia/deepstream/deepstream-6.3/samples/configs/deepstream-app/config_infer_primary.txt"
+            "/opt/nvidia/deepstream/deepstream-7.0/samples/configs/deepstream-app/config_infer_primary.txt"
+        )
+        for path in "${ds_paths[@]}"; do
+            if [ -f "$path" ]; then
+                ds_config="$path"
+                break
+            fi
+        done
+        
+        if [ -n "$ds_config" ]; then
+            benchmark_print_section "Test 5: DeepStream + nvinfer (AI Inference)"
+            echo -e "    ${CYAN}Using config: $ds_config${NC}"
+            echo ""
+            
+            # NV12 zero-copy: Direct to nvinfer (nvinfer expects NV12 in NVMM)
+            # Pipeline: zedsrc → nvstreammux → nvinfer → identity → fakesink
+            if [ "$nv12_available" = true ]; then
+                run_benchmark_pipeline "[NV12 zero-copy] DS nvinfer (direct)" \
+                    "zedsrc stream-type=6 $common_props ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
+                sleep $CAMERA_RESET_DELAY
+            fi
+            
+            # BGRA legacy: Requires videoconvert + nvvideoconvert to get to NVMM NV12
+            # Pipeline: zedsrc (BGRA sysmem) → videoconvert → nvvideoconvert → NV12 NVMM → nvstreammux → nvinfer → identity → fakesink
+            run_benchmark_pipeline "[BGRA legacy] DS nvinfer (w/ convert)" \
+                "zedsrc stream-type=0 $common_props ! videoconvert ! 'video/x-raw,format=I420' ! nvvideoconvert ! 'video/x-raw(memory:NVMM),format=NV12' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
+            sleep $CAMERA_RESET_DELAY
+            
+            if [ "$argus_available" = true ]; then
+                run_benchmark_pipeline "[Argus raw] DS nvinfer" \
+                    "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
+                sleep $CAMERA_RESET_DELAY
+                
+                # Argus + RGBA roundtrip: Simulates legacy pipeline with RGBA processing before inference
+                # NV12 → RGBA (custom processing) → back to NV12 NVMM → nvinfer
+                run_benchmark_pipeline "[Argus+RGBA] DS nvinfer (RGBA roundtrip)" \
+                    "nvarguscamerasrc sensor-id=0 ! 'video/x-raw(memory:NVMM),width=1920,height=1200,format=NV12,framerate=60/1' ! nvvidconv ! 'video/x-raw,format=RGBA' ! nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! mux.sink_0 nvstreammux name=mux batch-size=1 width=1920 height=1200 live-source=1 ! nvinfer config-file-path=$ds_config"
+                sleep $CAMERA_RESET_DELAY
+            fi
+        else
+            echo -e "    ${YELLOW}[INFO]${NC} Skipping DeepStream nvinfer test (no config file found)"
+        fi
+    fi
+    
+    # Note: Object Detection with NV12 zero-copy is not tested here because
+    # OD overlay rendering requires BGRA format internally for drawing boxes.
+    # The zero-copy benefit is in the camera capture path, not the OD path.
+    
+    # Summary - grouped by test pairs for easy comparison
+    benchmark_print_section "COMPARISON SUMMARY"
+    echo ""
+    echo -e "    ${CYAN}ZED SDK Version: ${sdk_version}${NC}"
+    if [ "$nv12_available" = true ]; then
+        echo -e "    ${GREEN}NV12 Zero-copy: Available${NC}"
+    else
+        echo -e "    ${YELLOW}NV12 Zero-copy: Not available (BGRA vs Argus comparison only)${NC}"
+    fi
+    echo ""
+    
+    # Define test pairs in order
+    local -a test_pairs=(
+        "Basic stream"
+        "NEURAL depth"
+        "Stereo"
+        "H.265 encode"
+        "DS nvinfer"
+    )
+    
+    echo "    ┌────────────────────────────────────────────────────────────────────────────────────────────┐"
+    printf "    │ %-28s │ %8s │ %8s │ %8s │ %8s │ %8s │ %7s │\n" "Configuration" "RAM(MB)" "CPU(%)" "GPU(%)" "FPS" "Lat(ms)" "Δ GPU"
+    echo "    ├────────────────────────────────────────────────────────────────────────────────────────────┤"
+    
+    for test_name in "${test_pairs[@]}"; do
+        # Find NV12, BGRA, Argus raw, and Argus+RGBA results for this test
+        local nv12_key=""
+        local bgra_key=""
+        local argus_key=""
+        local argus_rgba_key=""
+        
+        for key in "${!BENCHMARK_RESULTS[@]}"; do
+            if [[ "$key" == *",ram" ]]; then
+                local base="${key%,ram}"
+                if [[ "$base" == *"NV12"* && "$base" == *"$test_name"* ]]; then
+                    nv12_key="$base"
+                elif [[ "$base" == *"BGRA"* && "$base" == *"$test_name"* ]]; then
+                    bgra_key="$base"
+                elif [[ "$base" == *"Argus+RGBA"* && "$base" == *"$test_name"* ]]; then
+                    argus_rgba_key="$base"
+                elif [[ "$base" == *"Argus"* && "$base" == *"$test_name"* ]]; then
+                    argus_key="$base"
+                fi
+            fi
+        done
+        
+        # Skip if we don't have at least BGRA results (NV12 is optional for SDK 5.1)
+        if [[ -z "$bgra_key" ]]; then
+            continue
+        fi
+        
+        # Get NV12 results (may be empty on SDK 5.1)
+        local nv12_ram="${BENCHMARK_RESULTS[$nv12_key,ram]:-N/A}"
+        local nv12_cpu="${BENCHMARK_RESULTS[$nv12_key,cpu]:-N/A}"
+        local nv12_gpu="${BENCHMARK_RESULTS[$nv12_key,gpu]:-N/A}"
+        local nv12_fps="${BENCHMARK_RESULTS[$nv12_key,fps]:-N/A}"
+        local nv12_lat="${BENCHMARK_RESULTS[$nv12_key,latency]:-N/A}"
+        
+        # Get BGRA results
+        local bgra_ram="${BENCHMARK_RESULTS[$bgra_key,ram]:-N/A}"
+        local bgra_cpu="${BENCHMARK_RESULTS[$bgra_key,cpu]:-N/A}"
+        local bgra_gpu="${BENCHMARK_RESULTS[$bgra_key,gpu]:-N/A}"
+        local bgra_fps="${BENCHMARK_RESULTS[$bgra_key,fps]:-N/A}"
+        local bgra_lat="${BENCHMARK_RESULTS[$bgra_key,latency]:-N/A}"
+        
+        # Get Argus results (optional)
+        local argus_ram="${BENCHMARK_RESULTS[$argus_key,ram]:-N/A}"
+        local argus_cpu="${BENCHMARK_RESULTS[$argus_key,cpu]:-N/A}"
+        local argus_gpu="${BENCHMARK_RESULTS[$argus_key,gpu]:-N/A}"
+        local argus_fps="${BENCHMARK_RESULTS[$argus_key,fps]:-N/A}"
+        local argus_lat="${BENCHMARK_RESULTS[$argus_key,latency]:-N/A}"
+        
+        # Get Argus+RGBA results (optional - shows cost of color conversion)
+        local argus_rgba_ram="${BENCHMARK_RESULTS[$argus_rgba_key,ram]:-N/A}"
+        local argus_rgba_cpu="${BENCHMARK_RESULTS[$argus_rgba_key,cpu]:-N/A}"
+        local argus_rgba_gpu="${BENCHMARK_RESULTS[$argus_rgba_key,gpu]:-N/A}"
+        local argus_rgba_fps="${BENCHMARK_RESULTS[$argus_rgba_key,fps]:-N/A}"
+        local argus_rgba_lat="${BENCHMARK_RESULTS[$argus_rgba_key,latency]:-N/A}"
+        
+        # Calculate GPU delta (BGRA - NV12, positive means NV12 is better)
+        local gpu_delta="N/A"
+        if [[ -n "$nv12_key" && "$nv12_gpu" != "N/A" && "$bgra_gpu" != "N/A" ]]; then
+            gpu_delta=$(echo "$bgra_gpu $nv12_gpu" | awk '{printf "%.1f", $1-$2}')
+        fi
+        
+        # Calculate GPU delta BGRA vs Argus (shows ZED SDK overhead)
+        local bgra_argus_delta="N/A"
+        if [[ "$argus_gpu" != "N/A" && "$bgra_gpu" != "N/A" ]]; then
+            bgra_argus_delta=$(echo "$bgra_gpu $argus_gpu" | awk '{printf "%.1f", $1-$2}')
+        fi
+        
+        # Calculate GPU delta Argus+RGBA vs Argus raw (shows conversion cost)
+        local argus_rgba_delta="N/A"
+        if [[ "$argus_gpu" != "N/A" && "$argus_rgba_gpu" != "N/A" ]]; then
+            argus_rgba_delta=$(echo "$argus_rgba_gpu $argus_gpu" | awk '{printf "%.1f", $1-$2}')
+        fi
+        
+        # Print test header
+        printf "    │ ${CYAN}%-28s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ %7s │\n" "── $test_name ──" "" "" "" "" "" ""
+        
+        # Print Argus row if available (magenta - baseline)
+        if [[ -n "$argus_key" && "$argus_ram" != "N/A" ]]; then
+            printf "    │ ${MAGENTA}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ %7s │\n" \
+                "Argus raw (baseline)" "$argus_ram" "$argus_cpu" "$argus_gpu" "$argus_fps" "$argus_lat" "(ref)"
+        fi
+        
+        # Print Argus+RGBA row if available (shows color conversion cost)
+        if [[ -n "$argus_rgba_key" && "$argus_rgba_ram" != "N/A" ]]; then
+            printf "    │ ${MAGENTA}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ ${MAGENTA}%+6s%%${NC} │\n" \
+                "Argus+RGBA (convert)" "$argus_rgba_ram" "$argus_rgba_cpu" "$argus_rgba_gpu" "$argus_rgba_fps" "$argus_rgba_lat" "+$argus_rgba_delta"
+        fi
+        
+        # Print NV12 row if available (green highlight)
+        if [[ -n "$nv12_key" && "$nv12_ram" != "N/A" ]]; then
+            printf "    │ ${GREEN}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ ${GREEN}%+6s%%${NC} │\n" \
+                "NV12 zero-copy" "$nv12_ram" "$nv12_cpu" "$nv12_gpu" "$nv12_fps" "$nv12_lat" "-$gpu_delta"
+        fi
+        
+        # Print BGRA row (yellow) - show delta vs Argus if we have Argus data
+        if [[ -n "$argus_key" && "$bgra_argus_delta" != "N/A" ]]; then
+            printf "    │ ${YELLOW}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ ${YELLOW}%+6s%%${NC} │\n" \
+                "BGRA legacy" "$bgra_ram" "$bgra_cpu" "$bgra_gpu" "$bgra_fps" "$bgra_lat" "+$bgra_argus_delta"
+        else
+            printf "    │ ${YELLOW}  %-26s${NC} │ %8s │ %8s │ %8s │ %8s │ %8s │ %7s │\n" \
+                "BGRA legacy" "$bgra_ram" "$bgra_cpu" "$bgra_gpu" "$bgra_fps" "$bgra_lat" "(base)"
+        fi
+        
+        echo "    ├────────────────────────────────────────────────────────────────────────────────────────────┤"
+    done
+    
+    # Remove last separator and add footer
+    echo "    └────────────────────────────────────────────────────────────────────────────────────────────┘"
+    echo ""
+    echo -e "    ${GREEN}Legend:${NC}"
+    echo -e "    ${CYAN}• Δ GPU = GPU usage change (positive = higher GPU usage)${NC}"
+    echo -e "    ${MAGENTA}• Argus raw    = nvarguscamerasrc baseline (NV12 NVMM, no ZED SDK)${NC}"
+    echo -e "    ${MAGENTA}• Argus+RGBA   = Argus with NV12→RGBA→I420 via CPU videoconvert (simulates legacy)${NC}"
+    echo -e "    ${GREEN}• NV12 zero-copy = stream-type=6 (SDK 5.2+ required)${NC}"
+    echo -e "    ${YELLOW}• BGRA legacy  = stream-type=0 with CPU videoconvert (traditional mode)${NC}"
+    echo -e "    ${CYAN}• Lower RAM/CPU/GPU/Latency is better, Higher FPS is better${NC}"
+    echo ""
+    if [[ "$nv12_available" == true ]]; then
+        echo -e "    ${GREEN}Expected Benefits of NV12 Zero-Copy:${NC}"
+        echo -e "    ${CYAN}• Lower GPU usage (no CUDA color conversion)${NC}"
+        echo -e "    ${CYAN}• Lower CPU usage (less data movement)${NC}"
+        echo -e "    ${CYAN}• H.265 encoding: Major improvement (direct to encoder, no nvvidconv)${NC}"
+    else
+        echo -e "    ${YELLOW}Note: NV12 zero-copy requires ZED SDK 5.2+. Currently running SDK ${sdk_version}${NC}"
+        echo -e "    ${CYAN}Showing BGRA vs Argus comparison for SDK overhead analysis.${NC}"
+    fi
+    echo ""
+}
+
 # Run all benchmarks
 run_benchmarks() {
     benchmark_print_header
@@ -1607,6 +2334,10 @@ run_benchmarks() {
         mode_str="Extensive (full benchmark)"
     fi
     
+    # Common camera properties for consistent benchmarks
+    # HD1200 @ 60fps is the highest common resolution for both USB and GMSL cameras
+    local cam_props="camera-resolution=2 camera-fps=60"
+    
     echo -e "${BLUE}[INFO]${NC} Platform: $platform"
     echo -e "${BLUE}[INFO]${NC} Mode: $mode_str"
     echo -e "${BLUE}[INFO]${NC} Benchmark duration: ${BENCHMARK_DURATION}s per test"
@@ -1626,74 +2357,159 @@ run_benchmarks() {
         echo -e "${YELLOW}[INFO]${NC} Skipping camera open latency test (use --extensive)"
     fi
     
-    # Detect camera type for appropriate resolutions
-    local is_gmsl=false
-    if command -v ZED_Explorer &> /dev/null; then
-        if ZED_Explorer -a 2>&1 | grep -qi "ZED X\|GMSL"; then
-            is_gmsl=true
-            echo -e "${BLUE}[INFO]${NC} Detected GMSL camera (ZED X series)"
-        else
-            echo -e "${BLUE}[INFO]${NC} Detected USB camera"
+    # Detect camera type for appropriate resolutions (use global variable from check_hardware)
+    if [ "$GMSL_CAMERA" = true ]; then
+        echo -e "${BLUE}[INFO]${NC} Detected GMSL camera (ZED X series)"
+        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+            echo -e "${BLUE}[INFO]${NC} Zero-copy NV12 available"
         fi
+    elif [ "$HARDWARE_AVAILABLE" = true ]; then
+        echo -e "${BLUE}[INFO]${NC} Detected USB camera"
     fi
     
     # === CORE BENCHMARKS (always run) ===
     
     # Basic streaming benchmark
     benchmark_print_section "Basic Streaming (Left Image Only)"
-    run_benchmark_pipeline "Stream: Left RGB" "zedsrc stream-type=0"
+    run_benchmark_pipeline "Stream: Left RGB" "zedsrc stream-type=0 $cam_props"
     sleep $CAMERA_RESET_DELAY
     
     # Depth benchmark (one mode)
     benchmark_print_section "Depth Processing Benchmark"
-    run_benchmark_pipeline "Depth: NEURAL_LIGHT mode" "zedsrc stream-type=4 depth-mode=4"
+    run_benchmark_pipeline "Depth: NEURAL mode" "zedsrc stream-type=4 $cam_props depth-mode=4"
     sleep $CAMERA_RESET_DELAY
     
     # === EXTENSIVE BENCHMARKS (only in extensive mode) ===
     
     if [ "$EXTENSIVE_MODE" = true ]; then
         benchmark_print_section "Stereo Streaming (Left + Right)"
-        run_benchmark_pipeline "Stream: Left+Right RGB" "zedsrc stream-type=2"
+        run_benchmark_pipeline "Stream: Left+Right RGB" "zedsrc stream-type=2 $cam_props"
         sleep $CAMERA_RESET_DELAY
+        
+        # NV12 Zero-Copy benchmark (Jetson with GMSL + SDK 5.2+)
+        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+            benchmark_print_section "NV12 Zero-Copy Benchmarks (GMSL)"
+            
+            run_benchmark_pipeline "Stream: RAW_NV12 zero-copy" "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
+            sleep $CAMERA_RESET_DELAY
+            
+            run_benchmark_pipeline "Stream: RAW_NV12 stereo zero-copy" "zedsrc stream-type=7 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
+            sleep $CAMERA_RESET_DELAY
+            
+            # NV12 with hardware encoding benchmark
+            if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
+                benchmark_print_section "NV12 Zero-Copy + Hardware Encoding"
+                run_benchmark_pipeline "NV12 -> H.265 HW encode" \
+                    "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
+                sleep $CAMERA_RESET_DELAY
+            fi
+            
+            # =================================================================
+            # DEV COMPARISON: NV12 Zero-Copy vs BGRA (non-zero-copy)
+            # =================================================================
+            # This section benchmarks identical pipelines with both modes
+            # to measure the performance benefit of zero-copy NV12.
+            benchmark_print_section "DEV: NV12 Zero-Copy vs BGRA Comparison"
+            echo ""
+            echo -e "    ${CYAN}Comparing identical pipelines with different stream modes:${NC}"
+            echo -e "    ${CYAN}  - stream-type=6 (NV12 zero-copy, GMSL native)${NC}"
+            echo -e "    ${CYAN}  - stream-type=0 (BGRA, requires SDK color conversion)${NC}"
+            echo ""
+            
+            # Test 1: Basic streaming (no processing)
+            echo -e "    ${YELLOW}━━━ Test 1: Basic Streaming ━━━${NC}"
+            run_benchmark_pipeline "[NV12] Basic stream" \
+                "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
+            sleep $CAMERA_RESET_DELAY
+            
+            run_benchmark_pipeline "[BGRA] Basic stream" \
+                "zedsrc stream-type=0 $cam_props"
+            sleep $CAMERA_RESET_DELAY
+            
+            # Test 2: With depth enabled (common use case)
+            echo -e "    ${YELLOW}━━━ Test 2: With Depth Processing ━━━${NC}"
+            run_benchmark_pipeline "[NV12] With depth (NEURAL)" \
+                "zedsrc stream-type=6 $cam_props depth-mode=4 ! 'video/x-raw(memory:NVMM),format=NV12'"
+            sleep $CAMERA_RESET_DELAY
+            
+            run_benchmark_pipeline "[BGRA] With depth (NEURAL)" \
+                "zedsrc stream-type=0 $cam_props depth-mode=4"
+            sleep $CAMERA_RESET_DELAY
+            
+            # Test 3: Stereo streaming
+            echo -e "    ${YELLOW}━━━ Test 3: Stereo Streaming ━━━${NC}"
+            run_benchmark_pipeline "[NV12] Stereo stream" \
+                "zedsrc stream-type=7 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12'"
+            sleep $CAMERA_RESET_DELAY
+            
+            run_benchmark_pipeline "[BGRA] Stereo stream" \
+                "zedsrc stream-type=2 $cam_props"
+            sleep $CAMERA_RESET_DELAY
+            
+            # Test 4: Hardware encoding pipeline (real-world use case)
+            if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
+                echo -e "    ${YELLOW}━━━ Test 4: H.265 Hardware Encoding ━━━${NC}"
+                run_benchmark_pipeline "[NV12] H.265 encode (direct)" \
+                    "zedsrc stream-type=6 $cam_props ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
+                sleep $CAMERA_RESET_DELAY
+                
+                # BGRA requires videoconvert + nvvidconv for color space conversion to NV12
+                run_benchmark_pipeline "[BGRA] H.265 encode (w/ convert)" \
+                    "zedsrc stream-type=0 $cam_props ! videoconvert ! nvvidconv ! 'video/x-raw(memory:NVMM),format=NV12' ! nvv4l2h265enc"
+                sleep $CAMERA_RESET_DELAY
+            fi
+            
+            echo ""
+            echo -e "    ${GREEN}━━━ Comparison Summary ━━━${NC}"
+            echo -e "    ${CYAN}NV12 zero-copy eliminates SDK-side CUDA color conversion.${NC}"
+            echo -e "    ${CYAN}Expected benefits: Lower CPU/GPU usage, lower latency, lower RAM.${NC}"
+            echo ""
+            
+        elif [ "$GMSL_CAMERA" = true ]; then
+            log_info "Skipping NV12 zero-copy benchmarks (requires ZED SDK 5.2+)"
+        fi
         
         # Additional depth modes
         benchmark_print_section "Additional Depth Modes"
         
-        run_benchmark_pipeline "Depth: PERFORMANCE mode" "zedsrc stream-type=4 depth-mode=1"
+        run_benchmark_pipeline "Depth: PERFORMANCE mode" "zedsrc stream-type=4 $cam_props depth-mode=1"
         sleep $CAMERA_RESET_DELAY
         
-        run_benchmark_pipeline "Depth: ULTRA mode" "zedsrc stream-type=4 depth-mode=3"
+        run_benchmark_pipeline "Depth: ULTRA mode" "zedsrc stream-type=4 $cam_props depth-mode=3"
         sleep $CAMERA_RESET_DELAY
         
         # Resolution benchmarks
         benchmark_print_section "Resolution Benchmarks"
         
-        if [ "$is_gmsl" = true ]; then
-            run_benchmark_pipeline "Resolution: HD1200 (1920x1200)" "zedsrc stream-type=0 camera-resolution=2"
+        if [ "$GMSL_CAMERA" = true ]; then
+            run_benchmark_pipeline "Resolution: HD1200 (1920x1200)" "zedsrc stream-type=0 camera-resolution=2 camera-fps=60"
             sleep $CAMERA_RESET_DELAY
         else
-            run_benchmark_pipeline "Resolution: HD720 (1280x720)" "zedsrc stream-type=0 camera-resolution=3"
+            run_benchmark_pipeline "Resolution: HD720 (1280x720)" "zedsrc stream-type=0 camera-resolution=3 camera-fps=60"
             sleep $CAMERA_RESET_DELAY
         fi
         
-        run_benchmark_pipeline "Resolution: HD1080 (1920x1080)" "zedsrc stream-type=0 camera-resolution=1"
+        run_benchmark_pipeline "Resolution: HD1080 (1920x1080)" "zedsrc stream-type=0 camera-resolution=1 camera-fps=60"
         sleep $CAMERA_RESET_DELAY
         
         # AI Features benchmarks
+        # Note: OD and Body Tracking require positional tracking to be enabled
         benchmark_print_section "AI Features Benchmarks"
         
         run_benchmark_pipeline "Object Detection: MULTI_CLASS_BOX_FAST" \
-            "zedsrc stream-type=0 depth-mode=4 od-enabled=true od-detection-model=2"
+            "zedsrc stream-type=0 $cam_props depth-mode=4 enable-positional-tracking=true od-enabled=true od-detection-model=2" || \
+            echo -e "    ${YELLOW}[SKIP] Object Detection failed${NC}"
         sleep $CAMERA_RESET_DELAY
         
         run_benchmark_pipeline "Body Tracking: BODY_34_FAST" \
-            "zedsrc stream-type=0 depth-mode=4 bt-enabled=true bt-detection-model=0 bt-format=1"
+            "zedsrc stream-type=0 $cam_props depth-mode=4 enable-positional-tracking=true bt-enabled=true bt-detection-model=0 bt-format=1" || \
+            echo -e "    ${YELLOW}[SKIP] Body Tracking failed${NC}"
         sleep $CAMERA_RESET_DELAY
         
         # Positional Tracking benchmark
         benchmark_print_section "Positional Tracking Benchmark"
         run_benchmark_pipeline "Positional Tracking enabled" \
-            "zedsrc stream-type=0 depth-mode=1 enable-positional-tracking=true"
+            "zedsrc stream-type=0 $cam_props depth-mode=1 enable-positional-tracking=true"
         sleep $CAMERA_RESET_DELAY
     else
         echo ""
@@ -1868,7 +2684,8 @@ run_benchmarks() {
         echo "{"
         echo "  \"timestamp\": \"$(date -Iseconds)\","
         echo "  \"platform\": \"$platform\","
-        echo "  \"camera_type\": \"$([ "$is_gmsl" = true ] && echo 'GMSL' || echo 'USB')\","
+        echo "  \"camera_type\": \"$([ "$GMSL_CAMERA" = true ] && echo 'GMSL' || echo 'USB')\","
+        echo "  \"zero_copy_available\": $ZERO_COPY_AVAILABLE,"
         echo "  \"camera_open_latency_s\": ${BENCHMARK_RESULTS[camera_open_avg]:-null},"
         echo "  \"baseline\": {"
         echo "    \"ram_mb\": $BASELINE_RAM,"
@@ -1915,6 +2732,7 @@ show_help() {
     echo "  -f, --fast            Fast mode (~30s) - plugin registration checks only"
     echo "  -e, --extensive       Extensive mode (~10min) - full test suite with hardware"
     echo "  -b, --benchmark       Benchmark mode - performance measurements"
+    echo "  --compare-zerocopy    DEV: Compare NV12 zero-copy vs BGRA (GMSL only)"
     echo ""
     echo "Benchmark options:"
     echo "  --fast                With --benchmark: quick benchmark (3 tests, ~2min)"
@@ -1930,12 +2748,18 @@ show_help() {
     echo "  $0 -e                 # Extensive tests"
     echo "  $0 -b                 # Full benchmark"
     echo "  $0 -b -f              # Quick benchmark"
+    echo "  $0 --compare-zerocopy # DEV: NV12 vs BGRA comparison"
     echo "  $0 -b --baseline /tmp/zed_benchmark_xxx.json  # Compare with baseline"
     echo ""
     echo "Benchmark workflow:"
     echo "  1. Run initial benchmark:  $0 --benchmark"
     echo "  2. Make code changes"
     echo "  3. Run comparison:         $0 --benchmark --baseline <file.json>"
+    echo ""
+    echo "Zero-copy comparison (DEV):"
+    echo "  Runs identical pipelines with NV12 zero-copy (stream-type=6) vs"
+    echo "  BGRA legacy mode (stream-type=0) to measure performance difference."
+    echo "  Requires: GMSL camera (ZED X) + ZED SDK 5.2+ + Jetson platform"
     echo ""
     echo "Exit codes:"
     echo "  0 - All tests passed"
@@ -1964,6 +2788,11 @@ parse_args() {
                     FAST_MODE=false
                     EXTENSIVE_MODE=true
                 fi
+                shift
+                ;;
+            --compare-zerocopy)
+                COMPARE_ZEROCOPY_MODE=true
+                BENCHMARK_MODE=true
                 shift
                 ;;
             --baseline)
@@ -2021,6 +2850,12 @@ main() {
     # Check hardware availability
     check_hardware
     
+    # Zero-copy comparison mode - quick dev benchmark
+    if [ "$COMPARE_ZEROCOPY_MODE" = true ]; then
+        run_zerocopy_comparison
+        exit 0
+    fi
+    
     # Benchmark mode - separate execution path
     if [ "$BENCHMARK_MODE" = true ]; then
         run_benchmarks
@@ -2048,8 +2883,10 @@ main() {
     test_plugin_properties
     test_plugin_factory
     test_zedsrc_enums
+    test_zedsrc_nv12
     test_element_pads
     test_zedxone
+    test_zedxone_nv12
     
     # Hardware tests (if available)
     if [ "$HARDWARE_AVAILABLE" = true ]; then

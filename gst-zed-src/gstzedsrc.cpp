@@ -23,6 +23,11 @@
 #include <gst/gst.h>
 #include <gst/video/video.h>
 
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+#include <gst/allocators/gstdmabuf.h>
+#include <nvbufsurface.h>
+#endif
+
 #include "gst-zed-meta/gstzedmeta.h"
 #include "gstzedsrc.h"
 
@@ -57,6 +62,10 @@ static gboolean gst_zedsrc_unlock(GstBaseSrc *src);
 static gboolean gst_zedsrc_unlock_stop(GstBaseSrc *src);
 
 static GstFlowReturn gst_zedsrc_fill(GstPushSrc *src, GstBuffer *buf);
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+static GstFlowReturn gst_zedsrc_create(GstPushSrc *src, GstBuffer **buf);
+#endif
 
 static gboolean gst_zedsrc_query(GstBaseSrc *src, GstQuery *query);
 
@@ -203,12 +212,17 @@ typedef enum {
 } GstZedSrcFlip;
 
 typedef enum {
+    GST_ZEDSRC_STREAM_AUTO = -1,   // Auto-negotiate: prefer NV12 zero-copy if downstream accepts
     GST_ZEDSRC_ONLY_LEFT = 0,
     GST_ZEDSRC_ONLY_RIGHT = 1,
     GST_ZEDSRC_LEFT_RIGHT = 2,
     GST_ZEDSRC_DEPTH_16 = 3,
     GST_ZEDSRC_LEFT_DEPTH = 4,
-    GST_ZEDSRC_LEFT_RIGHT_SBS = 5
+    GST_ZEDSRC_LEFT_RIGHT_SBS = 5,   // Side-by-side stereo (BGRA) for VR/stereo displays
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    GST_ZEDSRC_RAW_NV12 = 6,         // Zero-copy NV12 raw buffer (GMSL cameras only)
+    GST_ZEDSRC_RAW_NV12_STEREO = 7   // Zero-copy NV12 stereo (left + right)
+#endif
 } GstZedSrcStreamType;
 
 typedef enum {
@@ -526,6 +540,9 @@ static GType gst_zedsrc_stream_type_get_type(void) {
 
     if (!zedsrc_stream_type_type) {
         static GEnumValue pattern_types[] = {
+            {GST_ZEDSRC_STREAM_AUTO,
+             "Auto-negotiate format based on downstream (prefer NV12 zero-copy)",
+             "Auto [prefer NV12 zero-copy]"},
             {GST_ZEDSRC_ONLY_LEFT, "8 bits- 4 channels Left image", "Left image [BGRA]"},
             {GST_ZEDSRC_ONLY_RIGHT, "8 bits- 4 channels Right image", "Right image [BGRA]"},
             {GST_ZEDSRC_LEFT_RIGHT, "8 bits- 4 channels bit Left and Right",
@@ -535,6 +552,12 @@ static GType gst_zedsrc_stream_type_get_type(void) {
              "Left and Depth up/down [BGRA]"},
             {GST_ZEDSRC_LEFT_RIGHT_SBS, "8 bits- 4 channels Left and Right side-by-side",
              "Stereo couple left/right [BGRA]"},
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+            {GST_ZEDSRC_RAW_NV12, "Zero-copy NV12 raw buffer (GMSL cameras only)",
+             "Raw NV12 zero-copy [NV12]"},
+            {GST_ZEDSRC_RAW_NV12_STEREO, "Zero-copy NV12 stereo (left + right side by side)",
+             "Raw NV12 stereo zero-copy [NV12]"},
+#endif
             {0, NULL, NULL},
         };
 
@@ -717,15 +740,14 @@ static GType gst_zedsrc_depth_mode_get_type(void) {
             {static_cast<gint>(sl::DEPTH_MODE::NEURAL_LIGHT),
              "End to End Neural disparity estimation (light), requires AI module", "NEURAL_LIGHT"},
             {static_cast<gint>(sl::DEPTH_MODE::ULTRA),
-             "[DEPRECATED] Computation mode favorising edges and sharpness. Requires more GPU "
-             "memory and computation power.",
+             "Computation mode favorising edges and sharpness. Requires more GPU memory and "
+             "computation power.",
              "ULTRA"},
             {static_cast<gint>(sl::DEPTH_MODE::QUALITY),
-             "[DEPRECATED] Computation mode designed for challenging areas with untextured "
-             "surfaces.",
+             "Computation mode designed for challenging areas with untextured surfaces.",
              "QUALITY"},
             {static_cast<gint>(sl::DEPTH_MODE::PERFORMANCE),
-             "[DEPRECATED] Computation mode optimized for speed.", "PERFORMANCE"},
+             "Computation mode optimized for speed.", "PERFORMANCE"},
             {static_cast<gint>(sl::DEPTH_MODE::NONE),
              "This mode does not compute any depth map. Only rectified stereo images will be "
              "available.",
@@ -764,151 +786,142 @@ static GType gst_zedsrc_3d_meas_ref_frame_get_type(void) {
 }
 
 /* pad templates */
-static GstStaticPadTemplate gst_zedsrc_src_template =
-    GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
-                            GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height = (int)752 , "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height = (int)1440, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)2160, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)2484, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)2400, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw, "   // Color VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth VGA
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD720
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD1080
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD2K
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD1200 (GMSL2)
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth SVGA (GMSL2)
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw, "   // SBS stream VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)1344, "
-                                             "height = (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // SBS stream HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)2560, "
-                                             "height = (int)720, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // SBS stream HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)3840, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // SBS stream HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)4416, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // SBS stream HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)3840, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // SBS stream SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }")));
+static GstStaticPadTemplate gst_zedsrc_src_template = GST_STATIC_PAD_TEMPLATE(
+    "src", GST_PAD_SRC, GST_PAD_ALWAYS,
+    GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
+                     "format = (string)BGRA, "
+                     "width = (int)672, "
+                     "height = (int)752 , "
+                     "framerate = (fraction) { 15, 30, 60, 100 }"
+                     ";"
+                     "video/x-raw, "   // Double stream HD720
+                     "format = (string)BGRA, "
+                     "width = (int)1280, "
+                     "height = (int)1440, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Double stream HD1080
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)2160, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Double stream HD2K
+                     "format = (string)BGRA, "
+                     "width = (int)2208, "
+                     "height = (int)2484, "
+                     "framerate = (fraction)15"
+                     ";"
+                     "video/x-raw, "   // Double stream HD1200 (GMSL2)
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)2400, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Double stream SVGA (GMSL2)
+                     "format = (string)BGRA, "
+                     "width = (int)960, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw, "   // Color VGA
+                     "format = (string)BGRA, "
+                     "width = (int)672, "
+                     "height =  (int)376, "
+                     "framerate = (fraction) { 15, 30, 60, 100 }"
+                     ";"
+                     "video/x-raw, "   // Color HD720
+                     "format = (string)BGRA, "
+                     "width = (int)1280, "
+                     "height =  (int)720, "
+                     "framerate =  (fraction)  { 15, 30, 60}"
+                     ";"
+                     "video/x-raw, "   // Color HD1080
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Color HD2K
+                     "format = (string)BGRA, "
+                     "width = (int)2208, "
+                     "height = (int)1242, "
+                     "framerate = (fraction)15"
+                     ";"
+                     "video/x-raw, "   // Color HD1200 (GMSL2)
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Color SVGA (GMSL2)
+                     "format = (string)BGRA, "
+                     "width = (int)960, "
+                     "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw, "   // Depth VGA
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)672, "
+                     "height =  (int)376, "
+                     "framerate = (fraction) { 15, 30, 60, 100 }"
+                     ";"
+                     "video/x-raw, "   // Depth HD720
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)1280, "
+                     "height =  (int)720, "
+                     "framerate =  (fraction)  { 15, 30, 60}"
+                     ";"
+                     "video/x-raw, "   // Depth HD1080
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)1920, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Depth HD2K
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)2208, "
+                     "height = (int)1242, "
+                     "framerate = (fraction)15"
+                     ";"
+                     "video/x-raw, "   // Depth HD1200 (GMSL2)
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)1920, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw, "   // Depth SVGA (GMSL2)
+                     "format = (string)GRAY16_LE, "
+                     "width = (int)960, "
+                     "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 HD1200 (GMSL2 zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)1920, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 HD1080 (GMSL2 zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)1920, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 SVGA (GMSL2 zero-copy)
+                     "format = (string)NV12, "
+                     "width = (int)960, "
+                     "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 stereo HD1200 (side-by-side)
+                     "format = (string)NV12, "
+                     "width = (int)3840, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+#endif
+                     )));
 
 /* class initialization */
 G_DEFINE_TYPE(GstZedSrc, gst_zedsrc, GST_TYPE_PUSH_SRC);
@@ -940,6 +953,9 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     gstbasesrc_class->query = GST_DEBUG_FUNCPTR(gst_zedsrc_query);
 
     gstpushsrc_class->fill = GST_DEBUG_FUNCPTR(gst_zedsrc_fill);
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    gstpushsrc_class->create = GST_DEBUG_FUNCPTR(gst_zedsrc_create);
+#endif
 
     /* Install GObject properties */
     g_object_class_install_property(
@@ -1721,6 +1737,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 
     src->stream_port = DEFAULT_PROP_STREAM_PORT;
     src->stream_type = DEFAULT_PROP_STREAM_TYPE;
+    src->resolved_stream_type = -1;   // Not resolved yet
     src->depth_min_dist = DEFAULT_PROP_DEPTH_MIN;
     src->depth_max_dist = DEFAULT_PROP_DEPTH_MAX;
     src->depth_mode = DEFAULT_PROP_DEPTH_MODE;
@@ -2641,30 +2658,120 @@ void gst_zedsrc_finalize(GObject *object) {
     G_OBJECT_CLASS(gst_zedsrc_parent_class)->finalize(object);
 }
 
+/* Helper function to check if downstream accepts NV12 NVMM caps */
+static gboolean gst_zedsrc_downstream_accepts_nv12_nvmm(GstZedSrc *src) {
+    GstPad *srcpad = GST_BASE_SRC_PAD(src);
+    GstCaps *peer_caps = gst_pad_peer_query_caps(srcpad, NULL);
+    gboolean accepts_nv12_nvmm = FALSE;
+
+    if (peer_caps) {
+        GST_DEBUG_OBJECT(src, "Peer caps for auto-negotiation: %" GST_PTR_FORMAT, peer_caps);
+
+        // Check if any structure has memory:NVMM feature and NV12 format
+        for (guint i = 0; i < gst_caps_get_size(peer_caps); i++) {
+            GstCapsFeatures *features = gst_caps_get_features(peer_caps, i);
+            GstStructure *structure = gst_caps_get_structure(peer_caps, i);
+
+            if (features && gst_caps_features_contains(features, "memory:NVMM")) {
+                const gchar *format = gst_structure_get_string(structure, "format");
+                if (format && g_strcmp0(format, "NV12") == 0) {
+                    accepts_nv12_nvmm = TRUE;
+                    GST_INFO_OBJECT(src, "Downstream accepts NV12 in NVMM memory");
+                    break;
+                }
+                // Also check if format is not specified (accepts any)
+                if (!format) {
+                    accepts_nv12_nvmm = TRUE;
+                    GST_INFO_OBJECT(src, "Downstream accepts NVMM memory (format unspecified)");
+                    break;
+                }
+            }
+        }
+        gst_caps_unref(peer_caps);
+    } else {
+        GST_DEBUG_OBJECT(src, "No peer caps available for auto-negotiation");
+    }
+
+    return accepts_nv12_nvmm;
+}
+
+/* Resolve stream-type=AUTO to actual stream type based on downstream caps and SDK capability */
+static void gst_zedsrc_resolve_stream_type(GstZedSrc *src) {
+    // If user explicitly set a stream type (not AUTO), use that
+    if (src->stream_type != GST_ZEDSRC_STREAM_AUTO) {
+        src->resolved_stream_type = src->stream_type;
+        GST_DEBUG_OBJECT(src, "Using explicit stream-type=%d", src->resolved_stream_type);
+        return;
+    }
+
+    // AUTO mode: prefer NV12 zero-copy if available
+    GST_INFO_OBJECT(src, "stream-type=AUTO, checking downstream capabilities...");
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    // Check if downstream accepts NV12 NVMM
+    if (gst_zedsrc_downstream_accepts_nv12_nvmm(src)) {
+        // Check if camera is GMSL stereo (ZED X) - NV12 zero-copy only works with GMSL cameras
+        // Note: ZED X One (mono) cameras use zedxonesrc plugin, not zedsrc
+        sl::MODEL model = src->zed.getCameraInformation().camera_model;
+        if (model == sl::MODEL::ZED_X || model == sl::MODEL::ZED_XM) {
+            src->resolved_stream_type = GST_ZEDSRC_RAW_NV12;
+            GST_INFO_OBJECT(src, "Auto-negotiated to NV12 zero-copy (stream-type=%d)",
+                            src->resolved_stream_type);
+            return;
+        } else {
+            GST_INFO_OBJECT(src,
+                            "Camera model %s does not support NV12 zero-copy, "
+                            "falling back to BGRA",
+                            sl::toString(model).c_str());
+        }
+    } else {
+        GST_INFO_OBJECT(src, "Downstream does not accept NV12 NVMM, falling back to BGRA");
+    }
+#else
+    GST_INFO_OBJECT(src, "NV12 zero-copy not available (SDK < 5.2), using BGRA");
+#endif
+
+    // Default fallback: LEFT image in BGRA
+    src->resolved_stream_type = GST_ZEDSRC_ONLY_LEFT;
+    GST_INFO_OBJECT(src, "Auto-negotiated to BGRA LEFT (stream-type=%d)",
+                    src->resolved_stream_type);
+}
+
 static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
     GST_TRACE_OBJECT(src, "gst_zedsrc_calculate_caps");
+
+    // Use resolved_stream_type which accounts for AUTO negotiation
+    gint stream_type = src->resolved_stream_type;
 
     guint32 width, height;
     gint fps;
     GstVideoInfo vinfo;
     GstVideoFormat format = GST_VIDEO_FORMAT_BGRA;
 
-    if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
+    if (stream_type == GST_ZEDSRC_DEPTH_16) {
         format = GST_VIDEO_FORMAT_GRAY16_LE;
     }
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    else if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        format = GST_VIDEO_FORMAT_NV12;
+    }
+#endif
 
     sl::CameraInformation cam_info = src->zed.getCameraInformation();
 
     width = cam_info.camera_configuration.resolution.width;
     height = cam_info.camera_configuration.resolution.height;
 
-    if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT || src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
+    if (stream_type == GST_ZEDSRC_LEFT_RIGHT || stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         height *= 2;
+    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
+        width *= 2;   // Side-by-side stereo (BGRA)
     }
-
-    if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
-        width *= 2;
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    else if (stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        width *= 2;   // Side-by-side stereo (NV12)
     }
+#endif
 
     fps = static_cast<gint>(cam_info.camera_configuration.fps);
 
@@ -2678,6 +2785,15 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
         vinfo.fps_n = fps;
         vinfo.fps_d = 1;
         src->caps = gst_video_info_to_caps(&vinfo);
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+        // Add memory:NVMM feature for zero-copy NV12 modes
+        if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+            GstCapsFeatures *features = gst_caps_features_new("memory:NVMM", NULL);
+            gst_caps_set_features(src->caps, 0, features);
+            GST_INFO_OBJECT(src, "Added memory:NVMM feature for zero-copy");
+        }
+#endif
     }
 
     gst_base_src_set_blocksize(GST_BASE_SRC(src), src->out_framesize);
@@ -3135,6 +3251,9 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     }
     // <---- Body Tracking
 
+    // Resolve stream type (handles AUTO negotiation based on downstream caps)
+    gst_zedsrc_resolve_stream_type(src);
+
     if (!gst_zedsrc_calculate_caps(src)) {
         return FALSE;
     }
@@ -3264,56 +3383,8 @@ static gboolean gst_zedsrc_query(GstBaseSrc *bsrc, GstQuery *query) {
     return ret;
 }
 
-static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
-    GstZedSrc *src = GST_ZED_SRC(psrc);
-    GST_TRACE_OBJECT(src, "gst_zedsrc_fill");
-
-    /// All locals here for goto
-    sl::ERROR_CODE ret;
-    GstMapInfo minfo;
-    GstClock *clock = nullptr;
-    GstClockTime clock_time = GST_CLOCK_TIME_NONE;
-
-    gboolean mapped = FALSE;
-    GstFlowReturn flow_ret = GST_FLOW_OK;
-
-    // objects we use later, but must be declared before any goto
-    ZedObjectData obj_data[GST_ZEDSRC_MAX_OBJECTS] = {0};
-    guint8 obj_count = 0;
-    guint64 offset = 0;
-    GstZedSrcMeta *meta = nullptr;
-
-    sl::RuntimeParameters zedRtParams;
-    CUcontext zctx;
-
-    sl::Mat left_img;
-    sl::Mat right_img;
-    sl::Mat depth_data;
-
-    sl::CameraInformation cam_info;
-    ZedInfo info;
-    ZedPose pose;
-    ZedSensors sens;
-
-    sl::ObjectDetectionRuntimeParameters od_rt_params;
-    std::vector<sl::OBJECT_CLASS> class_filter;
-    std::map<sl::OBJECT_CLASS, float> class_det_conf;
-    sl::Objects det_objs;
-
-    sl::BodyTrackingRuntimeParameters bt_rt_params;
-    sl::Bodies bodies;
-
-    //// Acquisition start time
-    if (!src->is_started) {
-        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
-        if (start_clock) {
-            src->acq_start_time = gst_clock_get_time(start_clock);
-            gst_object_unref(start_clock);
-        }
-        src->is_started = TRUE;
-    }
-
-    // ----> Set runtime parameters
+static void gst_zedsrc_setup_runtime_parameters(GstZedSrc *src,
+                                                sl::RuntimeParameters &zedRtParams) {
     GST_TRACE_OBJECT(src, "CAMERA RUNTIME PARAMETERS");
     if (src->depth_mode == static_cast<gint>(sl::DEPTH_MODE::NONE) && !src->pos_tracking) {
         zedRtParams.enable_depth = false;
@@ -3355,110 +3426,31 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             }
         }
     }
-    // <---- Set runtime parameters
+}
 
-    /// Push zed cuda context as current
-    int cu_err = (int) cudaGetLastError();
-    if (cu_err > 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Cuda ERROR trigger before ZED SDK : %d", cu_err),
-                          (NULL));
-        return GST_FLOW_ERROR;
-    }
+static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockTime clock_time) {
+    ZedInfo info;
+    ZedPose pose;
+    ZedSensors sens;
+    ZedObjectData *obj_data = new ZedObjectData[GST_ZEDSRC_MAX_OBJECTS];
+    memset(obj_data, 0, GST_ZEDSRC_MAX_OBJECTS * sizeof(ZedObjectData));
 
-    zctx = src->zed.getCUDAContext();
-    cuCtxPushCurrent_v2(zctx);
+    guint8 obj_count = 0;
+    guint64 offset = 0;
+    sl::ERROR_CODE ret;
 
-    /// Utils for check ret value and send to out
-#define CHECK_RET_OR_GOTO(_ret_expr)                                                               \
-    do {                                                                                           \
-        ret = (_ret_expr);                                                                         \
-        if (ret != sl::ERROR_CODE::SUCCESS) {                                                      \
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,                                               \
-                              ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(), \
-                               sl::toVerbose(ret).c_str()),                                        \
-                              (NULL));                                                             \
-            flow_ret = GST_FLOW_ERROR;                                                             \
-            goto out;                                                                              \
-        }                                                                                          \
-    } while (0)
-
-    // ----> ZED grab
-    ret = src->zed.grab(zedRtParams);
-    if (ret > sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
-                           sl::toVerbose(ret).c_str()),
-                          (NULL));
-        flow_ret = GST_FLOW_ERROR;
-        goto out;
-    }
-    // <---- ZED grab
-
-    // ----> Clock update
-    clock = gst_element_get_clock(GST_ELEMENT(src));
-    if (clock) {
-        clock_time = gst_clock_get_time(clock);
-        gst_object_unref(clock);
-        clock = nullptr;
-    }
-    // <---- Clock update
-
-    // Memory mapping
-    if (FALSE == gst_buffer_map(buf, &minfo, GST_MAP_WRITE)) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"), (NULL));
-        flow_ret = GST_FLOW_ERROR;
-        goto out;
-    }
-    mapped = TRUE;
-
-    // ----> Mats retrieving
-    if (src->stream_type == GST_ZEDSRC_ONLY_LEFT) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_ONLY_RIGHT) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
-        CHECK_RET_OR_GOTO(
-            src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-        CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU));
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::SIDE_BY_SIDE, sl::MEM::CPU));
-    }
-
-    /* --- Memory copy into GstBuffer ------------------------------------ */
-    if (src->stream_type == GST_ZEDSRC_DEPTH_16) {
-        memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_RIGHT) {
-        /* Left RGB data on half top */
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
-        /* Right RGB data on half bottom */
-        memcpy(minfo.data + minfo.size / 2, right_img.getPtr<sl::uchar4>(), minfo.size / 2);
-    } else if (src->stream_type == GST_ZEDSRC_LEFT_DEPTH) {
-        /* RGB data on half top */
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
-
-        /* Depth data on half bottom */
-        {
-            uint32_t *gst_data = (uint32_t *) (minfo.data + minfo.size / 2);
-            sl::float1 *depthDataPtr = depth_data.getPtr<sl::float1>();
-
-            for (unsigned long i = 0; i < minfo.size / 8; i++) {
-                *(gst_data++) = static_cast<uint32_t>(*(depthDataPtr++));
-            }
-        }
-    } else {
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
-    }
-    // <---- Memory copy
+    sl::CameraInformation cam_info;
+    sl::ObjectDetectionRuntimeParameters od_rt_params;
+    std::vector<sl::OBJECT_CLASS> class_filter;
+    std::map<sl::OBJECT_CLASS, float> class_det_conf;
+    sl::Objects det_objs;
+    sl::BodyTrackingRuntimeParameters bt_rt_params;
+    sl::Bodies bodies;
 
     // ----> Info metadata
     cam_info = src->zed.getCameraInformation();
     info.cam_model = (gint) cam_info.camera_model;
-    info.stream_type = src->stream_type;
+    info.stream_type = src->resolved_stream_type;   // Use resolved type for metadata
     info.grab_single_frame_width = cam_info.camera_configuration.resolution.width;
     info.grab_single_frame_height = cam_info.camera_configuration.resolution.height;
     if (info.grab_single_frame_height == 752 || info.grab_single_frame_height == 1440 ||
@@ -3744,9 +3736,170 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Timestamp meta-data
 
     offset = GST_BUFFER_OFFSET(buf);
-    meta = gst_buffer_add_zed_src_meta(buf, info, pose, sens,
-                                       src->object_detection | src->body_tracking, obj_count,
-                                       obj_data, offset);
+    gst_buffer_add_zed_src_meta(buf, info, pose, sens, src->object_detection | src->body_tracking,
+                                obj_count, obj_data, offset);
+
+    delete[] obj_data;
+}
+
+static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
+    GstZedSrc *src = GST_ZED_SRC(psrc);
+    GST_TRACE_OBJECT(src, "gst_zedsrc_fill");
+
+    /// All locals here for goto
+    sl::ERROR_CODE ret;
+    GstMapInfo minfo;
+    GstClock *clock = nullptr;
+    GstClockTime clock_time = GST_CLOCK_TIME_NONE;
+
+    gboolean mapped = FALSE;
+    GstFlowReturn flow_ret = GST_FLOW_OK;
+
+    // objects we use later, but must be declared before any goto
+    ZedObjectData obj_data[GST_ZEDSRC_MAX_OBJECTS] = {0};
+    guint8 obj_count = 0;
+    guint64 offset = 0;
+    GstZedSrcMeta *meta = nullptr;
+
+    sl::RuntimeParameters zedRtParams;
+    CUcontext zctx;
+
+    // Use resolved_stream_type which accounts for AUTO negotiation
+    gint stream_type = src->resolved_stream_type;
+
+    sl::Mat left_img;
+    sl::Mat right_img;
+    sl::Mat depth_data;
+
+    sl::CameraInformation cam_info;
+    ZedInfo info;
+    ZedPose pose;
+    ZedSensors sens;
+
+    sl::ObjectDetectionRuntimeParameters od_rt_params;
+    std::vector<sl::OBJECT_CLASS> class_filter;
+    std::map<sl::OBJECT_CLASS, float> class_det_conf;
+    sl::Objects det_objs;
+
+    sl::BodyTrackingRuntimeParameters bt_rt_params;
+    sl::Bodies bodies;
+
+    //// Acquisition start time
+    if (!src->is_started) {
+        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (start_clock) {
+            src->acq_start_time = gst_clock_get_time(start_clock);
+            gst_object_unref(start_clock);
+        }
+        src->is_started = TRUE;
+    }
+
+    // ----> Set runtime parameters
+    gst_zedsrc_setup_runtime_parameters(src, zedRtParams);
+    // <---- Set runtime parameters
+
+    /// Push zed cuda context as current
+    int cu_err = (int) cudaGetLastError();
+    if (cu_err > 0) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Cuda ERROR trigger before ZED SDK : %d", cu_err),
+                          (NULL));
+        return GST_FLOW_ERROR;
+    }
+
+    zctx = src->zed.getCUDAContext();
+    cuCtxPushCurrent_v2(zctx);
+
+    /// Utils for check ret value and send to out
+#define CHECK_RET_OR_GOTO(_ret_expr)                                                               \
+    do {                                                                                           \
+        ret = (_ret_expr);                                                                         \
+        if (ret != sl::ERROR_CODE::SUCCESS) {                                                      \
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,                                               \
+                              ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(), \
+                               sl::toVerbose(ret).c_str()),                                        \
+                              (NULL));                                                             \
+            flow_ret = GST_FLOW_ERROR;                                                             \
+            goto out;                                                                              \
+        }                                                                                          \
+    } while (0)
+
+    // ----> ZED grab
+    ret = src->zed.grab(zedRtParams);
+    if (ret > sl::ERROR_CODE::SUCCESS) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                           sl::toVerbose(ret).c_str()),
+                          (NULL));
+        flow_ret = GST_FLOW_ERROR;
+        goto out;
+    }
+    // <---- ZED grab
+
+    // ----> Clock update
+    clock = gst_element_get_clock(GST_ELEMENT(src));
+    if (clock) {
+        clock_time = gst_clock_get_time(clock);
+        gst_object_unref(clock);
+        clock = nullptr;
+    }
+    // <---- Clock update
+
+    // Memory mapping
+    if (FALSE == gst_buffer_map(buf, &minfo, GST_MAP_WRITE)) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"), (NULL));
+        flow_ret = GST_FLOW_ERROR;
+        goto out;
+    }
+    mapped = TRUE;
+
+    // ----> Mats retrieving
+    // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_STEREO) are handled
+    // by gst_zedsrc_create() which wraps NvBufSurface directly without memcpy.
+    // This fill() function only handles non-NVMM stream types.
+    if (stream_type == GST_ZEDSRC_ONLY_LEFT) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+    } else if (stream_type == GST_ZEDSRC_ONLY_RIGHT) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU));
+    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU));
+    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::SIDE_BY_SIDE, sl::MEM::CPU));
+    } else if (stream_type == GST_ZEDSRC_DEPTH_16) {
+        CHECK_RET_OR_GOTO(
+            src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU));
+    } else if (stream_type == GST_ZEDSRC_LEFT_DEPTH) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU));
+    }
+
+    /* --- Memory copy into GstBuffer ------------------------------------ */
+    if (stream_type == GST_ZEDSRC_DEPTH_16) {
+        memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
+    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT) {
+        /* Left RGB data on half top */
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
+        /* Right RGB data on half bottom */
+        memcpy(minfo.data + minfo.size / 2, right_img.getPtr<sl::uchar4>(), minfo.size / 2);
+    } else if (stream_type == GST_ZEDSRC_LEFT_DEPTH) {
+        /* RGB data on half top */
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
+
+        /* Depth data on half bottom */
+        {
+            uint32_t *gst_data = (uint32_t *) (minfo.data + minfo.size / 2);
+            sl::float1 *depthDataPtr = depth_data.getPtr<sl::float1>();
+
+            for (unsigned long i = 0; i < minfo.size / 8; i++) {
+                *(gst_data++) = static_cast<uint32_t>(*(depthDataPtr++));
+            }
+        }
+    } else {
+        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
+    }
+    // <---- Memory copy
+
+    gst_zedsrc_attach_metadata(src, buf, clock_time);
 
 out:
     if (mapped)
@@ -3761,6 +3914,182 @@ out:
 
     return GST_FLOW_OK;
 }
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+/**
+ * @brief Destroy callback for RawBuffer attached to GstBuffer
+ *
+ * This is called when the GstBuffer is unreffed, releasing the RawBuffer
+ * back to the ZED SDK capture pipeline.
+ */
+static void raw_buffer_destroy_notify(gpointer data) {
+    sl::RawBuffer *raw = static_cast<sl::RawBuffer *>(data);
+    if (raw) {
+        GST_DEBUG("Releasing RawBuffer back to SDK");
+        delete raw;
+    }
+}
+
+/**
+ * @brief Create function for NVMM zero-copy mode
+ *
+ * Unlike fill(), this creates a new GstBuffer wrapping the DMA-BUF FD
+ * from the NvBufSurface directly, enabling true zero-copy to downstream
+ * elements like nvvidconv, nv3dsink, nvv4l2h265enc.
+ */
+static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
+    GstZedSrc *src = GST_ZED_SRC(psrc);
+
+    // For non-NVMM modes, fall back to the fill() path
+    // We must allocate the buffer ourselves and call fill() directly,
+    // because delegating to parent->create doesn't work correctly when
+    // both create and fill vmethods are set on the class.
+    // Use resolved_stream_type which accounts for AUTO negotiation
+    gint stream_type = src->resolved_stream_type;
+
+    if (stream_type != GST_ZEDSRC_RAW_NV12 && stream_type != GST_ZEDSRC_RAW_NV12_STEREO) {
+        GstBuffer *buf;
+        GstFlowReturn ret;
+        GstBaseSrc *basesrc = GST_BASE_SRC(psrc);
+        GstBufferPool *pool;
+
+        // Try to use buffer pool if available
+        pool = gst_base_src_get_buffer_pool(basesrc);
+        if (pool) {
+            ret = gst_buffer_pool_acquire_buffer(pool, &buf, NULL);
+            gst_object_unref(pool);
+        } else {
+            // Allocate buffer directly
+            buf = gst_buffer_new_allocate(NULL, src->out_framesize, NULL);
+            ret = (buf != NULL) ? GST_FLOW_OK : GST_FLOW_ERROR;
+        }
+
+        if (ret != GST_FLOW_OK || buf == NULL) {
+            GST_ERROR_OBJECT(src, "Failed to allocate buffer");
+            return GST_FLOW_ERROR;
+        }
+
+        // Fill the buffer using our fill function
+        ret = gst_zedsrc_fill(psrc, buf);
+        if (ret != GST_FLOW_OK) {
+            gst_buffer_unref(buf);
+            return ret;
+        }
+
+        *outbuf = buf;
+        return GST_FLOW_OK;
+    }
+
+    GST_TRACE_OBJECT(src, "gst_zedsrc_create (NVMM zero-copy)");
+
+    sl::ERROR_CODE ret;
+    GstFlowReturn flow_ret = GST_FLOW_OK;
+    GstClock *clock = nullptr;
+    GstClockTime clock_time = GST_CLOCK_TIME_NONE;
+    CUcontext zctx;
+
+    // Acquisition start time
+    if (!src->is_started) {
+        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (start_clock) {
+            src->acq_start_time = gst_clock_get_time(start_clock);
+            gst_object_unref(start_clock);
+        }
+        src->is_started = TRUE;
+    }
+
+    // Runtime parameters - Unified path
+    sl::RuntimeParameters zedRtParams;
+    gst_zedsrc_setup_runtime_parameters(src, zedRtParams);
+
+    // Grab frame
+    if (cuCtxPushCurrent_v2(src->zed.getCUDAContext()) != CUDA_SUCCESS) {
+        GST_ERROR_OBJECT(src, "Failed to push CUDA context");
+        return GST_FLOW_ERROR;
+    }
+
+    ret = src->zed.grab(zedRtParams);
+    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
+        GST_INFO_OBJECT(src, "End of SVO file");
+        cuCtxPopCurrent_v2(NULL);
+        return GST_FLOW_EOS;
+    } else if (ret > sl::ERROR_CODE::SUCCESS) {
+        GST_ERROR_OBJECT(src, "grab() failed: %s", sl::toString(ret).c_str());
+        cuCtxPopCurrent_v2(NULL);
+        return GST_FLOW_ERROR;
+    }
+
+    // Get clock for timestamp
+    clock = gst_element_get_clock(GST_ELEMENT(src));
+    if (clock) {
+        clock_time = gst_clock_get_time(clock);
+        gst_object_unref(clock);
+    }
+
+    // Retrieve RawBuffer - allocate on heap for GstBuffer lifecycle
+    sl::RawBuffer *raw_buffer = new sl::RawBuffer();
+    ret = src->zed.retrieveImage(*raw_buffer);
+    if (ret != sl::ERROR_CODE::SUCCESS) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()),
+                          (NULL));
+        delete raw_buffer;
+        cuCtxPopCurrent_v2(NULL);
+        return GST_FLOW_ERROR;
+    }
+
+    // Get NvBufSurface
+    NvBufSurface *nvbuf = static_cast<NvBufSurface *>(raw_buffer->getRawBuffer());
+    if (!nvbuf) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("RawBuffer returned null NvBufSurface"), (NULL));
+        delete raw_buffer;
+        cuCtxPopCurrent_v2(NULL);
+        return GST_FLOW_ERROR;
+    }
+
+    if (nvbuf->numFilled == 0) {
+        GST_WARNING_OBJECT(src, "NvBufSurface has no filled surfaces");
+        delete raw_buffer;
+        cuCtxPopCurrent_v2(NULL);
+        // We cannot return NO_BUFFER here easily without implementing a retry loop.
+        // For debugging purposes, let's fail softly.
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("NvBufSurface empty"), (NULL));
+        return GST_FLOW_ERROR;
+    }
+
+    // Log buffer info
+    NvBufSurfaceParams *params = &nvbuf->surfaceList[0];
+    GST_DEBUG_OBJECT(src, "NvBufSurface: %p, FD: %ld, size: %d, memType: %d, format: %d", nvbuf,
+                     params->bufferDesc, params->dataSize, nvbuf->memType, params->colorFormat);
+
+    // Create GstBuffer wrapping the NvBufSurface pointer directly
+    // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
+    // DeepStream and other NVIDIA elements expect this format
+    GstBuffer *buf = gst_buffer_new_wrapped_full(
+        (GstMemoryFlags) 0,         // NVIDIA elements require writable memory even for reading   //
+                                    // NVIDIA elements require writable memory even for reading
+        nvbuf,                      // Data pointer is the NvBufSurface*
+        sizeof(NvBufSurface),       // Max size
+        0,                          // Offset
+        sizeof(NvBufSurface),       // Size
+        raw_buffer,                 // User data for destroy callback
+        raw_buffer_destroy_notify   // Called when buffer is unreffed
+    );
+
+    // Attach Unified Metadata
+    gst_zedsrc_attach_metadata(src, buf, clock_time);
+
+    cuCtxPopCurrent_v2(NULL);
+
+    if (src->stop_requested) {
+        gst_buffer_unref(buf);
+        return GST_FLOW_FLUSHING;
+    }
+
+    *outbuf = buf;
+    return GST_FLOW_OK;
+}
+#endif   // SL_ENABLE_ADVANCED_CAPTURE_API
 
 static gboolean plugin_init(GstPlugin *plugin) {
     GST_DEBUG_CATEGORY_INIT(gst_zedsrc_debug, "zedsrc", 0, "debug category for zedsrc element");

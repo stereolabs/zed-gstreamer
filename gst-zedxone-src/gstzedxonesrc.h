@@ -93,6 +93,9 @@ struct _GstZedXOneSrc {
     gint _denoising;   // Image Denoising [0,100]
 
     gboolean _outputRectifiedImage;   // Output rectified image (FALSE for custom optics)
+
+    gint _streamType;           // Stream type [enum]
+    gint _resolvedStreamType;   // Actual stream type after auto-negotiation (-1 = not resolved)
     // <---- Properties
 
     int _realFps;   // Real FPS

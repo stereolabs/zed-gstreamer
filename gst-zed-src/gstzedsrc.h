@@ -58,6 +58,7 @@ struct _GstZedSrc {
     GString *stream_ip;
     gint stream_port;
     gint stream_type;
+    gint resolved_stream_type;   // Actual stream type after auto-negotiation (-1 = not resolved)
     gfloat depth_min_dist;
     gfloat depth_max_dist;
     gint depth_mode;   // Depth mode [enum]
