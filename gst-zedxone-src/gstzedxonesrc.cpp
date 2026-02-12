@@ -318,35 +318,35 @@ static GstStaticPadTemplate gst_zedxonesrc_src_template = GST_STATIC_PAD_TEMPLAT
                      "framerate = (fraction) { 15, 30, 60, 120 }"
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
                      ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy SVGA
                      "format = (string)NV12, "
                      "width = (int)960, "
                      "height = (int)600, "
                      "framerate = (fraction) { 15, 30, 60, 120 }"
                      ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy HD1080
                      "format = (string)NV12, "
                      "width = (int)1920, "
                      "height = (int)1080, "
-                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     "framerate = (fraction) { 15, 30, 60 }"
                      ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy HD1200
                      "format = (string)NV12, "
                      "width = (int)1920, "
                      "height = (int)1200, "
-                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     "framerate = (fraction) { 15, 30, 60 }"
                      ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy QHDPLUS
                      "format = (string)NV12, "
                      "width = (int)3200, "
                      "height = (int)1800, "
-                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     "framerate = (fraction) { 15, 30 }"
                      ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy 4K
                      "format = (string)NV12, "
                      "width = (int)3840, "
                      "height = (int)2160, "
-                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     "framerate = (fraction) { 15, 30 }"
 #endif
                      )));
 
@@ -1794,17 +1794,19 @@ static gboolean gst_zedxonesrc_set_caps(GstBaseSrc *bsrc, GstCaps *caps) {
     GST_INFO_OBJECT(src, "Negotiated format: %s", gst_video_format_to_string(src->_outputFormat));
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    // Validate NV12 zero-copy sizes to avoid invalid width/height pairings
+    // Validate NV12 zero-copy sizes: the negotiated resolution must match the camera
+    // native resolution exactly, since zero-copy maps the raw buffer directly.
     if (src->_resolvedStreamType == GST_ZEDXONESRC_RAW_NV12) {
         const gint width = src->_outputWidth;
         const gint height = src->_outputHeight;
-        const gboolean valid_size =
-            (width == 960 && height == 600) || (width == 1920 && height == 1080) ||
-            (width == 1920 && height == 1200) || (width == 3200 && height == 1800) ||
-            (width == 3840 && height == 2160);
+        const guint cam_w = src->_cameraWidth;
+        const guint cam_h = src->_cameraHeight;
+        const gboolean valid_size = (width == (gint)cam_w && height == (gint)cam_h);
 
         if (!valid_size) {
-            GST_ERROR_OBJECT(src, "Invalid negotiated NV12 size %dx%d", width, height);
+            GST_ERROR_OBJECT(src,
+                             "Invalid negotiated NV12 size %dx%d (expected camera size %ux%u)",
+                             width, height, cam_w, cam_h);
             return FALSE;
         }
     }

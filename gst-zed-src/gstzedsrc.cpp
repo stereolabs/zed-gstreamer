@@ -174,6 +174,7 @@ enum {
     PROP_ASYNC_GRAB_CAMERA_RECOVERY,
     PROP_GRAB_COMPUTE_CAPPING_FPS,
     PROP_ENABLE_IMAGE_VALIDITY_CHECK,
+    PROP_ASYNC_IMAGE_RETRIEVAL,   // Deprecated no-op, kept for backward compatibility
     PROP_MAX_WORKING_RES_W,
     PROP_MAX_WORKING_RES_H,
     PROP_REMOVE_SATURATED_AREAS,
@@ -804,29 +805,29 @@ static GstStaticPadTemplate gst_zedsrc_src_template = GST_STATIC_PAD_TEMPLATE(
                      "framerate = (fraction) { 15, 30, 60, 100, 120 }"
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
                      ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy SVGA (GMSL2)
                      "format = (string)NV12, "
                      "width = (int)960, "
                      "height = (int)600, "
-                     "framerate = (fraction) { 15, 30, 60, 100, 120 }"
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
                      ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy HD1080 (GMSL2)
                      "format = (string)NV12, "
                      "width = (int)1920, "
                      "height = (int)1080, "
-                     "framerate = (fraction) { 15, 30, 60, 100, 120 }"
+                     "framerate = (fraction) { 15, 30, 60 }"
                      ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy HD1200 (GMSL2)
                      "format = (string)NV12, "
                      "width = (int)1920, "
                      "height = (int)1200, "
-                     "framerate = (fraction) { 15, 30, 60, 100, 120 }"
+                     "framerate = (fraction) { 15, 30, 60 }"
                      ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 stereo side-by-side (fixed resolution)
+                     "video/x-raw(memory:NVMM), "   // NV12 stereo side-by-side HD1200 (GMSL2)
                      "format = (string)NV12, "
                      "width = (int)3840, "
                      "height = (int)1200, "
-                     "framerate = (fraction) { 15, 30, 60, 100, 120 }"
+                     "framerate = (fraction) { 15, 30 }"
 #endif
                      )));
 
@@ -1552,6 +1553,15 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                              DEFAULT_PROP_ENABLE_IMAGE_VALIDITY_CHECK,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    // Deprecated: kept for backward compatibility, value is ignored
+    g_object_class_install_property(
+        gobject_class, PROP_ASYNC_IMAGE_RETRIEVAL,
+        g_param_spec_boolean("async-image-retrieval", "Async Image Retrieval (deprecated)",
+                             "Deprecated, no longer used. Kept for backward compatibility.",
+                             FALSE,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+                                            | G_PARAM_DEPRECATED)));
+
     g_object_class_install_property(
         gobject_class, PROP_MAX_WORKING_RES_W,
         g_param_spec_int("max-working-res-w", "Maximum Working Resolution Width",
@@ -2122,6 +2132,9 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
     case PROP_ENABLE_IMAGE_VALIDITY_CHECK:
         src->enable_image_validity_check = g_value_get_boolean(value);
         break;
+    case PROP_ASYNC_IMAGE_RETRIEVAL:
+        // Deprecated no-op: silently accept but ignore
+        break;
     case PROP_MAX_WORKING_RES_W:
         src->max_working_res_w = g_value_get_int(value);
         break;
@@ -2470,6 +2483,10 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         break;
     case PROP_ENABLE_IMAGE_VALIDITY_CHECK:
         g_value_set_boolean(value, src->enable_image_validity_check);
+        break;
+    case PROP_ASYNC_IMAGE_RETRIEVAL:
+        // Deprecated no-op: always return FALSE
+        g_value_set_boolean(value, FALSE);
         break;
     case PROP_MAX_WORKING_RES_W:
         g_value_set_int(value, src->max_working_res_w);
@@ -3486,22 +3503,29 @@ static gboolean gst_zedsrc_set_caps(GstBaseSrc *bsrc, GstCaps *caps) {
         }
     }
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    // Validate NV12 zero-copy sizes to avoid invalid width/height pairings
+    // Validate NV12 zero-copy sizes: the negotiated resolution must match the camera
+    // native resolution exactly, since zero-copy maps the raw buffer directly.
     if (src->resolved_stream_type == GST_ZEDSRC_RAW_NV12 ||
         src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
         const gint width = src->output_width;
         const gint height = src->output_height;
+        const guint cam_w = src->camera_width;
+        const guint cam_h = src->camera_height;
         gboolean valid_size = FALSE;
 
         if (src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
-            valid_size = (width == 3840 && height == 1200);
+            // Stereo side-by-side: width = 2 * cam_w, height = cam_h
+            valid_size = (width == (gint)(cam_w * 2) && height == (gint)cam_h);
         } else {
-            valid_size = (width == 960 && height == 600) || (width == 1920 && height == 1080) ||
-                         (width == 1920 && height == 1200);
+            valid_size = (width == (gint)cam_w && height == (gint)cam_h);
         }
 
         if (!valid_size) {
-            GST_ERROR_OBJECT(src, "Invalid negotiated NV12 size %dx%d", width, height);
+            GST_ERROR_OBJECT(src,
+                             "Invalid negotiated NV12 size %dx%d (expected %ux%u for %s)",
+                             width, height, cam_w, cam_h,
+                             src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_STEREO
+                                 ? "stereo" : "mono");
             return FALSE;
         }
     }
