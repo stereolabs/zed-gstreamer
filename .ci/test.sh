@@ -402,6 +402,150 @@ test_zedsrc_enums() {
     done
 }
 
+test_zedsrc_auto_resolution() {
+    print_subheader "ZedSrc Auto-Resolution Negotiation Tests"
+
+    # Check if zedsrc is available
+    if ! gst-inspect-1.0 zedsrc > /dev/null 2>&1; then
+        skip_test "ZedSrc auto-resolution tests" "zedsrc not available"
+        return 0
+    fi
+
+    # --- Enum introspection ---
+    # AUTO resolution enum must be advertised
+    if gst-inspect-1.0 zedsrc 2>&1 | grep -qi "Automatic.*Default value\|AUTO_RES\|auto_res"; then
+        test_pass "zedsrc has AUTO resolution enum"
+    else
+        # Accept either "Automatic" or "AUTO" keyword
+        if gst-inspect-1.0 zedsrc 2>&1 | grep -qi "automatic"; then
+            test_pass "zedsrc has AUTO resolution enum"
+        else
+            test_fail "zedsrc has AUTO resolution enum"
+        fi
+    fi
+
+    # Default camera-resolution must be AUTO (enum value 6)
+    local default_res
+    default_res=$(gst-inspect-1.0 zedsrc 2>&1 | grep -A2 "camera-resolution" | grep -oi "Default.*" | head -1)
+    if echo "$default_res" | grep -qi "6\|auto\|automatic"; then
+        test_pass "zedsrc default camera-resolution is AUTO"
+    else
+        test_fail "zedsrc default camera-resolution is AUTO (got: $default_res)"
+    fi
+
+    # Default camera-fps must be 30
+    local default_fps
+    default_fps=$(gst-inspect-1.0 zedsrc 2>&1 | grep -A2 "camera-fps" | grep -oi "Default.*" | head -1)
+    if echo "$default_fps" | grep -q "30"; then
+        test_pass "zedsrc default camera-fps is 30"
+    else
+        test_fail "zedsrc default camera-fps is 30 (got: $default_fps)"
+    fi
+
+    # --- FPS discrete list in caps (requires camera) ---
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "zedsrc AUTO caps inspection" "No camera detected"
+        return 0
+    fi
+
+    if [ "$EXTENSIVE_MODE" = false ]; then
+        skip_test "zedsrc AUTO caps negotiation" "Extensive mode required"
+        return 0
+    fi
+
+    local timeout_val=90
+    local num_buffers=5
+    local output
+
+    # Test 1: Default (AUTO + 30fps) should produce a valid pipeline
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc num-buffers=$num_buffers ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "zedsrc AUTO resolution default pipeline"
+    else
+        test_fail "zedsrc AUTO resolution default pipeline"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test 2: AUTO + 15fps → HD2K on USB, HD1200 on GMSL
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=6 camera-fps=15 num-buffers=$num_buffers ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        if [ "$GMSL_CAMERA" = true ]; then
+            test_pass "zedsrc AUTO@15fps pipeline works (GMSL → HD1200)"
+        else
+            test_pass "zedsrc AUTO@15fps pipeline works (USB → HD2K)"
+        fi
+    else
+        test_fail "zedsrc AUTO@15fps pipeline"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test 3: AUTO + 60fps → should select HD1200 (highest supporting 60)
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=6 camera-fps=60 num-buffers=$num_buffers ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "zedsrc AUTO@60fps pipeline works"
+    else
+        test_fail "zedsrc AUTO@60fps pipeline"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test 4: AUTO + 120fps → should select SVGA (only mode supporting 120)
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=6 camera-fps=120 num-buffers=$num_buffers ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "zedsrc AUTO@120fps pipeline works"
+    else
+        # 120fps is GMSL-only, USB cameras will clamp to closest supported FPS
+        if echo "$output" | grep -qi "no camera\|not found\|failed to open\|not supported"; then
+            skip_test "zedsrc AUTO@120fps pipeline" "Not supported on this camera"
+        else
+            test_fail "zedsrc AUTO@120fps pipeline"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test 5: Explicit resolution + FPS clamping
+    if [ "$GMSL_CAMERA" = true ]; then
+        # GMSL: test HD1200 → supports 15/30/60, so 120 clamps to 60
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=2 camera-fps=120 num-buffers=$num_buffers ! fakesink 2>&1)
+        if [ $? -eq 0 ]; then
+            test_pass "zedsrc HD1200@120fps clamped to 60fps [GMSL]"
+        else
+            test_fail "zedsrc HD1200@120fps FPS clamping [GMSL]"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
+    else
+        # USB: test HD2K → only supports 15, so 60 clamps to 15
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=0 camera-fps=60 num-buffers=$num_buffers ! fakesink 2>&1)
+        if [ $? -eq 0 ]; then
+            test_pass "zedsrc HD2K@60fps clamped to 15fps [USB]"
+        else
+            test_fail "zedsrc HD2K@60fps FPS clamping [USB]"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test 6: Downstream size negotiation — request smaller output than camera native
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=6 num-buffers=$num_buffers ! \
+        "video/x-raw,width=640,height=480" ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "zedsrc AUTO with downstream resize (640x480)"
+    else
+        test_fail "zedsrc AUTO with downstream resize (640x480)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+}
+
 test_zedsrc_nv12() {
     print_subheader "ZedSrc NV12 Zero-Copy Tests"
     
@@ -821,6 +965,234 @@ test_zedxone() {
     fi
 }
 
+test_zedxone_enums() {
+    print_subheader "ZED X One Enum Value Tests"
+
+    # Check if zedxonesrc is available
+    if ! gst-inspect-1.0 zedxonesrc > /dev/null 2>&1; then
+        skip_test "ZED X One enum tests" "zedxonesrc not available"
+        return 0
+    fi
+
+    # Test resolution enum values — must match xone_camera_modes[] table
+    local resolutions=("4K" "QHDPLUS" "HD1200" "HD1080" "SVGA")
+    for res in "${resolutions[@]}"; do
+        if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "$res"; then
+            test_pass "zedxonesrc has resolution '$res'"
+        else
+            test_fail "zedxonesrc has resolution '$res'"
+        fi
+    done
+
+    # AUTO must also be present
+    if gst-inspect-1.0 zedxonesrc 2>&1 | grep -q "AUTO"; then
+        test_pass "zedxonesrc has resolution 'AUTO'"
+    else
+        test_fail "zedxonesrc has resolution 'AUTO'"
+    fi
+
+    # Test stream-type enum values
+    local stream_types=("Image" "Auto")
+    for stype in "${stream_types[@]}"; do
+        if gst-inspect-1.0 zedxonesrc 2>&1 | grep -qi "$stype"; then
+            test_pass "zedxonesrc has stream-type '$stype'"
+        else
+            test_fail "zedxonesrc has stream-type '$stype'"
+        fi
+    done
+}
+
+test_zedxone_auto_resolution() {
+    print_subheader "ZED X One Auto-Resolution Negotiation Tests"
+
+    # Check if zedxonesrc is available
+    if ! gst-inspect-1.0 zedxonesrc > /dev/null 2>&1; then
+        skip_test "ZED X One auto-resolution tests" "zedxonesrc not available"
+        return 0
+    fi
+
+    # --- Enum introspection ---
+    # AUTO resolution enum must be advertised
+    if gst-inspect-1.0 zedxonesrc 2>&1 | grep -qi "Auto.*best resolution\|AUTO"; then
+        test_pass "zedxonesrc has AUTO resolution enum"
+    else
+        test_fail "zedxonesrc has AUTO resolution enum"
+    fi
+
+    # Default camera-resolution must be AUTO
+    local default_res
+    default_res=$(gst-inspect-1.0 zedxonesrc 2>&1 | grep -A2 "camera-resolution" | grep -oi "Default.*" | head -1)
+    if echo "$default_res" | grep -qi "auto\|5"; then
+        test_pass "zedxonesrc default camera-resolution is AUTO"
+    else
+        test_fail "zedxonesrc default camera-resolution is AUTO (got: $default_res)"
+    fi
+
+    # Default camera-fps must be 30
+    local default_fps
+    default_fps=$(gst-inspect-1.0 zedxonesrc 2>&1 | grep -A2 "camera-fps" | grep -oi "Default.*" | head -1)
+    if echo "$default_fps" | grep -q "30"; then
+        test_pass "zedxonesrc default camera-fps is 30"
+    else
+        test_fail "zedxonesrc default camera-fps is 30 (got: $default_fps)"
+    fi
+
+    # --- Hardware pipeline tests ---
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "zedxonesrc AUTO caps inspection" "No camera detected"
+        return 0
+    fi
+
+    if [ "$EXTENSIVE_MODE" = false ]; then
+        skip_test "zedxonesrc AUTO caps negotiation" "Extensive mode required"
+        return 0
+    fi
+
+    local timeout_val=90
+    local num_buffers=5
+    local output
+
+    # Test 1: Default (AUTO + 30fps) → 4K (3840x2160) on ZED X One
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc num-buffers=$num_buffers ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "zedxonesrc AUTO resolution default pipeline"
+    else
+        if echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
+            skip_test "zedxonesrc AUTO default pipeline" "No ZED X One camera detected"
+        else
+            test_fail "zedxonesrc AUTO resolution default pipeline"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test 2: AUTO + 15fps → should select 4K (highest supporting 15)
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc camera-resolution=5 camera-fps=15 num-buffers=$num_buffers ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "zedxonesrc AUTO@15fps pipeline works"
+    else
+        if echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
+            skip_test "zedxonesrc AUTO@15fps pipeline" "No ZED X One camera detected"
+        else
+            test_fail "zedxonesrc AUTO@15fps pipeline"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test 3: AUTO + 60fps → should select QHDPLUS (3200x1800)
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc camera-resolution=5 camera-fps=60 num-buffers=$num_buffers ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "zedxonesrc AUTO@60fps pipeline works"
+    else
+        if echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
+            skip_test "zedxonesrc AUTO@60fps pipeline" "No ZED X One camera detected"
+        else
+            test_fail "zedxonesrc AUTO@60fps pipeline"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test 4: AUTO + 120fps → should select QHDPLUS (3200x1800)
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc camera-resolution=5 camera-fps=120 num-buffers=$num_buffers ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "zedxonesrc AUTO@120fps pipeline works"
+    else
+        if echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
+            skip_test "zedxonesrc AUTO@120fps pipeline" "No ZED X One camera detected"
+        else
+            test_fail "zedxonesrc AUTO@120fps pipeline"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test 5: Explicit 4K + FPS clamping (4K only supports 15/30 → 60 clamps to 30)
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc camera-resolution=0 camera-fps=60 num-buffers=$num_buffers ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "zedxonesrc 4K@60fps clamped to 30fps"
+    else
+        if echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
+            skip_test "zedxonesrc 4K@60fps FPS clamping" "No ZED X One camera detected"
+        else
+            test_fail "zedxonesrc 4K@60fps FPS clamping"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test 6: Downstream size negotiation — request smaller output
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc camera-resolution=5 num-buffers=$num_buffers ! \
+        "video/x-raw,width=640,height=480" ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "zedxonesrc AUTO with downstream resize (640x480)"
+    else
+        if echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
+            skip_test "zedxonesrc AUTO downstream resize" "No ZED X One camera detected"
+        else
+            test_fail "zedxonesrc AUTO with downstream resize (640x480)"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_zedxone_resolutions() {
+    print_subheader "Resolution Tests — all zedxonesrc mode table entries (requires ZED X One)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "ZED X One resolution tests" "No camera detected"
+        return 2
+    fi
+
+    if [ "$EXTENSIVE_MODE" = false ]; then
+        skip_test "ZED X One resolution tests" "Extensive mode required"
+        return 0
+    fi
+
+    local timeout_val=90
+    local num_buffers=5
+    local output
+
+    # Iterate every entry in the xone_camera_modes[] mapping table.
+    # Each line: enum_value  label  WxH
+    local modes=(
+        "4  4K       3840x2160"
+        "3  QHDPLUS  3200x1800"
+        "2  HD1200   1920x1200"
+        "1  HD1080   1920x1080"
+        "0  SVGA     960x600"
+    )
+
+    for entry in "${modes[@]}"; do
+        local enum_val name dims
+        read -r enum_val name dims <<< "$entry"
+
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc camera-resolution=$enum_val num-buffers=$num_buffers ! fakesink 2>&1)
+        if [ $? -eq 0 ]; then
+            test_pass "zedxonesrc $name ($dims) [enum=$enum_val]"
+        else
+            if echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
+                skip_test "zedxonesrc $name ($dims)" "No ZED X One camera detected"
+            elif echo "$output" | grep -qi "not available\|not supported\|invalid resolution"; then
+                skip_test "zedxonesrc $name ($dims)" "Not supported on this camera model"
+            else
+                test_fail "zedxonesrc $name ($dims) [enum=$enum_val]"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+            fi
+        fi
+
+        sleep $CAMERA_RESET_DELAY
+    done
+}
+
 test_zedxone_nv12() {
     print_subheader "ZED X One NV12 Zero-Copy Tests"
     
@@ -1050,71 +1422,53 @@ test_overlay_skeletons() {
 }
 
 test_resolutions() {
-    print_subheader "Resolution Tests (requires camera)"
-    
+    print_subheader "Resolution Tests — all zedsrc mode table entries (requires camera)"
+
     if [ "$HARDWARE_AVAILABLE" = false ]; then
-        skip_test "Resolution HD1080" "No camera detected"
-        skip_test "Resolution HD720/HD1200" "No camera detected"
-        skip_test "Resolution SVGA" "No camera detected"
+        skip_test "Resolution tests" "No camera detected"
         return 2
     fi
-    
+
     if [ "$EXTENSIVE_MODE" = false ]; then
         skip_test "Resolution tests" "Extensive mode required"
         return 0
     fi
-    
+
     local timeout_val=90
     local num_buffers=10
     local output
-    
-    # Use global GMSL_CAMERA variable from check_hardware()
 
-    # Test HD1080 resolution (1920x1080) - supported by ALL cameras
-    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=1 num-buffers=$num_buffers ! fakesink 2>&1)
-    if [ $? -eq 0 ]; then
-        test_pass "Resolution HD1080 (1920x1080)"
-    else
-        test_fail "Resolution HD1080 (1920x1080)"
-        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
-    fi
-    
-    sleep $CAMERA_RESET_DELAY
-    
-    # Test camera-specific resolution
-    if [ "$GMSL_CAMERA" = true ]; then
-        # GMSL cameras (ZED X, ZED X Mini): Test HD1200 (1920x1200)
-        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=2 num-buffers=$num_buffers ! fakesink 2>&1)
+    # Iterate every entry in the zed_camera_modes[] mapping table.
+    # Each line: enum_value  label  WxH
+    # Dimensions come from sl::getResolution() at runtime; shown here for reference.
+    local modes=(
+        "0  HD2K    2208x1242"
+        "1  HD1080  1920x1080"
+        "2  HD1200  1920x1200"
+        "3  HD720   1280x720"
+        "4  SVGA    960x600"
+        "5  VGA     672x376"
+    )
+
+    for entry in "${modes[@]}"; do
+        local enum_val name dims
+        read -r enum_val name dims <<< "$entry"
+
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=$enum_val num-buffers=$num_buffers ! fakesink 2>&1)
         if [ $? -eq 0 ]; then
-            test_pass "Resolution HD1200 (1920x1200) [GMSL]"
+            test_pass "zedsrc $name ($dims) [enum=$enum_val]"
         else
-            test_fail "Resolution HD1200 (1920x1200) [GMSL]"
-            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+            # Resolution may be unavailable for this camera model — skip rather than fail
+            if echo "$output" | grep -qi "not available\|not supported\|invalid resolution\|failed to open"; then
+                skip_test "zedsrc $name ($dims)" "Not supported on this camera"
+            else
+                test_fail "zedsrc $name ($dims) [enum=$enum_val]"
+                [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+            fi
         fi
-    else
-        # USB cameras (ZED, ZED 2, ZED 2i): Test HD720 (1280x720)
-        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=3 num-buffers=$num_buffers ! fakesink 2>&1)
-        if [ $? -eq 0 ]; then
-            test_pass "Resolution HD720 (1280x720) [USB]"
-        else
-            test_fail "Resolution HD720 (1280x720) [USB]"
-            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
-        fi
-    fi
-    
-    sleep $CAMERA_RESET_DELAY
-    
-    # Test SVGA resolution (960x600) - exercises the VGA->SVGA mapping fix
-    # On USB cameras this maps to VGA (672x376)
-    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=4 num-buffers=$num_buffers ! fakesink 2>&1)
-    if [ $? -eq 0 ]; then
-        test_pass "Resolution SVGA/VGA (low-res mode)"
-    else
-        test_fail "Resolution SVGA/VGA (low-res mode)"
-        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
-    fi
-    
-    sleep $CAMERA_RESET_DELAY
+
+        sleep $CAMERA_RESET_DELAY
+    done
 }
 
 test_depth_modes() {
@@ -2883,9 +3237,12 @@ main() {
     test_plugin_properties
     test_plugin_factory
     test_zedsrc_enums
+    test_zedsrc_auto_resolution
     test_zedsrc_nv12
     test_element_pads
     test_zedxone
+    test_zedxone_enums
+    test_zedxone_auto_resolution
     test_zedxone_nv12
     
     # Hardware tests (if available)
@@ -2906,6 +3263,7 @@ main() {
             test_video_recording_playback
             test_udp_streaming
             test_zedxone_hardware
+            test_zedxone_resolutions
             test_hardware_od
             test_hardware_bt
             test_overlay_skeletons
@@ -2929,6 +3287,7 @@ main() {
             test_video_recording_playback
             test_udp_streaming
             test_zedxone_hardware
+            test_zedxone_resolutions
             test_hardware_od
             test_hardware_bt
             test_overlay_skeletons

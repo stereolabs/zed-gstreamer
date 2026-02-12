@@ -23,6 +23,7 @@
 #define _GST_ZED_SRC_H_
 
 #include <gst/base/gstpushsrc.h>
+#include <gst/video/video.h>
 
 #include "sl/Camera.hpp"
 
@@ -80,7 +81,6 @@ struct _GstZedSrc {
     gboolean async_grab_camera_recovery;
     gfloat grab_compute_capping_fps;
     gboolean enable_image_validity_check;
-    gboolean async_image_retrieval;
     gint max_working_res_w;
     gint max_working_res_h;
 
@@ -184,6 +184,15 @@ struct _GstZedSrc {
 
     GstCaps *caps;
     guint out_framesize;
+
+    // Camera native resolution (set after open)
+    guint camera_width;
+    guint camera_height;
+
+    // Output resolution and format (negotiated via caps, used for retrieveImage)
+    guint output_width;
+    guint output_height;
+    GstVideoFormat output_format;   // Negotiated pixel format (BGRA, BGR, GRAY8...)
 
     gboolean stop_requested;
 };

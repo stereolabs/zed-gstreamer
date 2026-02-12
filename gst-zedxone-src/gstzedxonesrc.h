@@ -23,6 +23,7 @@
 #define _GST_ZED_X_ONE_SRC_H_
 
 #include <gst/base/gstpushsrc.h>
+#include <gst/video/video.h>
 
 #include "sl/CameraOne.hpp"
 
@@ -106,6 +107,13 @@ struct _GstZedXOneSrc {
 
     GstCaps *_caps;        // Stream caps
     guint _outFramesize;   // Output frame size in byte
+
+    // Resolution and format tracking for flexible output caps
+    guint _cameraWidth;             // Native camera resolution width
+    guint _cameraHeight;            // Native camera resolution height
+    guint _outputWidth;             // Negotiated output resolution width
+    guint _outputHeight;            // Negotiated output resolution height
+    GstVideoFormat _outputFormat;   // Negotiated pixel format (BGRA, BGR, GRAY8...)
 };
 
 struct _GstZedXOneSrcClass {

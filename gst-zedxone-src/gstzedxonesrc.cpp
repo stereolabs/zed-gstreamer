@@ -35,6 +35,9 @@
 
 #include <chrono>
 
+// Minimum output resolution for ranged caps (allows downstream to negotiate any size >= 32)
+#define GST_ZEDXONESRC_MIN_OUTPUT_SIZE 32
+
 GST_DEBUG_CATEGORY_STATIC(gst_zedxonesrc_debug);
 #define GST_CAT_DEFAULT gst_zedxonesrc_debug
 
@@ -50,6 +53,7 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *src);
 static gboolean gst_zedxonesrc_stop(GstBaseSrc *src);
 static GstCaps *gst_zedxonesrc_get_caps(GstBaseSrc *src, GstCaps *filter);
 static gboolean gst_zedxonesrc_set_caps(GstBaseSrc *src, GstCaps *caps);
+static GstCaps *gst_zedxonesrc_fixate(GstBaseSrc *src, GstCaps *caps);
 static gboolean gst_zedxonesrc_unlock(GstBaseSrc *src);
 static gboolean gst_zedxonesrc_unlock_stop(GstBaseSrc *src);
 static gboolean gst_zedxonesrc_query(GstBaseSrc *src, GstQuery *query);
@@ -114,11 +118,12 @@ typedef enum {
 } GstZedXOneSrcStreamType;
 
 typedef enum {
-    GST_ZEDXONESRC_SVGA,      // 960 x 600
-    GST_ZEDXONESRC_1080P,     // 1920 x 1080
-    GST_ZEDXONESRC_1200P,     // 1920 x 1200
-    GST_ZEDXONESRC_QHDPLUS,   // 3200x1800
-    GST_ZEDXONESRC_4K         // 3840 x 2160
+    GST_ZEDXONESRC_SVGA,       // 960 x 600
+    GST_ZEDXONESRC_1080P,      // 1920 x 1080
+    GST_ZEDXONESRC_1200P,      // 1920 x 1200
+    GST_ZEDXONESRC_QHDPLUS,    // 3200x1800
+    GST_ZEDXONESRC_4K,         // 3840 x 2160
+    GST_ZEDXONESRC_AUTO_RES,   // Auto: best resolution for requested FPS
 } GstZedXOneSrcRes;
 
 typedef enum {
@@ -148,7 +153,7 @@ typedef enum {
 //////////////// DEFAULT PARAMETERS
 /////////////////////////////////////////////////////////////////////////////
 
-#define DEFAULT_PROP_CAM_RES GST_ZEDXONESRC_1200P
+#define DEFAULT_PROP_CAM_RES GST_ZEDXONESRC_AUTO_RES
 #define DEFAULT_PROP_CAM_FPS GST_ZEDXONESRC_30FPS
 #define DEFAULT_PROP_VERBOSE_LVL 1
 #define DEFAULT_PROP_TIMEOUT_SEC 5.0f
@@ -223,6 +228,7 @@ static GType gst_zedxonesrc_resol_get_type(void) {
             {static_cast<gint>(GST_ZEDXONESRC_1200P), "1920x1200", "HD1200"},
             {static_cast<gint>(GST_ZEDXONESRC_1080P), "1920x1080", "HD1080"},
             {static_cast<gint>(GST_ZEDXONESRC_SVGA), "960x600 (only ZED X One GS)", "SVGA"},
+            {static_cast<gint>(GST_ZEDXONESRC_AUTO_RES), "Auto: best resolution for FPS", "AUTO"},
             {0, NULL, NULL},
         };
 
@@ -299,105 +305,65 @@ static GType gst_zedxonesrc_coord_sys_get_type(void) {
 }
 
 /* pad templates */
+// Use ranged caps to allow flexible output resolution negotiation.
+// The actual resolution is determined by the camera and downstream negotiation.
+// Non-NVMM formats (BGRA) support resize via sl::Resolution in retrieveImage().
+// NVMM formats (NV12 zero-copy) require fixed resolution (direct buffer mapping).
 static GstStaticPadTemplate gst_zedxonesrc_src_template = GST_STATIC_PAD_TEMPLATE(
     "src", GST_PAD_SRC, GST_PAD_ALWAYS,
-    GST_STATIC_CAPS(("video/x-raw, "   // Color 4K
-                     "format = (string)BGRA, "
-                     "width = (int)3840, "
-                     "height = (int)2160, "
-                     "framerate = (fraction) { 15, 30 }"
-                     ";"
-                     "video/x-raw, "   // Color QHDPLUS
-                     "format = (string)BGRA, "
-                     "width = (int)3200, "
-                     "height = (int)1800, "
-                     "framerate = (fraction) { 15, 30 }"
-                     ";"
-                     "video/x-raw, "   // Color HD1200
-                     "format = (string)BGRA, "
-                     "width = (int)1920, "
-                     "height = (int)1200, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Color HD1080
-                     "format = (string)BGRA, "
-                     "width = (int)1920, "
-                     "height = (int)1080, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Color SVGA
-                     "format = (string)BGRA, "
-                     "width = (int)960, "
-                     "height = (int)600, "
+    GST_STATIC_CAPS(("video/x-raw, "
+                     "format = (string){BGRA, BGR, GRAY8}, "
+                     "width = (int) [ 32, 3840 ], "
+                     "height = (int) [ 32, 2160 ], "
                      "framerate = (fraction) { 15, 30, 60, 120 }"
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
                      ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 4K (zero-copy)
-                     "format = (string)NV12, "
-                     "width = (int)3840, "
-                     "height = (int)2160, "
-                     "framerate = (fraction) { 15, 30 }"
-                     ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 QHDPLUS (zero-copy)
-                     "format = (string)NV12, "
-                     "width = (int)3200, "
-                     "height = (int)1800, "
-                     "framerate = (fraction) { 15, 30 }"
-                     ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 HD1200 (zero-copy)
-                     "format = (string)NV12, "
-                     "width = (int)1920, "
-                     "height = (int)1200, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 HD1080 (zero-copy)
-                     "format = (string)NV12, "
-                     "width = (int)1920, "
-                     "height = (int)1080, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw(memory:NVMM), "   // NV12 SVGA (zero-copy)
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
                      "format = (string)NV12, "
                      "width = (int)960, "
                      "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "format = (string)NV12, "
+                     "width = (int)1920, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "format = (string)NV12, "
+                     "width = (int)1920, "
+                     "height = (int)1200, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "format = (string)NV12, "
+                     "width = (int)3200, "
+                     "height = (int)1800, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 zero-copy (fixed resolution only)
+                     "format = (string)NV12, "
+                     "width = (int)3840, "
+                     "height = (int)2160, "
                      "framerate = (fraction) { 15, 30, 60, 120 }"
 #endif
                      )));
 
 /* Tools */
+/* Forward declaration — defined after the mode table */
+static sl::RESOLUTION gst_zedxonesrc_get_sl_resolution(GstZedXOneSrcRes resol);
+
 bool resol_to_w_h(const GstZedXOneSrcRes &resol, guint32 &out_w, guint32 &out_h) {
-    switch (resol) {
-    case GST_ZEDXONESRC_SVGA:
-        out_w = 960;
-        out_h = 600;
-        break;
-
-    case GST_ZEDXONESRC_1080P:
-        out_w = 1920;
-        out_h = 1080;
-        break;
-
-    case GST_ZEDXONESRC_1200P:
-        out_w = 1920;
-        out_h = 1200;
-        break;
-
-    case GST_ZEDXONESRC_QHDPLUS:
-        out_w = 3200;
-        out_h = 1800;
-        break;
-
-    case GST_ZEDXONESRC_4K:
-        out_w = 3840;
-        out_h = 2160;
-        break;
-
-    default:
+    sl::RESOLUTION sl_res = gst_zedxonesrc_get_sl_resolution(resol);
+    if (sl_res == sl::RESOLUTION::LAST) {
         out_w = -1;
         out_h = -1;
         return false;
     }
-
+    sl::Resolution native = sl::getResolution(sl_res);
+    out_w = native.width;
+    out_h = native.height;
     return true;
 }
 
@@ -426,6 +392,7 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
     gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(gst_zedxonesrc_stop);
     gstbasesrc_class->get_caps = GST_DEBUG_FUNCPTR(gst_zedxonesrc_get_caps);
     gstbasesrc_class->set_caps = GST_DEBUG_FUNCPTR(gst_zedxonesrc_set_caps);
+    gstbasesrc_class->fixate = GST_DEBUG_FUNCPTR(gst_zedxonesrc_fixate);
     gstbasesrc_class->unlock = GST_DEBUG_FUNCPTR(gst_zedxonesrc_unlock);
     gstbasesrc_class->unlock_stop = GST_DEBUG_FUNCPTR(gst_zedxonesrc_unlock_stop);
     gstbasesrc_class->query = GST_DEBUG_FUNCPTR(gst_zedxonesrc_query);
@@ -1166,6 +1133,88 @@ static void gst_zedxonesrc_resolve_stream_type(GstZedXOneSrc *src) {
                     src->_resolvedStreamType);
 }
 
+/* Camera mode: maps GstZedXOneSrcRes enum to sl::RESOLUTION.
+ * Resolution dimensions come from sl::getResolution().
+ * FPS validity is queried dynamically via sl::isAvailable(fps, resolution, model). */
+typedef struct {
+    GstZedXOneSrcRes resolution;
+    sl::RESOLUTION sl_resolution;
+} ZedXOneCameraMode;
+
+/* Camera modes ordered by quality (highest first) for AUTO resolution selection */
+static const ZedXOneCameraMode xone_camera_modes[] = {
+    {GST_ZEDXONESRC_4K, sl::RESOLUTION::HD4K},
+    {GST_ZEDXONESRC_QHDPLUS, sl::RESOLUTION::QHDPLUS},
+    {GST_ZEDXONESRC_1200P, sl::RESOLUTION::HD1200},
+    {GST_ZEDXONESRC_1080P, sl::RESOLUTION::HD1080},
+    {GST_ZEDXONESRC_SVGA, sl::RESOLUTION::SVGA},
+};
+static const guint xone_camera_modes_count = G_N_ELEMENTS(xone_camera_modes);
+
+static const ZedXOneCameraMode *gst_zedxonesrc_get_camera_mode(GstZedXOneSrcRes resolution) {
+    for (guint i = 0; i < xone_camera_modes_count; ++i) {
+        if (xone_camera_modes[i].resolution == resolution) {
+            return &xone_camera_modes[i];
+        }
+    }
+    return NULL;
+}
+
+/* Get sl::RESOLUTION for a GstZedXOneSrcRes enum value */
+static sl::RESOLUTION gst_zedxonesrc_get_sl_resolution(GstZedXOneSrcRes resol) {
+    const ZedXOneCameraMode *mode = gst_zedxonesrc_get_camera_mode(resol);
+    return mode ? mode->sl_resolution : sl::RESOLUTION::LAST;
+}
+
+/*
+ * Detect the camera model using sl::CameraOne::getDeviceList() (lightweight, no open needed).
+ * If camera_id or camera_sn is set, match the specific device; otherwise use the first one.
+ */
+static sl::MODEL gst_zedxonesrc_detect_camera_model(GstZedXOneSrc *src) {
+    auto devices = sl::CameraOne::getDeviceList();
+    if (devices.empty()) {
+        GST_WARNING("No ZED X One cameras detected, falling back to ZED_XM");
+        return sl::MODEL::ZED_XM;
+    }
+
+    sl::MODEL model = devices[0].camera_model;
+
+    if (src->_cameraId != -1) {
+        for (const auto &dev : devices) {
+            if (dev.id == static_cast<unsigned int>(src->_cameraId)) {
+                model = dev.camera_model;
+                break;
+            }
+        }
+    } else if (src->_cameraSN != 0) {
+        for (const auto &dev : devices) {
+            if (dev.serial_number == static_cast<unsigned int>(src->_cameraSN)) {
+                model = dev.camera_model;
+                break;
+            }
+        }
+    }
+
+    GST_INFO("Detected camera model: %s", sl::toString(model).c_str());
+    return model;
+}
+
+/*
+ * Query the SDK for valid FPS values for a given resolution + camera model.
+ * Returns the count of valid FPS values written to out_fps (up to max_count).
+ */
+static guint gst_zedxonesrc_get_valid_fps(sl::RESOLUTION sl_res, sl::MODEL model, gint *out_fps,
+                                          guint max_count) {
+    const auto &candidate_fps = sl::getAvailableCameraFPS();
+    guint count = 0;
+    for (size_t i = 0; i < candidate_fps.size() && count < max_count; ++i) {
+        if (sl::isAvailable(candidate_fps[i], sl_res, model)) {
+            out_fps[count++] = candidate_fps[i];
+        }
+    }
+    return count;
+}
+
 static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_calculate_caps");
 
@@ -1173,32 +1222,125 @@ static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
     gint stream_type = src->_resolvedStreamType;
 
     guint32 width, height;
-    gint fps;
     GstVideoInfo vinfo;
-    GstVideoFormat format = GST_VIDEO_FORMAT_BGRA;
+    GstVideoFormat format = GST_VIDEO_FORMAT_UNKNOWN;
+    const gchar *format_str = NULL;
+    gboolean use_ranged_caps = TRUE;
+    gboolean multi_format = FALSE;
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
     if (stream_type == GST_ZEDXONESRC_RAW_NV12) {
         format = GST_VIDEO_FORMAT_NV12;
-    }
+        format_str = "NV12";
+        use_ranged_caps = FALSE;   // Zero-copy cannot resize
+    } else
 #endif
+    {
+        // Image stream type supports BGRA, BGR, GRAY8 via SDK VIEW variants
+        format = GST_VIDEO_FORMAT_BGRA;
+        format_str = "BGRA";
+        multi_format = TRUE;
+    }
 
     if (!resol_to_w_h(static_cast<GstZedXOneSrcRes>(src->_cameraResolution), width, height)) {
         return FALSE;
     }
 
-    fps = src->_cameraFps;
+    // Store native camera resolution
+    src->_cameraWidth = width;
+    src->_cameraHeight = height;
+
+    // Get the mode for the resolved camera resolution
+    const ZedXOneCameraMode *mode =
+        gst_zedxonesrc_get_camera_mode(static_cast<GstZedXOneSrcRes>(src->_cameraResolution));
+    gint fps = src->_cameraFps;   // Already clamped in start()
+
+    // Query valid FPS from SDK for this resolution + camera model
+    auto cam_info = src->_zed->getCameraInformation();
+    sl::MODEL caps_model = cam_info.camera_model;
+    gint valid_fps[8];
+    guint valid_fps_count = 0;
+    if (mode) {
+        valid_fps_count =
+            gst_zedxonesrc_get_valid_fps(mode->sl_resolution, caps_model, valid_fps, 8);
+    }
+
+    if (src->_caps) {
+        gst_caps_unref(src->_caps);
+        src->_caps = NULL;
+    }
 
     if (format != GST_VIDEO_FORMAT_UNKNOWN) {
+        if (use_ranged_caps && width >= GST_ZEDXONESRC_MIN_OUTPUT_SIZE &&
+            height >= GST_ZEDXONESRC_MIN_OUTPUT_SIZE) {
+            // Create caps with ranged width/height for flexible output resolution.
+            // Downstream can negotiate any size from [32, max] and we'll use
+            // sl::Resolution in retrieveImage() to resize.
+            src->_caps = gst_caps_new_empty_simple("video/x-raw");
+            GstStructure *s = gst_caps_get_structure(src->_caps, 0);
+
+            // Set format: multi-format list (BGRA preferred) or single format
+            if (multi_format) {
+                GValue fmt_list = G_VALUE_INIT;
+                g_value_init(&fmt_list, GST_TYPE_LIST);
+                const gchar *formats[] = {"BGRA", "BGR", "GRAY8"};
+                for (guint i = 0; i < G_N_ELEMENTS(formats); ++i) {
+                    GValue v = G_VALUE_INIT;
+                    g_value_init(&v, G_TYPE_STRING);
+                    g_value_set_string(&v, formats[i]);
+                    gst_value_list_append_value(&fmt_list, &v);
+                    g_value_unset(&v);
+                }
+                gst_structure_set_value(s, "format", &fmt_list);
+                g_value_unset(&fmt_list);
+            } else {
+                gst_structure_set(s, "format", G_TYPE_STRING, format_str, NULL);
+            }
+
+            // Set ranged width/height
+            gst_structure_set(s, "width", GST_TYPE_INT_RANGE, GST_ZEDXONESRC_MIN_OUTPUT_SIZE,
+                              (gint) width, "height", GST_TYPE_INT_RANGE,
+                              GST_ZEDXONESRC_MIN_OUTPUT_SIZE, (gint) height, NULL);
+
+            // Set framerate as a list of valid values for this camera resolution
+            if (valid_fps_count > 1) {
+                GValue fps_list = G_VALUE_INIT;
+                g_value_init(&fps_list, GST_TYPE_LIST);
+                for (guint i = 0; i < valid_fps_count; ++i) {
+                    GValue fps_val = G_VALUE_INIT;
+                    g_value_init(&fps_val, GST_TYPE_FRACTION);
+                    gst_value_set_fraction(&fps_val, valid_fps[i], 1);
+                    gst_value_list_append_value(&fps_list, &fps_val);
+                    g_value_unset(&fps_val);
+                }
+                gst_structure_set_value(s, "framerate", &fps_list);
+                g_value_unset(&fps_list);
+            } else {
+                gst_structure_set(s, "framerate", GST_TYPE_FRACTION, fps, 1, NULL);
+            }
+
+            GST_INFO_OBJECT(src, "Created ranged caps: format=%s%s, width=[%d,%d], height=[%d,%d]",
+                            format_str, multi_format ? " (+BGR, GRAY8)" : "",
+                            GST_ZEDXONESRC_MIN_OUTPUT_SIZE, width, GST_ZEDXONESRC_MIN_OUTPUT_SIZE,
+                            height);
+        } else {
+            // Fixed caps for zero-copy modes or when ranged caps not applicable
+            gst_video_info_init(&vinfo);
+            gst_video_info_set_format(&vinfo, format, width, height);
+            vinfo.fps_n = fps;
+            vinfo.fps_d = 1;
+            src->_caps = gst_video_info_to_caps(&vinfo);
+        }
+
+        // Calculate frame size based on maximum resolution
         gst_video_info_init(&vinfo);
         gst_video_info_set_format(&vinfo, format, width, height);
-        if (src->_caps) {
-            gst_caps_unref(src->_caps);
-        }
         src->_outFramesize = (guint) GST_VIDEO_INFO_SIZE(&vinfo);
-        vinfo.fps_n = fps;
-        vinfo.fps_d = 1;
-        src->_caps = gst_video_info_to_caps(&vinfo);
+
+        // Initialize output resolution and format (will be updated in set_caps)
+        src->_outputWidth = width;
+        src->_outputHeight = height;
+        src->_outputFormat = format;
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
         // Add memory:NVMM feature for zero-copy NV12 mode
@@ -1211,10 +1353,106 @@ static gboolean gst_zedxonesrc_calculate_caps(GstZedXOneSrc *src) {
     }
 
     gst_base_src_set_blocksize(GST_BASE_SRC(src), src->_outFramesize);
-    gst_base_src_set_caps(GST_BASE_SRC(src), src->_caps);
+
+    // Only call gst_base_src_set_caps for fixed caps (non-ranged)
+    // For ranged caps, negotiation happens via get_caps/set_caps
+    if (!use_ranged_caps) {
+        gst_base_src_set_caps(GST_BASE_SRC(src), src->_caps);
+    }
     GST_DEBUG_OBJECT(src, "Created caps %" GST_PTR_FORMAT, src->_caps);
 
     return TRUE;
+}
+
+/* Return the closest valid FPS for the current camera resolution + detected model */
+static gint gst_zedxonesrc_select_fps(GstZedXOneSrc *src, gint requested_fps) {
+    if (requested_fps <= 0) {
+        requested_fps = DEFAULT_PROP_CAM_FPS;
+    }
+
+    const ZedXOneCameraMode *mode =
+        gst_zedxonesrc_get_camera_mode(static_cast<GstZedXOneSrcRes>(src->_cameraResolution));
+    if (!mode) {
+        return requested_fps;
+    }
+
+    sl::MODEL camera_model = gst_zedxonesrc_detect_camera_model(src);
+    gint valid_fps[8];
+    guint count = gst_zedxonesrc_get_valid_fps(mode->sl_resolution, camera_model, valid_fps, 8);
+    if (count == 0) {
+        return requested_fps;
+    }
+
+    gint best = valid_fps[0];
+    gint best_diff = ABS(requested_fps - best);
+    for (guint i = 1; i < count; ++i) {
+        gint diff = ABS(requested_fps - valid_fps[i]);
+        if (diff < best_diff) {
+            best = valid_fps[i];
+            best_diff = diff;
+        }
+    }
+
+    return best;
+}
+
+/*
+ * Resolve camera resolution when set to AUTO.
+ *
+ * Strategy: detect the camera model using sl::CameraOne::getDeviceList()
+ * and use sl::isAvailable(resolution, model) to filter compatible modes.
+ * Then pick the highest-quality resolution that supports the requested FPS.
+ *
+ * If the requested FPS doesn't exactly match any mode, the nearest valid
+ * FPS is selected first, then the best resolution for that FPS is chosen.
+ */
+static void gst_zedxonesrc_resolve_auto_resolution(GstZedXOneSrc *src) {
+    gint requested_fps = src->_cameraFps;
+    if (requested_fps <= 0) {
+        requested_fps = DEFAULT_PROP_CAM_FPS;
+    }
+
+    /* Detect camera model to filter incompatible resolutions */
+    sl::MODEL camera_model = gst_zedxonesrc_detect_camera_model(src);
+
+    /* First: find the closest valid FPS across compatible modes */
+    const auto &candidate_fps = sl::getAvailableCameraFPS();
+    gint best_fps = requested_fps;
+    gint best_fps_diff = G_MAXINT;
+    for (guint i = 0; i < xone_camera_modes_count; ++i) {
+        if (!sl::isAvailable(xone_camera_modes[i].sl_resolution, camera_model))
+            continue;
+        for (size_t j = 0; j < candidate_fps.size(); ++j) {
+            if (!sl::isAvailable(candidate_fps[j], xone_camera_modes[i].sl_resolution,
+                                 camera_model))
+                continue;
+            gint diff = ABS(requested_fps - candidate_fps[j]);
+            if (diff < best_fps_diff) {
+                best_fps_diff = diff;
+                best_fps = candidate_fps[j];
+            }
+        }
+    }
+
+    /* Second: pick the highest quality compatible resolution supporting that FPS */
+    for (guint i = 0; i < xone_camera_modes_count; ++i) {
+        if (!sl::isAvailable(xone_camera_modes[i].sl_resolution, camera_model))
+            continue;
+        if (sl::isAvailable(best_fps, xone_camera_modes[i].sl_resolution, camera_model)) {
+            src->_cameraResolution = xone_camera_modes[i].resolution;
+            src->_cameraFps = best_fps;
+            sl::Resolution native = sl::getResolution(xone_camera_modes[i].sl_resolution);
+            GST_INFO("AUTO resolution resolved: %dx%d @ %d FPS (requested %d FPS, model %s)",
+                     (int) native.width, (int) native.height, best_fps, requested_fps,
+                     sl::toString(camera_model).c_str());
+            return;
+        }
+    }
+
+    /* Fallback */
+    src->_cameraResolution = GST_ZEDXONESRC_1200P;
+    src->_cameraFps = 30;
+    GST_WARNING("AUTO resolution fallback to 1200P@30");
 }
 
 static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
@@ -1227,7 +1465,16 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 #endif
     sl::ERROR_CODE ret;
 
-    GST_TRACE_OBJECT(src, "gst_zedxonesrc_calculate_caps");
+    GST_TRACE_OBJECT(src, "gst_zedxonesrc_start");
+
+    // ----> Resolve AUTO camera resolution based on requested FPS
+    if (src->_cameraResolution == GST_ZEDXONESRC_AUTO_RES) {
+        gst_zedxonesrc_resolve_auto_resolution(src);
+    } else {
+        // Explicit resolution: clamp FPS to nearest valid for this resolution
+        src->_cameraFps = gst_zedxonesrc_select_fps(src, src->_cameraFps);
+        GST_INFO("Explicit resolution: clamped FPS to %d", src->_cameraFps);
+    }
 
     // ----> Set init parameters
     sl::InitParametersOne init_params;
@@ -1250,23 +1497,11 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         GST_INFO(" * Input Stream: %s:%d", src->_streamIp->str, src->_streamPort);
     }
 
-    switch (src->_cameraResolution) {
-    case GST_ZEDXONESRC_SVGA:
-        init_params.camera_resolution = sl::RESOLUTION::SVGA;
-        break;
-    case GST_ZEDXONESRC_1080P:
-        init_params.camera_resolution = sl::RESOLUTION::HD1080;
-        break;
-    case GST_ZEDXONESRC_1200P:
-        init_params.camera_resolution = sl::RESOLUTION::HD1200;
-        break;
-    case GST_ZEDXONESRC_QHDPLUS:
-        init_params.camera_resolution = sl::RESOLUTION::QHDPLUS;
-        break;
-    case GST_ZEDXONESRC_4K:
-        init_params.camera_resolution = sl::RESOLUTION::HD4K;
-        break;
-    default:
+    const ZedXOneCameraMode *resolved_mode =
+        gst_zedxonesrc_get_camera_mode(static_cast<GstZedXOneSrcRes>(src->_cameraResolution));
+    if (resolved_mode) {
+        init_params.camera_resolution = resolved_mode->sl_resolution;
+    } else {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set camera resolution"), (NULL));
         return FALSE;
     }
@@ -1551,11 +1786,82 @@ static gboolean gst_zedxonesrc_set_caps(GstBaseSrc *bsrc, GstCaps *caps) {
         goto unsupported_caps;
     }
 
+    // Capture the negotiated output resolution and format
+    src->_outputWidth = GST_VIDEO_INFO_WIDTH(&vinfo);
+    src->_outputHeight = GST_VIDEO_INFO_HEIGHT(&vinfo);
+    src->_outputFormat = GST_VIDEO_INFO_FORMAT(&vinfo);
+
+    GST_INFO_OBJECT(src, "Negotiated format: %s", gst_video_format_to_string(src->_outputFormat));
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    // Validate NV12 zero-copy sizes to avoid invalid width/height pairings
+    if (src->_resolvedStreamType == GST_ZEDXONESRC_RAW_NV12) {
+        const gint width = src->_outputWidth;
+        const gint height = src->_outputHeight;
+        const gboolean valid_size =
+            (width == 960 && height == 600) || (width == 1920 && height == 1080) ||
+            (width == 1920 && height == 1200) || (width == 3200 && height == 1800) ||
+            (width == 3840 && height == 2160);
+
+        if (!valid_size) {
+            GST_ERROR_OBJECT(src, "Invalid negotiated NV12 size %dx%d", width, height);
+            return FALSE;
+        }
+    }
+#endif
+
+    // Recalculate frame size based on negotiated resolution
+    src->_outFramesize = (guint) GST_VIDEO_INFO_SIZE(&vinfo);
+    gst_base_src_set_blocksize(GST_BASE_SRC(src), src->_outFramesize);
+
+    GST_INFO_OBJECT(src, "Negotiated output resolution: %dx%d (camera: %dx%d), framesize: %u",
+                    src->_outputWidth, src->_outputHeight, src->_cameraWidth, src->_cameraHeight,
+                    src->_outFramesize);
+
     return TRUE;
 
 unsupported_caps:
     GST_ERROR_OBJECT(src, "Unsupported caps: %" GST_PTR_FORMAT, caps);
     return FALSE;
+}
+
+static GstCaps *gst_zedxonesrc_fixate(GstBaseSrc *bsrc, GstCaps *caps) {
+    GstZedXOneSrc *src = GST_ZED_X_ONE_SRC(bsrc);
+    GstStructure *structure;
+
+    GST_DEBUG_OBJECT(src, "Fixating caps %" GST_PTR_FORMAT, caps);
+
+    caps = gst_caps_make_writable(caps);
+    structure = gst_caps_get_structure(caps, 0);
+
+    // Default output to camera native resolution when downstream doesn't constrain
+    if (src->_outputWidth > 0 && src->_outputHeight > 0) {
+        gst_structure_fixate_field_nearest_int(structure, "width", src->_outputWidth);
+        gst_structure_fixate_field_nearest_int(structure, "height", src->_outputHeight);
+    }
+
+    // Default framerate to the camera_fps (already clamped in start()).
+    // If downstream constrained the FPS list, pick the closest valid one.
+    {
+        gint fps_n = 0, fps_d = 1;
+        gint requested_fps = src->_cameraFps;
+
+        if (gst_structure_get_fraction(structure, "framerate", &fps_n, &fps_d) && fps_d > 0) {
+            requested_fps = (gint) ((gdouble) fps_n / (gdouble) fps_d + 0.5);
+        }
+
+        const gint selected_fps = gst_zedxonesrc_select_fps(src, requested_fps);
+        src->_cameraFps = selected_fps;
+        gst_structure_set(structure, "framerate", GST_TYPE_FRACTION, selected_fps, 1, NULL);
+        GST_INFO_OBJECT(src, "Fixated: %dx%d @ %d FPS (camera: %dx%d)", src->_outputWidth,
+                        src->_outputHeight, selected_fps, src->_cameraWidth, src->_cameraHeight);
+    }
+
+    // Chain up to parent fixate
+    caps = GST_BASE_SRC_CLASS(gst_zedxonesrc_parent_class)->fixate(bsrc, caps);
+
+    GST_DEBUG_OBJECT(src, "Fixated caps %" GST_PTR_FORMAT, caps);
+    return caps;
 }
 
 static gboolean gst_zedxonesrc_unlock(GstBaseSrc *bsrc) {
@@ -1819,16 +2125,41 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         return true;
     };
 
-    const sl::VIEW view_type =
-        src->_outputRectifiedImage ? sl::VIEW::LEFT : sl::VIEW::LEFT_UNRECTIFIED;
-    ret = src->_zed->retrieveImage(img, view_type, sl::MEM::CPU);
+    // Select sl::VIEW based on negotiated format and rectification setting.
+    // SDK VIEW variants: LEFT/LEFT_UNRECTIFIED (BGRA), _BGR (BGR), _GRAY (GRAY8)
+    sl::VIEW view_type;
+    const GstVideoFormat fmt = src->_outputFormat;
+    if (src->_outputRectifiedImage) {
+        view_type = (fmt == GST_VIDEO_FORMAT_BGR)     ? sl::VIEW::LEFT_BGR
+                    : (fmt == GST_VIDEO_FORMAT_GRAY8) ? sl::VIEW::LEFT_GRAY
+                                                      : sl::VIEW::LEFT;
+    } else {
+        view_type = (fmt == GST_VIDEO_FORMAT_BGR)     ? sl::VIEW::LEFT_UNRECTIFIED_BGR
+                    : (fmt == GST_VIDEO_FORMAT_GRAY8) ? sl::VIEW::LEFT_UNRECTIFIED_GRAY
+                                                      : sl::VIEW::LEFT_UNRECTIFIED;
+    }
+
+    // Use negotiated output resolution for retrieveImage if different from camera resolution
+    // Note: Pass sl::Resolution only if resizing is needed, to avoid potential SDK issues
+    if (src->_outputWidth != src->_cameraWidth || src->_outputHeight != src->_cameraHeight) {
+        sl::Resolution out_res(src->_outputWidth, src->_outputHeight);
+        ret = src->_zed->retrieveImage(img, view_type, sl::MEM::CPU, out_res);
+    } else {
+        ret = src->_zed->retrieveImage(img, view_type, sl::MEM::CPU);
+    }
     if (!check_ret(ret))
         return GST_FLOW_ERROR;
     // <---- Retrieve images
 
     // Memory copy
     GST_TRACE("Memory copy");
-    memcpy(minfo.data, img.getPtr<sl::uchar4>(), minfo.size);
+    if (fmt == GST_VIDEO_FORMAT_BGR) {
+        memcpy(minfo.data, img.getPtr<sl::uchar3>(), minfo.size);
+    } else if (fmt == GST_VIDEO_FORMAT_GRAY8) {
+        memcpy(minfo.data, img.getPtr<sl::uchar1>(), minfo.size);
+    } else {
+        memcpy(minfo.data, img.getPtr<sl::uchar4>(), minfo.size);
+    }
 
     // ----> Info metadata
     GST_TRACE("Info metadata");
