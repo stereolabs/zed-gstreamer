@@ -1556,11 +1556,10 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     // Deprecated: kept for backward compatibility, value is ignored
     g_object_class_install_property(
         gobject_class, PROP_ASYNC_IMAGE_RETRIEVAL,
-        g_param_spec_boolean("async-image-retrieval", "Async Image Retrieval (deprecated)",
-                             "Deprecated, no longer used. Kept for backward compatibility.",
-                             FALSE,
-                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
-                                            | G_PARAM_DEPRECATED)));
+        g_param_spec_boolean(
+            "async-image-retrieval", "Async Image Retrieval (deprecated)",
+            "Deprecated, no longer used. Kept for backward compatibility.", FALSE,
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_DEPRECATED)));
 
     g_object_class_install_property(
         gobject_class, PROP_MAX_WORKING_RES_W,
@@ -3515,17 +3514,16 @@ static gboolean gst_zedsrc_set_caps(GstBaseSrc *bsrc, GstCaps *caps) {
 
         if (src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
             // Stereo side-by-side: width = 2 * cam_w, height = cam_h
-            valid_size = (width == (gint)(cam_w * 2) && height == (gint)cam_h);
+            valid_size = (width == (gint) (cam_w * 2) && height == (gint) cam_h);
         } else {
-            valid_size = (width == (gint)cam_w && height == (gint)cam_h);
+            valid_size = (width == (gint) cam_w && height == (gint) cam_h);
         }
 
         if (!valid_size) {
-            GST_ERROR_OBJECT(src,
-                             "Invalid negotiated NV12 size %dx%d (expected %ux%u for %s)",
+            GST_ERROR_OBJECT(src, "Invalid negotiated NV12 size %dx%d (expected %ux%u for %s)",
                              width, height, cam_w, cam_h,
-                             src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_STEREO
-                                 ? "stereo" : "mono");
+                             src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_STEREO ? "stereo"
+                                                                                     : "mono");
             return FALSE;
         }
     }

@@ -1801,11 +1801,10 @@ static gboolean gst_zedxonesrc_set_caps(GstBaseSrc *bsrc, GstCaps *caps) {
         const gint height = src->_outputHeight;
         const guint cam_w = src->_cameraWidth;
         const guint cam_h = src->_cameraHeight;
-        const gboolean valid_size = (width == (gint)cam_w && height == (gint)cam_h);
+        const gboolean valid_size = (width == (gint) cam_w && height == (gint) cam_h);
 
         if (!valid_size) {
-            GST_ERROR_OBJECT(src,
-                             "Invalid negotiated NV12 size %dx%d (expected camera size %ux%u)",
+            GST_ERROR_OBJECT(src, "Invalid negotiated NV12 size %dx%d (expected camera size %ux%u)",
                              width, height, cam_w, cam_h);
             return FALSE;
         }
