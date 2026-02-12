@@ -8,7 +8,7 @@
 #   - Uses zero-copy NV12 for maximum performance
 #
 # For USB cameras or older SDK:
-#   - Uses BGRA with nvvideoconvert to NVMM
+#   - Uses BGRA with $NVVIDCONV to NVMM
 #
 # For Orin Nano (no NVENC):
 #   - Falls back to software encoding (x265enc/x264enc)
@@ -103,7 +103,7 @@ run_pipeline() {
                 nv3dsink sync=false
         else
             gst-launch-1.0 zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
-                nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! nv3dsink sync=false
+                $NVVIDCONV ! "video/x-raw(memory:NVMM),format=NV12" ! nv3dsink sync=false
         fi
         return
     fi
@@ -131,7 +131,7 @@ run_pipeline() {
             if [ -n "$DISPLAY" ] && xset q &>/dev/null 2>&1; then
                 $duration_opt gst-launch-1.0 -e \
                     zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
-                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                    $NVVIDCONV ! "video/x-raw(memory:NVMM),format=NV12" ! \
                     tee name=t \
                     t. ! queue ! nvv4l2h265enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
                         h265parse ! mp4mux ! filesink location=$OUTPUT_FILE \
@@ -139,7 +139,7 @@ run_pipeline() {
             else
                 $duration_opt gst-launch-1.0 -e \
                     zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
-                    nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                    $NVVIDCONV ! "video/x-raw(memory:NVMM),format=NV12" ! \
                     nvv4l2h265enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
                     h265parse ! mp4mux ! filesink location=$OUTPUT_FILE
             fi
@@ -154,7 +154,7 @@ run_pipeline() {
         else
             $duration_opt gst-launch-1.0 -e \
                 zedsrc camera-resolution=$RES_PROP camera-fps=$FPS stream-type=0 ! \
-                nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                $NVVIDCONV ! "video/x-raw(memory:NVMM),format=NV12" ! \
                 nvv4l2h264enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
                 h264parse ! mp4mux ! filesink location=$OUTPUT_FILE
         fi

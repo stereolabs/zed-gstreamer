@@ -1,6 +1,34 @@
 LATEST CHANGES
 ==============
 
+ZED SDK v5.2
+--------------
+- Add NV12 zero-copy capture support on Jetson (GMSL cameras) via ``stream-type=6``
+- Add NV12 stereo side-by-side zero-copy mode via ``stream-type=7``
+- Add AUTO stream-type negotiation (``stream-type=-1``) that prefers NV12 zero-copy when available
+- Add AUTO resolution mode that selects the best resolution for requested FPS based on camera model
+- Add flexible output resolution negotiation with ranged caps for non-NVMM formats
+- Add BGR and GRAY8 output format support for zedsrc and zedxonesrc
+- Add ``fixate`` callback for proper caps negotiation during pipeline setup
+- Add side-by-side left+right image stream type (``stream-type=5``, #79)
+- Add Jetson pipeline scripts: NV12 encoding, RTSP/SRT/UDP streaming, benchmarks
+- Add runtime SVO recording control (``svo-recording-enable``, ``svo-recording-filename``, ``svo-recording-compression``, #78)
+- Add ``output-rectified-image`` property for ZED X One (#71)
+- Add GEN_3 positional tracking, NEURAL_LIGHT depth mode, custom YOLO model support
+- Add SDK version compile-time check to catch version mismatches early
+- Add test script (``.ci/test.sh``) with fast, extensive, and benchmark modes
+- Default camera FPS changed from 15 to 30
+- Default camera resolution changed to AUTO
+- Deprecated ``async-image-retrieval`` property in zedsrc (no-op, kept for backward compatibility)
+- Fixed incorrect VGA resolution mapping and ``memcpy`` buffer overflow in data mux
+- Fixed ``sprintf`` buffer safety issues
+- Fixed multi-instance issues (replaced static buffer counters with per-instance variables)
+- Fixed floating-point math issues and AEC_AGC enum handling
+- Added latency query handlers to prevent crashes during pipeline queries
+- Disabled shadow warnings for older ZED SDK compatibility
+- Improved code formatting consistency and documentation typos
+- SDK version requirement updated to 5.2
+
 ZED SDK v5.1
 --------------
 - Fix memleak on demux chain

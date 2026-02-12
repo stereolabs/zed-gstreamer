@@ -11,6 +11,24 @@
 #   - Pipeline building helpers that work for both camera types
 # =============================================================================
 
+# --- Auto-detect nvvidconv vs nvvideoconvert ---
+# JP5 (L4T R35.x) has "nvvidconv", JP6+ (L4T R36.x) has "nvvideoconvert"
+get_nvvidconv_element() {
+    if gst-inspect-1.0 nvvideoconvert > /dev/null 2>&1; then
+        echo "nvvideoconvert"
+    elif gst-inspect-1.0 nvvidconv > /dev/null 2>&1; then
+        echo "nvvidconv"
+    else
+        echo ""
+    fi
+}
+NVVIDCONV=$(get_nvvidconv_element)
+
+# --- Ensure DISPLAY is set for EGL-CUDA interop ---
+if [ -z "$DISPLAY" ]; then
+    export DISPLAY=:0
+fi
+
 # Check if zedsrc plugin supports NV12 zero-copy (stream-type=6)
 # This requires ZED SDK 5.2+ with Advanced Capture API compiled in
 zedsrc_supports_nv12() {
@@ -154,7 +172,7 @@ build_nvmm_converter() {
         echo ""  # GMSL already outputs NVMM NV12
     else
         # USB cameras output BGRA on system memory, need to convert to NVMM NV12
-        echo "! nvvideoconvert ! 'video/x-raw(memory:NVMM),format=NV12'"
+        echo "! $NVVIDCONV ! 'video/x-raw(memory:NVMM),format=NV12'"
     fi
 }
 
@@ -170,7 +188,7 @@ build_encode_source() {
         echo "zedsrc stream-type=6 camera-resolution=$resolution camera-fps=$fps"
     else
         # USB: Need conversion to NVMM
-        echo "zedsrc stream-type=0 camera-resolution=$resolution camera-fps=$fps ! nvvideoconvert ! 'video/x-raw(memory:NVMM),format=NV12'"
+        echo "zedsrc stream-type=0 camera-resolution=$resolution camera-fps=$fps ! $NVVIDCONV ! 'video/x-raw(memory:NVMM),format=NV12'"
     fi
 }
 
@@ -201,14 +219,19 @@ check_gst_plugin() {
     return 0
 }
 
+# Check if nvvidconv/nvvideoconvert is available
+has_nvvidconv() {
+    [ -n "$NVVIDCONV" ]
+}
+
 # Check if hardware H.265 encoder is available
 # Orin Nano only has NVDEC (decoder), no NVENC (encoder)
 has_hw_h265_encoder() {
-    if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1; then
+    if gst-inspect-1.0 nvv4l2h265enc > /dev/null 2>&1 && [ -n "$NVVIDCONV" ]; then
         # Plugin exists, but check if it actually works (Orin Nano has the plugin but no HW)
-        # Try a quick encode test
+        # Try a quick encode test using the correct nvvidconv element for this platform
         if timeout 2 gst-launch-1.0 videotestsrc num-buffers=1 ! \
-            "video/x-raw,width=320,height=240" ! nvvideoconvert ! \
+            "video/x-raw,width=320,height=240" ! $NVVIDCONV ! \
             "video/x-raw(memory:NVMM),format=NV12" ! nvv4l2h265enc ! \
             fakesink > /dev/null 2>&1; then
             return 0
@@ -219,9 +242,9 @@ has_hw_h265_encoder() {
 
 # Check if hardware H.264 encoder is available
 has_hw_h264_encoder() {
-    if gst-inspect-1.0 nvv4l2h264enc > /dev/null 2>&1; then
+    if gst-inspect-1.0 nvv4l2h264enc > /dev/null 2>&1 && [ -n "$NVVIDCONV" ]; then
         if timeout 2 gst-launch-1.0 videotestsrc num-buffers=1 ! \
-            "video/x-raw,width=320,height=240" ! nvvideoconvert ! \
+            "video/x-raw,width=320,height=240" ! $NVVIDCONV ! \
             "video/x-raw(memory:NVMM),format=NV12" ! nvv4l2h264enc ! \
             fakesink > /dev/null 2>&1; then
             return 0
@@ -264,8 +287,8 @@ check_encoding_plugins() {
         missing=1
     fi
     
-    if ! check_gst_plugin nvvideoconvert; then
-        echo "       NVIDIA GStreamer plugins may not be installed."
+    if ! has_nvvidconv; then
+        echo "       NVIDIA GStreamer plugins (nvvidconv/nvvideoconvert) not found."
         missing=1
     fi
     

@@ -9,7 +9,7 @@
 #   - Uses zero-copy NV12 stereo for maximum performance (stream-type=7)
 #
 # For USB cameras or older SDK:
-#   - Uses BGRA left+right demuxed with nvvideoconvert to NVMM NV12
+#   - Uses BGRA left+right demuxed with $NVVIDCONV to NVMM NV12
 #
 # For Orin Nano (no NVENC):
 #   - Falls back to software encoding (x265enc/x264enc)
@@ -71,10 +71,10 @@ run_pipeline() {
             gst-launch-1.0 -e \
                 zedsrc camera-resolution=2 camera-fps=$FPS stream-type=2 ! \
                 zeddemux stream-data=false name=demux \
-                demux.src_left ! queue ! nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                demux.src_left ! queue ! $NVVIDCONV ! "video/x-raw(memory:NVMM),format=NV12" ! \
                 nvv4l2h265enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
                 h265parse ! mp4mux name=mux ! filesink location=$OUTPUT_FILE \
-                demux.src_aux ! queue ! nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                demux.src_aux ! queue ! $NVVIDCONV ! "video/x-raw(memory:NVMM),format=NV12" ! \
                 nvv4l2h265enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
                 h265parse ! mux.
         fi
@@ -90,10 +90,10 @@ run_pipeline() {
             gst-launch-1.0 -e \
                 zedsrc camera-resolution=2 camera-fps=$FPS stream-type=2 ! \
                 zeddemux stream-data=false name=demux \
-                demux.src_left ! queue ! nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                demux.src_left ! queue ! $NVVIDCONV ! "video/x-raw(memory:NVMM),format=NV12" ! \
                 nvv4l2h264enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
                 h264parse ! mp4mux name=mux ! filesink location=$OUTPUT_FILE \
-                demux.src_aux ! queue ! nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12" ! \
+                demux.src_aux ! queue ! $NVVIDCONV ! "video/x-raw(memory:NVMM),format=NV12" ! \
                 nvv4l2h264enc bitrate=$BITRATE preset-level=1 maxperf-enable=true ! \
                 h264parse ! mux.
         fi
