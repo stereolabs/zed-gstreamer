@@ -274,6 +274,8 @@ static void gst_zeddatamux_set_property(GObject *object, guint prop_id, const GV
                                         GParamSpec *pspec);
 static void gst_zeddatamux_get_property(GObject *object, guint prop_id, GValue *value,
                                         GParamSpec *pspec);
+static GstStateChangeReturn gst_zeddatamux_change_state(GstElement *element,
+                                                        GstStateChange transition);
 
 static gboolean gst_zeddatamux_sink_data_event(GstPad *pad, GstObject *parent, GstEvent *event);
 static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, GstBuffer *buf);
@@ -283,6 +285,8 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
 /* GObject vmethod implementations */
 
 /* initialize the plugin's class */
+static void gst_zeddatamux_finalize(GObject *object);
+
 static void gst_zeddatamux_class_init(GstZedDataMuxClass *klass) {
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
     GstElementClass *gstelement_class = GST_ELEMENT_CLASS(klass);
@@ -291,6 +295,9 @@ static void gst_zeddatamux_class_init(GstZedDataMuxClass *klass) {
 
     gobject_class->set_property = gst_zeddatamux_set_property;
     gobject_class->get_property = gst_zeddatamux_get_property;
+    gobject_class->finalize = gst_zeddatamux_finalize;
+
+    gstelement_class->change_state = gst_zeddatamux_change_state;
 
     gst_element_class_set_static_metadata(gstelement_class, "ZED Data Video Muxer", "Muxer/Video",
                                           "Stereolabs ZED Data Video Muxer",
@@ -339,6 +346,56 @@ static void gst_zeddatamux_init(GstZedDataMux *filter) {
     filter->last_video_buf_size = 0;
     filter->last_data_buf = nullptr;
     filter->last_data_buf_size = 0;
+}
+
+static void gst_zeddatamux_finalize(GObject *object) {
+    GstZedDataMux *filter = GST_ZEDDATAMUX(object);
+
+    if (filter->caps) {
+        gst_caps_unref(filter->caps);
+        filter->caps = nullptr;
+    }
+    if (filter->last_video_buf) {
+        gst_buffer_unref(filter->last_video_buf);
+        filter->last_video_buf = nullptr;
+    }
+    if (filter->last_data_buf) {
+        gst_buffer_unref(filter->last_data_buf);
+        filter->last_data_buf = nullptr;
+    }
+
+    G_OBJECT_CLASS(gst_zeddatamux_parent_class)->finalize(object);
+}
+
+static GstStateChangeReturn gst_zeddatamux_change_state(GstElement *element,
+                                                        GstStateChange transition) {
+    GstZedDataMux *filter = GST_ZEDDATAMUX(element);
+
+    switch (transition) {
+    case GST_STATE_CHANGE_PAUSED_TO_READY:
+    case GST_STATE_CHANGE_READY_TO_NULL:
+        if (filter->caps) {
+            gst_caps_unref(filter->caps);
+            filter->caps = nullptr;
+        }
+        if (filter->last_video_buf) {
+            gst_buffer_unref(filter->last_video_buf);
+            filter->last_video_buf = nullptr;
+        }
+        if (filter->last_data_buf) {
+            gst_buffer_unref(filter->last_data_buf);
+            filter->last_data_buf = nullptr;
+        }
+        filter->last_video_ts = 0;
+        filter->last_data_ts = 0;
+        filter->last_video_buf_size = 0;
+        filter->last_data_buf_size = 0;
+        break;
+    default:
+        break;
+    }
+
+    return GST_ELEMENT_CLASS(gst_zeddatamux_parent_class)->change_state(element, transition);
 }
 
 static void gst_zeddatamux_set_property(GObject *object, guint prop_id, const GValue *value,
@@ -493,55 +550,67 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
                     // ----> Release incoming buffer
                     GST_TRACE("Input buffer unmap");
                     gst_buffer_unmap(buf, &map_in);
-                    // gst_buffer_unref(buf);
+                    gst_buffer_unref(buf);
                     //  <---- Release incoming buffer
 
                     return GST_FLOW_ERROR;
                 }
 
-                if (gst_buffer_map(out_buf, &map_out, (GstMapFlags) (GST_MAP_WRITE)) &&
-                    gst_buffer_map(filter->last_video_buf, &map_store,
-                                   (GstMapFlags) (GST_MAP_READ))) {
-                    GST_TRACE("Copying video buffer %lu B", out_buf_size);
-                    memcpy(map_out.data, map_store.data, out_buf_size);
-
-                    GstZedSrcMeta *meta = (GstZedSrcMeta *) buf;
-
-                    GST_TRACE("Adding metadata");
-                    gst_buffer_add_zed_src_meta(out_buf, meta->info, meta->pose, meta->sens,
-                                                meta->od_enabled, meta->obj_count, meta->objects,
-                                                meta->frame_id);
-
-                    // ----> Timestamp meta-data
-                    GST_TRACE("Out buffer set timestamp");
-                    GST_BUFFER_TIMESTAMP(out_buf) = timestamp;
-                    GST_BUFFER_DTS(out_buf) = GST_BUFFER_TIMESTAMP(out_buf);
-                    GST_BUFFER_OFFSET(out_buf) = GST_BUFFER_OFFSET(filter->last_video_buf);
-                    // <---- Timestamp meta-data
-
-                    GST_TRACE("Out buffer push");
-                    GstFlowReturn ret = gst_pad_push(filter->srcpad, out_buf);
-
-                    if (ret != GST_FLOW_OK) {
-                        GST_DEBUG_OBJECT(filter, "Error pushing out buffer: %s",
-                                         gst_flow_get_name(ret));
-
-                        // ----> Release incoming buffer
-                        GST_TRACE("Input buffer unmap");
-                        gst_buffer_unmap(buf, &map_in);
-                        // gst_buffer_unref(buf);
-                        GST_TRACE("Out buffer unmap");
-                        gst_buffer_unmap(out_buf, &map_out);
-                        // gst_buffer_unref(out_buf);
-                        //  <---- Release incoming buffer
-                        return ret;
-                    }
-
-                    GST_TRACE("Out buffer unmap");
+                if (!gst_buffer_map(out_buf, &map_out, (GstMapFlags) (GST_MAP_WRITE))) {
+                    GST_ELEMENT_ERROR(pad, RESOURCE, FAILED,
+                                      ("Failed to map output buffer for writing"), (NULL));
+                    gst_buffer_unref(out_buf);
+                    gst_buffer_unmap(buf, &map_in);
+                    gst_buffer_unref(buf);
+                    return GST_FLOW_ERROR;
+                }
+                if (!gst_buffer_map(filter->last_video_buf, &map_store,
+                                    (GstMapFlags) (GST_MAP_READ))) {
+                    GST_ELEMENT_ERROR(pad, RESOURCE, FAILED,
+                                      ("Failed to map stored video buffer for reading"), (NULL));
                     gst_buffer_unmap(out_buf, &map_out);
-                    GST_TRACE("Store buffer unmap");
-                    gst_buffer_unmap(filter->last_video_buf, &map_store);
-                    // gst_buffer_unref(data_buf);
+                    gst_buffer_unref(out_buf);
+                    gst_buffer_unmap(buf, &map_in);
+                    gst_buffer_unref(buf);
+                    return GST_FLOW_ERROR;
+                }
+
+                GST_TRACE("Copying video buffer %lu B", out_buf_size);
+                memcpy(map_out.data, map_store.data, out_buf_size);
+
+                // The data buffer's payload contains a serialized GstZedSrcMeta.
+                // Read from the mapped data, NOT from the GstBuffer pointer.
+                GstZedSrcMeta *meta = (GstZedSrcMeta *) map_in.data;
+
+                GST_TRACE("Adding metadata");
+                gst_buffer_add_zed_src_meta(out_buf, meta->info, meta->pose, meta->sens,
+                                            meta->od_enabled, meta->obj_count, meta->objects,
+                                            meta->frame_id);
+
+                // ----> Timestamp meta-data
+                GST_TRACE("Out buffer set timestamp");
+                GST_BUFFER_TIMESTAMP(out_buf) = timestamp;
+                GST_BUFFER_DTS(out_buf) = GST_BUFFER_TIMESTAMP(out_buf);
+                GST_BUFFER_OFFSET(out_buf) = GST_BUFFER_OFFSET(filter->last_video_buf);
+                // <---- Timestamp meta-data
+
+                // Unmap all buffers before push (push takes ownership of out_buf)
+                GST_TRACE("Out buffer unmap");
+                gst_buffer_unmap(out_buf, &map_out);
+                GST_TRACE("Store buffer unmap");
+                gst_buffer_unmap(filter->last_video_buf, &map_store);
+
+                GST_TRACE("Out buffer push");
+                GstFlowReturn ret = gst_pad_push(filter->srcpad, out_buf);
+                // out_buf ownership transferred to downstream, do not touch it
+
+                if (ret != GST_FLOW_OK) {
+                    GST_DEBUG_OBJECT(filter, "Error pushing out buffer: %s",
+                                     gst_flow_get_name(ret));
+
+                    gst_buffer_unmap(buf, &map_in);
+                    gst_buffer_unref(buf);
+                    return ret;
                 }
             } else {
                 GST_TRACE("No video buffer to be muxed");
@@ -551,15 +620,15 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
 
             filter->last_data_ts = timestamp;
 
-            if (!filter->last_data_buf) {
-                GST_TRACE("Creating new stored data buffer");
+            if (!filter->last_data_buf || map_in.size != filter->last_data_buf_size) {
+                GST_TRACE("%s stored data buffer (size %lu)",
+                          filter->last_data_buf ? "Reallocating" : "Creating", map_in.size);
+                if (filter->last_data_buf) {
+                    gst_buffer_unref(filter->last_data_buf);
+                }
                 filter->last_data_buf_size = map_in.size;
                 filter->last_data_buf =
                     gst_buffer_new_allocate(NULL, filter->last_data_buf_size, NULL);
-            } else if (map_in.size != filter->last_data_buf_size) {
-                GST_TRACE("Resizing stored data buffer");
-                filter->last_data_buf_size = map_in.size;
-                gst_buffer_resize(filter->last_data_buf, 0, filter->last_data_buf_size);
             }
 
             if (!GST_IS_BUFFER(filter->last_data_buf)) {
@@ -568,7 +637,7 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
                 // ----> Release incoming buffer
                 GST_TRACE("Input buffer unmap");
                 gst_buffer_unmap(buf, &map_in);
-                // gst_buffer_unref(buf);
+                gst_buffer_unref(buf);
                 //  <---- Release incoming buffer
 
                 return GST_FLOW_ERROR;
@@ -586,9 +655,11 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
         // ----> Release incoming buffer
         GST_TRACE("Input buffer unmap");
         gst_buffer_unmap(buf, &map_in);
+        gst_buffer_unref(buf);
         // <---- Release incoming buffer
     } else {
         GST_ELEMENT_ERROR(pad, RESOURCE, FAILED, ("Failed to map buffer for reading"), (NULL));
+        gst_buffer_unref(buf);
         return GST_FLOW_ERROR;
     }
     GST_TRACE("... processed");
@@ -631,55 +702,65 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
                     // ----> Release incoming buffer
                     GST_TRACE("Input buffer unmap");
                     gst_buffer_unmap(buf, &map_in);
-                    // gst_buffer_unref(buf);
+                    gst_buffer_unref(buf);
                     //  <---- Release incoming buffer
 
                     return GST_FLOW_ERROR;
                 }
 
-                if (gst_buffer_map(out_buf, &map_out, (GstMapFlags) (GST_MAP_WRITE)) &&
-                    gst_buffer_map(filter->last_data_buf, &map_store,
-                                   (GstMapFlags) (GST_MAP_WRITE))) {
-                    GST_TRACE("Copying video buffer %lu B", map_in.size);
-                    memcpy(map_out.data, map_in.data, map_in.size);
-
-                    GstZedSrcMeta *meta = (GstZedSrcMeta *) map_store.data;
-
-                    GST_TRACE("Adding metadata");
-                    gst_buffer_add_zed_src_meta(out_buf, meta->info, meta->pose, meta->sens,
-                                                meta->od_enabled, meta->obj_count, meta->objects,
-                                                meta->frame_id);
-
-                    // ----> Timestamp meta-data
-                    GST_TRACE("Out buffer set timestamp");
-                    GST_BUFFER_TIMESTAMP(out_buf) = timestamp;
-                    GST_BUFFER_DTS(out_buf) = GST_BUFFER_TIMESTAMP(out_buf);
-                    GST_BUFFER_OFFSET(out_buf) = GST_BUFFER_OFFSET(buf);
-                    // <---- Timestamp meta-data
-
-                    GST_TRACE("Out buffer push");
-                    GstFlowReturn ret = gst_pad_push(filter->srcpad, out_buf);
-
-                    if (ret != GST_FLOW_OK) {
-                        GST_DEBUG_OBJECT(filter, "Error pushing out buffer: %s",
-                                         gst_flow_get_name(ret));
-
-                        // ----> Release incoming buffer
-                        GST_TRACE("Input buffer unmap");
-                        gst_buffer_unmap(buf, &map_in);
-                        // gst_buffer_unref(buf);
-                        GST_TRACE("Out buffer unmap");
-                        gst_buffer_unmap(out_buf, &map_out);
-                        // gst_buffer_unref(out_buf);
-                        //  <---- Release incoming buffer
-                        return ret;
-                    }
-
-                    GST_TRACE("Out buffer unmap");
+                if (!gst_buffer_map(out_buf, &map_out, (GstMapFlags) (GST_MAP_WRITE))) {
+                    GST_ELEMENT_ERROR(pad, RESOURCE, FAILED,
+                                      ("Failed to map output buffer for writing"), (NULL));
+                    gst_buffer_unref(out_buf);
+                    gst_buffer_unmap(buf, &map_in);
+                    gst_buffer_unref(buf);
+                    return GST_FLOW_ERROR;
+                }
+                if (!gst_buffer_map(filter->last_data_buf, &map_store,
+                                    (GstMapFlags) (GST_MAP_READ))) {
+                    GST_ELEMENT_ERROR(pad, RESOURCE, FAILED,
+                                      ("Failed to map stored data buffer for reading"), (NULL));
                     gst_buffer_unmap(out_buf, &map_out);
-                    GST_TRACE("Store buffer unmap");
-                    gst_buffer_unmap(filter->last_data_buf, &map_store);
-                    // gst_buffer_unref(data_buf);
+                    gst_buffer_unref(out_buf);
+                    gst_buffer_unmap(buf, &map_in);
+                    gst_buffer_unref(buf);
+                    return GST_FLOW_ERROR;
+                }
+
+                GST_TRACE("Copying video buffer %lu B", map_in.size);
+                memcpy(map_out.data, map_in.data, map_in.size);
+
+                GstZedSrcMeta *meta = (GstZedSrcMeta *) map_store.data;
+
+                GST_TRACE("Adding metadata");
+                gst_buffer_add_zed_src_meta(out_buf, meta->info, meta->pose, meta->sens,
+                                            meta->od_enabled, meta->obj_count, meta->objects,
+                                            meta->frame_id);
+
+                // ----> Timestamp meta-data
+                GST_TRACE("Out buffer set timestamp");
+                GST_BUFFER_TIMESTAMP(out_buf) = timestamp;
+                GST_BUFFER_DTS(out_buf) = GST_BUFFER_TIMESTAMP(out_buf);
+                GST_BUFFER_OFFSET(out_buf) = GST_BUFFER_OFFSET(buf);
+                // <---- Timestamp meta-data
+
+                // Unmap all buffers before push (push takes ownership of out_buf)
+                GST_TRACE("Out buffer unmap");
+                gst_buffer_unmap(out_buf, &map_out);
+                GST_TRACE("Store buffer unmap");
+                gst_buffer_unmap(filter->last_data_buf, &map_store);
+
+                GST_TRACE("Out buffer push");
+                GstFlowReturn ret = gst_pad_push(filter->srcpad, out_buf);
+                // out_buf ownership transferred to downstream, do not touch it
+
+                if (ret != GST_FLOW_OK) {
+                    GST_DEBUG_OBJECT(filter, "Error pushing out buffer: %s",
+                                     gst_flow_get_name(ret));
+
+                    gst_buffer_unmap(buf, &map_in);
+                    gst_buffer_unref(buf);
+                    return ret;
                 }
             } else {
                 GST_TRACE("No data buffer to be muxed");
@@ -689,14 +770,15 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
 
             filter->last_video_ts = timestamp;
 
-            if (!filter->last_video_buf) {
-                GST_TRACE("Creating new stored video buffer");
+            if (!filter->last_video_buf || map_in.size != filter->last_video_buf_size) {
+                GST_TRACE("%s stored video buffer (size %lu)",
+                          filter->last_video_buf ? "Reallocating" : "Creating", map_in.size);
+                if (filter->last_video_buf) {
+                    gst_buffer_unref(filter->last_video_buf);
+                }
                 filter->last_video_buf_size = map_in.size;
                 filter->last_video_buf =
                     gst_buffer_new_allocate(NULL, filter->last_video_buf_size, NULL);
-            } else if (map_in.size != filter->last_video_buf_size) {
-                filter->last_video_buf_size = map_in.size;
-                gst_buffer_resize(filter->last_video_buf, 0, filter->last_video_buf_size);
             }
 
             if (!GST_IS_BUFFER(filter->last_video_buf)) {
@@ -705,7 +787,7 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
                 // ----> Release incoming buffer
                 GST_TRACE("Input buffer unmap");
                 gst_buffer_unmap(buf, &map_in);
-                // gst_buffer_unref(buf);
+                gst_buffer_unref(buf);
                 //  <---- Release incoming buffer
 
                 return GST_FLOW_ERROR;
@@ -722,9 +804,11 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
 
         // ----> Release incoming buffer
         gst_buffer_unmap(buf, &map_in);
+        gst_buffer_unref(buf);
         // <---- Release incoming buffer
     } else {
         GST_ELEMENT_ERROR(pad, RESOURCE, FAILED, ("Failed to map buffer for reading"), (NULL));
+        gst_buffer_unref(buf);
         return GST_FLOW_ERROR;
     }
     GST_TRACE("... processed");

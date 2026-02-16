@@ -1617,6 +1617,8 @@ static void gst_zedsrc_reset(GstZedSrc *src) {
 
     src->out_framesize = 0;
     src->is_started = FALSE;
+    src->stop_requested = FALSE;
+    src->resolved_stream_type = -1;   // Reset so AUTO re-negotiates on next start
 
     src->last_frame_count = 0;
     src->total_dropped_frames = 0;
@@ -2187,7 +2189,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_int(value, src->camera_id);
         break;
     case PROP_CAM_SN:
-        g_value_set_int64(value, src->camera_id);
+        g_value_set_int64(value, src->camera_sn);
         break;
     case PROP_SVO_FILE:
         g_value_set_string(value, src->svo_file->str);
@@ -2367,7 +2369,7 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         g_value_set_float(value, src->bt_max_range);
         break;
     case PROP_BT_KP_SELECT:
-        g_value_set_float(value, src->bt_kp_sel);
+        g_value_set_enum(value, src->bt_kp_sel);
         break;
     case PROP_BT_BODY_FITTING:
         g_value_set_boolean(value, src->bt_fitting);

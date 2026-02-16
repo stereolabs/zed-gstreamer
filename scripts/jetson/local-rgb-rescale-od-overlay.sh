@@ -18,8 +18,8 @@ gst-launch-1.0 \
 zeddatamux name=mux \
 zedsrc stream-type=4 od-detection-model=0 od-enabled=true ! \
 zeddemux stream-data=true is-depth=true name=demux \
-demux.src_aux ! queue ! autovideoconvert ! videoscale ! video/x-raw,width=672,height=376 ! queue ! fpsdisplaysink \
+demux.src_aux ! queue ! nvvideoconvert ! "video/x-raw(memory:NVMM),format=NV12,width=672,height=376" ! nv3dsink sync=false \
 demux.src_data ! mux.sink_data \
-demux.src_left ! queue ! videoscale ! video/x-raw,width=672,height=376 ! mux.sink_video \
+demux.src_left ! queue ! nvvideoconvert ! video/x-raw,format=BGRA,width=672,height=376 ! mux.sink_video \
 mux.src ! queue ! zedodoverlay ! queue ! \
-autovideoconvert ! fpsdisplaysink
+nvvideoconvert ! nv3dsink sync=false

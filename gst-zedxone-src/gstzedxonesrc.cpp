@@ -672,6 +672,8 @@ static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
 
     src->_outFramesize = 0;
     src->_isStarted = FALSE;
+    src->_stopRequested = FALSE;
+    src->_resolvedStreamType = -1;   // Reset so AUTO re-negotiates on next start
     src->_bufferIndex = 0;
 
     if (src->_caps) {
@@ -1168,7 +1170,8 @@ static sl::RESOLUTION gst_zedxonesrc_get_sl_resolution(GstZedXOneSrcRes resol) {
 
 /*
  * Detect the camera model using sl::CameraOne::getDeviceList() (lightweight, no open needed).
- * If camera_id or camera_sn is set, match the specific device; otherwise use the first one.
+ * If camera_id or camera_sn is set, match the specific device; otherwise find
+ * the first genuine mono camera using sl::isCameraOne().
  */
 static sl::MODEL gst_zedxonesrc_detect_camera_model(GstZedXOneSrc *src) {
     auto devices = sl::CameraOne::getDeviceList();
@@ -1177,26 +1180,41 @@ static sl::MODEL gst_zedxonesrc_detect_camera_model(GstZedXOneSrc *src) {
         return sl::MODEL::ZED_XM;
     }
 
-    sl::MODEL model = devices[0].camera_model;
-
+    // If a specific camera was requested, match it directly
     if (src->_cameraId != -1) {
         for (const auto &dev : devices) {
             if (dev.id == static_cast<unsigned int>(src->_cameraId)) {
-                model = dev.camera_model;
-                break;
+                GST_INFO("Detected camera model: %s (camera-id %d)",
+                         sl::toString(dev.camera_model).c_str(), src->_cameraId);
+                return dev.camera_model;
             }
         }
     } else if (src->_cameraSN != 0) {
         for (const auto &dev : devices) {
             if (dev.serial_number == static_cast<unsigned int>(src->_cameraSN)) {
-                model = dev.camera_model;
-                break;
+                GST_INFO("Detected camera model: %s (S/N %u)",
+                         sl::toString(dev.camera_model).c_str(),
+                         static_cast<unsigned int>(src->_cameraSN));
+                return dev.camera_model;
             }
         }
     }
 
-    GST_INFO("Detected camera model: %s", sl::toString(model).c_str());
-    return model;
+    // No explicit camera specified — find the first genuine mono camera.
+    // CameraOne::getDeviceList() may return stereo ZED X cameras on
+    // multi-camera rigs.
+    for (const auto &dev : devices) {
+        if (sl::isCameraOne(dev.camera_model)) {
+            GST_INFO("Detected camera model: %s (auto, device %d)",
+                     sl::toString(dev.camera_model).c_str(), dev.id);
+            return dev.camera_model;
+        }
+    }
+
+    // Fallback: no mono camera found, use first device's model
+    GST_WARNING("No mono camera in device list, using %s from device %d",
+                sl::toString(devices[0].camera_model).c_str(), devices[0].id);
+    return devices[0].camera_model;
 }
 
 /*
@@ -1495,6 +1513,35 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     } else if (src->_streamIp->len != 0) {
         init_params.input.setFromStream(sl::String(src->_streamIp->str), src->_streamPort);
         GST_INFO(" * Input Stream: %s:%d", src->_streamIp->str, src->_streamPort);
+    } else {
+        // No explicit input specified — auto-detect the first ZED X One camera.
+        // On multi-camera rigs (e.g. 4x ZED X + 2x ZED X One)
+        // CameraOne::getDeviceList() may return ALL GMSL cameras including
+        // stereo ZED X models.  Filter using sl::isCameraOne() to find a
+        // genuine mono camera.
+        auto devices = sl::CameraOne::getDeviceList();
+        bool found = false;
+        for (const auto &dev : devices) {
+            if (sl::isCameraOne(dev.camera_model)) {
+                init_params.input.setFromCameraID(dev.id);
+                GST_INFO(" * Auto-selected ZED X One camera ID: %d (S/N: %u, model: %s)", dev.id,
+                         dev.serial_number, sl::toString(dev.camera_model).c_str());
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            if (!devices.empty()) {
+                // No mono camera found — fall back to first device and let
+                // CameraOne::open() report the real error.
+                init_params.input.setFromCameraID(devices[0].id);
+                GST_WARNING("No mono (ZED X One) camera found in device list, "
+                            "falling back to device %d (%s)",
+                            devices[0].id, sl::toString(devices[0].camera_model).c_str());
+            } else {
+                GST_WARNING("No cameras found in device list, using SDK default");
+            }
+        }
     }
 
     const ZedXOneCameraMode *resolved_mode =
@@ -1933,9 +1980,29 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
     // Use resolved stream type which accounts for AUTO negotiation
     gint stream_type = src->_resolvedStreamType;
 
-    // For non-NVMM modes, fall back to the default fill() path
+    // For non-NVMM modes, allocate a buffer and use the fill() path.
+    // NOTE: We cannot chain to GstPushSrcClass->create here because
+    // GstPushSrc does not set a default create vmethod in its class
+    // struct (it installs its dispatch at the GstBaseSrc level), so
+    // the parent create pointer is NULL.
     if (stream_type != GST_ZEDXONESRC_RAW_NV12) {
-        return GST_PUSH_SRC_CLASS(gst_zedxonesrc_parent_class)->create(psrc, outbuf);
+        GstFlowReturn ret;
+        GstBuffer *buf = NULL;
+        GstBaseSrc *bsrc = GST_BASE_SRC(psrc);
+
+        ret = GST_BASE_SRC_CLASS(gst_zedxonesrc_parent_class)
+                  ->alloc(bsrc, -1, gst_base_src_get_blocksize(bsrc), &buf);
+        if (ret != GST_FLOW_OK)
+            return ret;
+
+        ret = gst_zedxonesrc_fill(psrc, buf);
+        if (ret != GST_FLOW_OK) {
+            gst_buffer_unref(buf);
+            return ret;
+        }
+
+        *outbuf = buf;
+        return GST_FLOW_OK;
     }
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_create (NVMM zero-copy)");
@@ -2075,11 +2142,14 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     sl::ERROR_CODE ret;
     GstMapInfo minfo;
     GstClock *clock;
-    GstClockTime clock_time;
+    GstClockTime clock_time = GST_CLOCK_TIME_NONE;
 
     if (!src->_isStarted) {
-        src->_acqStartTime = gst_clock_get_time(gst_element_get_clock(GST_ELEMENT(src)));
-
+        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (start_clock) {
+            src->_acqStartTime = gst_clock_get_time(start_clock);
+            gst_object_unref(start_clock);
+        }
         src->_isStarted = TRUE;
     }
 
@@ -2087,7 +2157,10 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GST_TRACE(" Data Grabbing");
     ret = src->_zed->grab();
 
-    if (ret > sl::ERROR_CODE::SUCCESS) {
+    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
+        GST_INFO_OBJECT(src, "End of SVO file");
+        return GST_FLOW_EOS;
+    } else if (ret != sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
                           ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
                            sl::toVerbose(ret).c_str()),
@@ -2099,8 +2172,10 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // ----> Clock update
     GST_TRACE("Clock update");
     clock = gst_element_get_clock(GST_ELEMENT(src));
-    clock_time = gst_clock_get_time(clock);
-    gst_object_unref(clock);
+    if (clock) {
+        clock_time = gst_clock_get_time(clock);
+        gst_object_unref(clock);
+    }
     // <---- Clock update
 
     // Memory mapping

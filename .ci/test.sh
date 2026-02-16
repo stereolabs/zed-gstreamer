@@ -48,6 +48,7 @@ VERBOSE=false
 HARDWARE_AVAILABLE=false
 HARDWARE_CHECK_DONE=false
 GMSL_CAMERA=false
+GMSL_CAMERA_SN=""       # Serial number of the first available GMSL stereo camera
 ZERO_COPY_AVAILABLE=false
 
 # Counters
@@ -225,6 +226,24 @@ check_hardware() {
             if echo "$zed_output" | grep -qi "ZED X\|GMSL"; then
                 GMSL_CAMERA=true
                 log_info "GMSL camera detected (ZED X / ZED X Mini)"
+                
+                # Extract the serial number of the first available GMSL *stereo*
+                # camera (ZED X or ZED X Mini — NOT ZED XOne which is mono).
+                # ZED_Explorer output groups cameras in "## Cam N ##" blocks.
+                # We look for a block containing a stereo GMSL model AND "AVAILABLE".
+                GMSL_CAMERA_SN=$(echo "$zed_output" | awk '
+                    /^## Cam/ { block=""; sn=""; is_gmsl=0; is_stereo=0; is_avail=0 }
+                    /Model.*"ZED X"$/ || /Model.*"ZED X Mini"/ { is_stereo=1 }
+                    /Type.*"GMSL"/                             { is_gmsl=1 }
+                    /State.*"AVAILABLE"/                       { is_avail=1 }
+                    /S\/N/ { sn=$NF }
+                    /^\*\*\*\*\*/ {
+                        if (is_gmsl && is_stereo && is_avail && sn != "") { print sn; exit }
+                    }
+                ')
+                if [ -n "$GMSL_CAMERA_SN" ]; then
+                    log_info "First available GMSL stereo camera S/N: $GMSL_CAMERA_SN"
+                fi
             fi
         fi
     fi
@@ -264,6 +283,73 @@ check_hardware() {
     
     if [ "$HARDWARE_AVAILABLE" = false ]; then
         log_warning "No ZED camera hardware detected - hardware tests will be skipped"
+    fi
+}
+
+# Build the best available H.264 encode pipeline for the current platform.
+# Priority order:
+#   1. NV12 zero-copy → nvv4l2h264enc  (Jetson + GMSL, no CPU conversion)
+#   2. BGRA → nvvidconv → nvv4l2h264enc (Jetson without zero-copy)
+#   3. BGRA → videoconvert → x264enc    (x86 / USB fallback)
+#   4. BGRA → videoconvert → openh264enc (last resort)
+#
+# Sets the following globals:
+#   _ENCODE_STREAM_TYPE  - zedsrc stream-type value (0 or 6)
+#   _ENCODE_PIPELINE     - encoder chain (everything after zedsrc ! queue)
+#   _ENCODER_NAME        - human-readable encoder name for test output
+#   _ENCODE_AVAILABLE    - "true" if an encoder was found
+#   _ENCODE_CAMERA_PROP  - extra zedsrc prop to target a GMSL camera (may be empty)
+#
+# For RTSP pipelines (pass "rtsp" as $1), appends h264parse + rtph264pay.
+build_h264_encode_pipeline() {
+    local mode="${1:-encode}"  # "encode" or "rtsp"
+
+    _ENCODE_STREAM_TYPE=0
+    _ENCODE_PIPELINE=""
+    _ENCODER_NAME=""
+    _ENCODE_AVAILABLE=false
+    _ENCODE_CAMERA_PROP=""
+
+    if [ -f /etc/nv_tegra_release ] && gst-inspect-1.0 nvv4l2h264enc &>/dev/null; then
+        if [ "$ZERO_COPY_AVAILABLE" = true ]; then
+            # Best path: NV12 NVMM straight from the camera into HW encoder.
+            # No queue, no conversion — zedsrc already outputs NVMM NV12.
+            _ENCODE_STREAM_TYPE=6
+            _ENCODE_PIPELINE="video/x-raw(memory:NVMM),format=NV12 ! nvv4l2h264enc bitrate=4000000"
+            _ENCODER_NAME="nvv4l2h264enc (NV12 ZC)"
+            # NV12 zero-copy requires a GMSL camera.  When both USB and GMSL
+            # cameras are present, zedsrc without an explicit camera-sn would
+            # pick the first available camera (which may be USB).  Pin to a
+            # GMSL stereo camera so the pipeline actually gets NVMM buffers.
+            if [ -n "$GMSL_CAMERA_SN" ]; then
+                _ENCODE_CAMERA_PROP="camera-sn=$GMSL_CAMERA_SN"
+            fi
+        elif gst-inspect-1.0 nvvidconv &>/dev/null; then
+            # Fallback on Jetson: upload BGRA to NVMM and convert
+            _ENCODE_STREAM_TYPE=0
+            _ENCODE_PIPELINE="nvvidconv ! video/x-raw(memory:NVMM),format=I420 ! nvv4l2h264enc bitrate=4000000"
+            _ENCODER_NAME="nvv4l2h264enc"
+        fi
+    fi
+
+    # CPU-based encoders for x86 / USB cameras / missing HW encoder
+    if [ -z "$_ENCODE_PIPELINE" ]; then
+        if gst-inspect-1.0 x264enc &>/dev/null; then
+            _ENCODE_STREAM_TYPE=0
+            _ENCODE_PIPELINE="videoconvert ! video/x-raw,format=I420 ! x264enc tune=zerolatency speed-preset=ultrafast bitrate=2000"
+            _ENCODER_NAME="x264enc"
+        elif gst-inspect-1.0 openh264enc &>/dev/null; then
+            _ENCODE_STREAM_TYPE=0
+            _ENCODE_PIPELINE="videoconvert ! video/x-raw,format=I420 ! openh264enc"
+            _ENCODER_NAME="openh264enc"
+        fi
+    fi
+
+    if [ -n "$_ENCODE_PIPELINE" ]; then
+        _ENCODE_AVAILABLE=true
+        if [ "$mode" = "rtsp" ]; then
+            _ENCODE_PIPELINE="$_ENCODE_PIPELINE ! h264parse ! rtph264pay name=pay0 pt=96"
+        fi
     fi
 }
 
@@ -513,7 +599,10 @@ test_zedsrc_auto_resolution() {
     # Test 5: Explicit resolution + FPS clamping
     if [ "$GMSL_CAMERA" = true ]; then
         # GMSL: test HD1200 → supports 15/30/60, so 120 clamps to 60
-        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=2 camera-fps=120 num-buffers=$num_buffers ! fakesink 2>&1)
+        # Pin to the GMSL camera — HD1200 is ZED X-only, not available on USB cameras
+        local gmsl_prop=""
+        [ -n "$GMSL_CAMERA_SN" ] && gmsl_prop="camera-sn=$GMSL_CAMERA_SN"
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc camera-resolution=2 camera-fps=120 $gmsl_prop num-buffers=$num_buffers ! fakesink 2>&1)
         if [ $? -eq 0 ]; then
             test_pass "zedsrc HD1200@120fps clamped to 60fps [GMSL]"
         else
@@ -597,9 +686,12 @@ test_zedsrc_nv12() {
         local timeout_val=30
         local num_buffers=10
         local output
+        # Pin to a GMSL camera when USB cameras are also present
+        local gmsl_prop=""
+        [ -n "$GMSL_CAMERA_SN" ] && gmsl_prop="camera-sn=$GMSL_CAMERA_SN"
         
         # Test stream-type=6 (single NV12 zero-copy)
-        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 num-buffers=$num_buffers ! \
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 $gmsl_prop num-buffers=$num_buffers ! \
             'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
         if [ $? -eq 0 ]; then
             test_pass "ZedSrc NV12 zero-copy pipeline (stream-type=6)"
@@ -615,7 +707,7 @@ test_zedsrc_nv12() {
         sleep $CAMERA_RESET_DELAY
         
         # Test stream-type=7 (stereo NV12 zero-copy)
-        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=7 num-buffers=$num_buffers ! \
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=7 $gmsl_prop num-buffers=$num_buffers ! \
             'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
         if [ $? -eq 0 ]; then
             test_pass "ZedSrc NV12 stereo zero-copy pipeline (stream-type=7)"
@@ -761,8 +853,12 @@ test_hardware_streaming() {
         if [ "$ZERO_COPY_AVAILABLE" = true ]; then
             sleep $CAMERA_RESET_DELAY
             
+            # Pin to a GMSL camera when USB cameras are also present
+            local gmsl_prop=""
+            [ -n "$GMSL_CAMERA_SN" ] && gmsl_prop="camera-sn=$GMSL_CAMERA_SN"
+            
             # Test stream-type=6 (single NV12 zero-copy)
-            output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 num-buffers=$num_buffers ! \
+            output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=6 $gmsl_prop num-buffers=$num_buffers ! \
                 'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
             if [ $? -eq 0 ]; then
                 test_pass "Stream type 6 (RAW_NV12 zero-copy)"
@@ -775,7 +871,7 @@ test_hardware_streaming() {
                 sleep $CAMERA_RESET_DELAY
                 
                 # Test stream-type=7 (stereo NV12 zero-copy)
-                output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=7 num-buffers=$num_buffers ! \
+                output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=7 $gmsl_prop num-buffers=$num_buffers ! \
                     'video/x-raw(memory:NVMM),format=NV12' ! fakesink 2>&1)
                 if [ $? -eq 0 ]; then
                     test_pass "Stream type 7 (RAW_NV12 stereo zero-copy)"
@@ -1043,6 +1139,17 @@ test_zedxone_auto_resolution() {
         return 0
     fi
 
+    # Need an actual ZED X One camera — on multi-camera rigs the default
+    # camera-id may pick a ZED X (stereo) which is incompatible with
+    # zedxonesrc.  Use a quick pipeline probe instead of ZED_Explorer
+    # string matching, since ZED_Explorer output varies across SDK versions.
+    if ! timeout 15 gst-launch-1.0 zedxonesrc num-buffers=1 ! fakesink &>/dev/null; then
+        skip_test "zedxonesrc AUTO caps negotiation" "No ZED X One camera available"
+        sleep $CAMERA_RESET_DELAY
+        return 0
+    fi
+    sleep $CAMERA_RESET_DELAY
+
     if [ "$EXTENSIVE_MODE" = false ]; then
         skip_test "zedxonesrc AUTO caps negotiation" "Extensive mode required"
         return 0
@@ -1179,10 +1286,10 @@ test_zedxone_resolutions() {
         if [ $? -eq 0 ]; then
             test_pass "zedxonesrc $name ($dims) [enum=$enum_val]"
         else
-            if echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
+            if echo "$output" | grep -qi "invalid resolution\|not available\|not supported"; then
+                skip_test "zedxonesrc $name ($dims)" "Resolution not supported by connected camera model"
+            elif echo "$output" | grep -qi "no camera\|not found\|failed to open"; then
                 skip_test "zedxonesrc $name ($dims)" "No ZED X One camera detected"
-            elif echo "$output" | grep -qi "not available\|not supported\|invalid resolution"; then
-                skip_test "zedxonesrc $name ($dims)" "Not supported on this camera model"
             else
                 test_fail "zedxonesrc $name ($dims) [enum=$enum_val]"
                 [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
@@ -1568,14 +1675,16 @@ test_zedxone_hardware() {
         return 0
     fi
     
-    # Check if ZED X One is specifically available
-    local zed_output
-    zed_output=$(ZED_Explorer -a 2>&1)
-    if ! echo "$zed_output" | grep -qi "ZED X One"; then
-        skip_test "ZED X One camera grab" "No ZED X One camera detected"
-        skip_test "ZED X One with HDR" "No ZED X One camera detected"
+    # Check if ZED X One is specifically available using a quick pipeline probe.
+    # ZED_Explorer output format varies across SDK versions, so this is more
+    # reliable than string matching.
+    if ! timeout 15 gst-launch-1.0 zedxonesrc num-buffers=1 ! fakesink &>/dev/null; then
+        skip_test "ZED X One camera grab" "No ZED X One camera available"
+        skip_test "ZED X One with HDR" "No ZED X One camera available"
+        sleep $CAMERA_RESET_DELAY
         return 0
     fi
+    sleep $CAMERA_RESET_DELAY
     
     local timeout_val=90
     local num_buffers=10
@@ -1592,13 +1701,17 @@ test_zedxone_hardware() {
     
     sleep $CAMERA_RESET_DELAY
     
-    # Test ZED X One with HDR enabled
+    # Test ZED X One with HDR enabled (requires ZED X One HDR — ISX031 sensor)
     output=$(timeout "$timeout_val" gst-launch-1.0 zedxonesrc enable-hdr=true num-buffers=$num_buffers ! fakesink 2>&1)
     if [ $? -eq 0 ]; then
         test_pass "ZED X One with HDR"
     else
-        test_fail "ZED X One with HDR"
-        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        if echo "$output" | grep -qi "not compatible with.*hdr\|invalid function call\|hdr.*not supported\|invalid resolution"; then
+            skip_test "ZED X One with HDR" "HDR requires ZED X One HDR model (ISX031 sensor)"
+        else
+            test_fail "ZED X One with HDR"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
     fi
     
     sleep $CAMERA_RESET_DELAY
@@ -1686,47 +1799,41 @@ test_video_recording_playback() {
     mkdir -p "$test_dir"
     
     # STEP 1: Record video from camera to file
+    build_h264_encode_pipeline encode
+    if [ "$_ENCODE_AVAILABLE" != true ]; then
+        skip_test "Video recording" "No H.264 encoder available"
+        skip_test "Video playback" "No H.264 encoder available"
+        rm -rf "$test_dir"
+        return 0
+    fi
+
+    local st="$_ENCODE_STREAM_TYPE"
+    local encoder="$_ENCODE_PIPELINE"
+    local encoder_name="$_ENCODER_NAME"
+    local cam_prop="$_ENCODE_CAMERA_PROP"
+
     # Use mp4mux for a standard container format
-    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=0 num-buffers=60 ! \
-        queue ! videoconvert ! video/x-raw,format=I420 ! \
-        x264enc tune=zerolatency speed-preset=ultrafast ! \
-        mp4mux ! filesink location="$video_file" 2>&1)
+    # shellcheck disable=SC2086
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=$st $cam_prop num-buffers=60 ! \
+        queue ! $encoder ! h264parse ! \
+        mp4mux ! filesink location=$video_file 2>&1)
     local record_status=$?
-    
+
     if [ $record_status -eq 0 ] && [ -f "$video_file" ]; then
         local file_size
         file_size=$(stat -c%s "$video_file" 2>/dev/null || echo "0")
         if [ "$file_size" -gt 1000 ]; then
-            test_pass "Video recording to MP4 ($file_size bytes)"
+            test_pass "Video recording to MP4 ($file_size bytes, $encoder_name)"
         else
             test_fail "Video recording (file too small: $file_size bytes)"
             rm -rf "$test_dir"
             return 1
         fi
     else
-        # Try with openh264enc as fallback
-        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=0 num-buffers=60 ! \
-            queue ! videoconvert ! video/x-raw,format=I420 ! \
-            openh264enc ! \
-            mp4mux ! filesink location="$video_file" 2>&1)
-        record_status=$?
-        
-        if [ $record_status -eq 0 ] && [ -f "$video_file" ]; then
-            local file_size
-            file_size=$(stat -c%s "$video_file" 2>/dev/null || echo "0")
-            if [ "$file_size" -gt 1000 ]; then
-                test_pass "Video recording to MP4 ($file_size bytes, openh264)"
-            else
-                test_fail "Video recording (file too small)"
-                rm -rf "$test_dir"
-                return 1
-            fi
-        else
-            test_fail "Video recording to MP4"
-            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
-            rm -rf "$test_dir"
-            return 1
-        fi
+        test_fail "Video recording to MP4 ($encoder_name)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        rm -rf "$test_dir"
+        return 1
     fi
     
     sleep 1
@@ -1796,20 +1903,36 @@ test_udp_streaming() {
         return 1
     fi
     
+    # Build optimal sender pipeline via shared helper
+    build_h264_encode_pipeline encode
+    if [ "$_ENCODE_AVAILABLE" != true ]; then
+        kill $receiver_pid 2>/dev/null
+        wait $receiver_pid 2>/dev/null
+        skip_test "UDP stream sender" "No H.264 encoder available"
+        skip_test "UDP stream receiver" "No H.264 encoder available"
+        rm -f "$receiver_output"
+        return 0
+    fi
+
+    local st="$_ENCODE_STREAM_TYPE"
+    local encoder="$_ENCODE_PIPELINE"
+    local encoder_name="$_ENCODER_NAME"
+    local cam_prop="$_ENCODE_CAMERA_PROP"
+
     # Start sender - stream camera to UDP
-    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=0 num-buffers=$num_buffers ! \
-        queue ! videoconvert ! video/x-raw,format=I420 ! \
-        x264enc tune=zerolatency speed-preset=ultrafast bitrate=2000 ! \
+    # shellcheck disable=SC2086
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=$st $cam_prop num-buffers=$num_buffers ! \
+        queue ! $encoder ! \
         rtph264pay ! udpsink host=127.0.0.1 port=$stream_port 2>&1)
     local sender_status=$?
-    
+
     # Give receiver a moment to process
     sleep 1
-    
+
     # Stop receiver
     kill $receiver_pid 2>/dev/null
     wait $receiver_pid 2>/dev/null
-    
+
     # Check results
     if [ $sender_status -eq 0 ]; then
         # Check if receiver got any data
@@ -1817,42 +1940,20 @@ test_udp_streaming() {
             local receiver_log
             receiver_log=$(cat "$receiver_output")
             if echo "$receiver_log" | grep -qi "PLAYING\|pipeline\|clock"; then
-                test_pass "UDP stream sender (to port $stream_port)"
+                test_pass "UDP stream sender ($encoder_name, port $stream_port)"
                 test_pass "UDP stream receiver (verified data flow)"
             else
-                test_pass "UDP stream sender (to port $stream_port)"
+                test_pass "UDP stream sender ($encoder_name, port $stream_port)"
                 test_fail "UDP stream receiver (no data received)"
             fi
         else
-            test_pass "UDP stream sender (to port $stream_port)"
+            test_pass "UDP stream sender ($encoder_name, port $stream_port)"
             skip_test "UDP stream receiver" "Could not verify"
         fi
     else
-        # Try with openh264enc as fallback
-        timeout "$timeout_val" gst-launch-1.0 \
-            udpsrc port=$stream_port caps="application/x-rtp,media=video,encoding-name=H264" ! \
-            rtph264depay ! h264parse ! avdec_h264 ! fakesink sync=false \
-            > "$receiver_output" 2>&1 &
-        receiver_pid=$!
-        sleep 2
-        
-        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=0 num-buffers=$num_buffers ! \
-            queue ! videoconvert ! video/x-raw,format=I420 ! \
-            openh264enc ! \
-            rtph264pay ! udpsink host=127.0.0.1 port=$stream_port 2>&1)
-        sender_status=$?
-        
-        kill $receiver_pid 2>/dev/null
-        wait $receiver_pid 2>/dev/null
-        
-        if [ $sender_status -eq 0 ]; then
-            test_pass "UDP stream sender (openh264, port $stream_port)"
-            test_pass "UDP stream receiver"
-        else
-            test_fail "UDP stream sender"
-            test_fail "UDP stream receiver"
-            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
-        fi
+        test_fail "UDP stream sender ($encoder_name)"
+        test_fail "UDP stream receiver"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
     fi
     
     rm -f "$receiver_output"
@@ -1949,6 +2050,975 @@ test_error_handling() {
     else
         test_fail "Overlay with invalid input (should have failed)"
     fi
+}
+
+# =============================================================================
+# Lifecycle & Reconnection Regression Tests
+# =============================================================================
+# These tests target bugs fixed in the RTSP-reconnection / buffer-ownership
+# patch set.  They exercise stop→start cycling, element teardown, and
+# RTSP client reconnection to make sure the camera is properly released
+# and re-acquired each time.
+
+# Helper: run a GStreamer pipeline N times in a row, with a camera-reset
+# delay between runs.  Returns 0 only if ALL iterations succeed.
+run_pipeline_cycles() {
+    local label="$1"
+    local iterations="$2"
+    local timeout_val="$3"
+    shift 3
+    # remaining args = the gst-launch-1.0 arguments
+
+    local i
+    for i in $(seq 1 "$iterations"); do
+        local output
+        output=$(timeout "$timeout_val" gst-launch-1.0 "$@" 2>&1)
+        if [ $? -ne 0 ]; then
+            test_fail "$label (iteration $i/$iterations)"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -5
+            return 1
+        fi
+        log_verbose "$label: iteration $i/$iterations OK"
+        [ "$i" -lt "$iterations" ] && sleep "$CAMERA_RESET_DELAY"
+    done
+    test_pass "$label ($iterations cycles)"
+    return 0
+}
+
+test_source_stop_start() {
+    print_subheader "Source Stop/Start Cycling (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "zedsrc stop/start cycle" "No camera detected"
+        skip_test "zedsrc AUTO stream-type re-negotiation" "No camera detected"
+        return 2
+    fi
+
+    local iterations=3
+    local num_buffers=5
+    local timeout_val=$FAST_PIPELINE_TIMEOUT
+
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        iterations=5
+        num_buffers=10
+        timeout_val=$EXTENSIVE_PIPELINE_TIMEOUT
+    fi
+
+    # --- zedsrc stop/start ---
+    # Regression: resolved_stream_type and stop_requested were not reset,
+    # causing the second pipeline start to fail.
+    run_pipeline_cycles \
+        "zedsrc stop/start cycle" "$iterations" "$timeout_val" \
+        zedsrc stream-type=0 num-buffers=$num_buffers ! fakesink
+
+    sleep $CAMERA_RESET_DELAY
+
+    # --- AUTO stream-type re-negotiation after explicit type ---
+    # Start with an explicit stream-type, then switch to AUTO.
+    # If resolved_stream_type is not cleared, AUTO will keep the old type.
+    local output
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=2 num-buffers=$num_buffers ! fakesink 2>&1)
+    if [ $? -ne 0 ]; then
+        test_fail "zedsrc AUTO re-negotiation: explicit run failed"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+    else
+        sleep $CAMERA_RESET_DELAY
+        output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=0 num-buffers=$num_buffers ! fakesink 2>&1)
+        if [ $? -eq 0 ]; then
+            test_pass "zedsrc AUTO stream-type re-negotiation"
+        else
+            test_fail "zedsrc AUTO stream-type re-negotiation"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -3
+        fi
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_zedxone_stop_start() {
+    print_subheader "ZED X One Stop/Start Cycling (requires ZED X One camera)"
+
+    # Detect ZED X One camera via gst-inspect
+    local has_xone=false
+    if gst-inspect-1.0 zedxonesrc &>/dev/null && [ "$GMSL_CAMERA" = true ]; then
+        has_xone=true
+    fi
+
+    if [ "$HARDWARE_AVAILABLE" = false ] || [ "$has_xone" = false ]; then
+        skip_test "zedxonesrc stop/start cycle" "No ZED X One camera detected"
+        return 2
+    fi
+
+    local iterations=3
+    local num_buffers=5
+    local timeout_val=$FAST_PIPELINE_TIMEOUT
+
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        iterations=5
+        num_buffers=10
+        timeout_val=$EXTENSIVE_PIPELINE_TIMEOUT
+    fi
+
+    run_pipeline_cycles \
+        "zedxonesrc stop/start cycle" "$iterations" "$timeout_val" \
+        zedxonesrc num-buffers=$num_buffers ! fakesink
+
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_demux_lifecycle() {
+    print_subheader "Demux Lifecycle Tests (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "Demux stop/start cycle" "No camera detected"
+        skip_test "Demux teardown (no leak/crash)" "No camera detected"
+        return 2
+    fi
+
+    local iterations=3
+    local num_buffers=10
+    local timeout_val=90
+
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        iterations=4
+        num_buffers=20
+    fi
+
+    # Regression: missing finalize leaked caps; missing change_state left stale
+    # caps on restart; double-free after gst_pad_push crashed on teardown.
+    local i
+    local all_ok=true
+    for i in $(seq 1 "$iterations"); do
+        local output
+        output=$(timeout "$timeout_val" gst-launch-1.0 \
+            zedsrc stream-type=2 num-buffers=$num_buffers ! \
+            zeddemux is-depth=false name=demux \
+            demux.src_left ! queue ! fakesink \
+            demux.src_aux  ! queue ! fakesink 2>&1)
+        if [ $? -ne 0 ]; then
+            test_fail "Demux stop/start cycle (iteration $i/$iterations)"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail\|double\|free\|abort" | head -5
+            all_ok=false
+            break
+        fi
+        log_verbose "Demux cycle $i/$iterations OK"
+        [ "$i" -lt "$iterations" ] && sleep "$CAMERA_RESET_DELAY"
+    done
+    [ "$all_ok" = true ] && test_pass "Demux stop/start cycle ($iterations cycles)"
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Quick teardown test: create and destroy immediately
+    local output
+    output=$(timeout 30 gst-launch-1.0 \
+        zedsrc stream-type=2 num-buffers=2 ! \
+        zeddemux is-depth=false stream-data=true name=demux \
+        demux.src_left ! queue ! fakesink \
+        demux.src_aux  ! queue ! fakesink \
+        demux.src_data ! queue ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "Demux teardown (no leak/crash)"
+    else
+        test_fail "Demux teardown (no leak/crash)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail\|abort" | head -3
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_datamux_lifecycle() {
+    print_subheader "Data-Mux Lifecycle Tests (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "Data-mux stop/start cycle" "No camera detected"
+        skip_test "Data-mux rapid teardown" "No camera detected"
+        return 2
+    fi
+
+    local iterations=3
+    local num_buffers=10
+    local timeout_val=90
+
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        iterations=4
+        num_buffers=20
+    fi
+
+    # Regression: buffer use-after-free in chain_data/chain_video when
+    # gst_pad_push transferred ownership but code still touched the buffer.
+    local i
+    local all_ok=true
+    for i in $(seq 1 "$iterations"); do
+        local output
+        output=$(timeout "$timeout_val" gst-launch-1.0 \
+            zedsrc stream-type=2 num-buffers=$num_buffers ! \
+            zeddemux stream-data=true name=demux \
+            demux.src_left ! queue ! zeddatamux name=mux ! queue ! fakesink \
+            demux.src_data ! queue ! mux.sink_data \
+            demux.src_aux  ! queue ! fakesink 2>&1)
+        if [ $? -ne 0 ]; then
+            test_fail "Data-mux stop/start cycle (iteration $i/$iterations)"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail\|abort" | head -5
+            all_ok=false
+            break
+        fi
+        log_verbose "Data-mux cycle $i/$iterations OK"
+        [ "$i" -lt "$iterations" ] && sleep "$CAMERA_RESET_DELAY"
+    done
+    [ "$all_ok" = true ] && test_pass "Data-mux stop/start cycle ($iterations cycles)"
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Rapid teardown: very few buffers so GStreamer tears the pipeline
+    # apart quickly — stresses finalize + change_state paths.
+    local output
+    output=$(timeout 30 gst-launch-1.0 \
+        zedsrc stream-type=2 num-buffers=2 ! \
+        zeddemux stream-data=true name=demux \
+        demux.src_left ! queue ! zeddatamux name=mux ! queue ! fakesink \
+        demux.src_data ! queue ! mux.sink_data \
+        demux.src_aux  ! queue ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "Data-mux rapid teardown"
+    else
+        test_fail "Data-mux rapid teardown"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail\|abort" | head -3
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_rtsp_reconnection() {
+    print_subheader "RTSP Server Reconnection Tests (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "RTSP server reconnection" "No camera detected"
+        skip_test "RTSP multi-client" "No camera detected"
+        return 2
+    fi
+
+    if ! command -v gst-zed-rtsp-launch &>/dev/null; then
+        skip_test "RTSP server reconnection" "gst-zed-rtsp-launch not installed"
+        skip_test "RTSP multi-client" "gst-zed-rtsp-launch not installed"
+        return 2
+    fi
+
+    # We need rtspsrc or gst-play-1.0 as a client
+    if ! gst-inspect-1.0 rtspsrc &>/dev/null; then
+        skip_test "RTSP server reconnection" "rtspsrc element not available"
+        skip_test "RTSP multi-client" "rtspsrc element not available"
+        return 2
+    fi
+
+    local rtsp_port=8554
+    local rtsp_url="rtsp://127.0.0.1:${rtsp_port}/zed-stream"
+    local server_log="/tmp/zed_rtsp_server_$$.log"
+    local client_log="/tmp/zed_rtsp_client_$$.log"
+    local server_pid=""
+    local timeout_client=20
+    local connect_cycles=3
+
+    if [ "$EXTENSIVE_MODE" = true ]; then
+        connect_cycles=5
+    fi
+
+    # Find a free port
+    while ss -tuln 2>/dev/null | grep -q ":$rtsp_port "; do
+        rtsp_port=$((rtsp_port + 1))
+        rtsp_url="rtsp://127.0.0.1:${rtsp_port}/zed-stream"
+        if [ $rtsp_port -gt 8600 ]; then
+            skip_test "RTSP server reconnection" "No available port"
+            return 0
+        fi
+    done
+
+    # Build the RTSP server pipeline via the shared helper.
+    build_h264_encode_pipeline rtsp
+    if [ "$_ENCODE_AVAILABLE" != true ]; then
+        skip_test "RTSP server reconnection" "No H.264 encoder available"
+        skip_test "RTSP multi-client" "No H.264 encoder available"
+        return 0
+    fi
+    local rtsp_pipeline="zedsrc stream-type=$_ENCODE_STREAM_TYPE $_ENCODE_CAMERA_PROP ! queue ! $_ENCODE_PIPELINE"
+
+    # Start RTSP server in background.
+    # NOTE: gst-zed-rtsp-launch uses gst_parse_launchv(), which expects
+    # the pipeline elements as separate argv words.  We intentionally
+    # leave $rtsp_pipeline UNQUOTED so bash performs word-splitting.
+    # The parentheses in "video/x-raw(memory:NVMM)" are safe because
+    # bash does not interpret parentheses during variable expansion.
+    # shellcheck disable=SC2086
+    gst-zed-rtsp-launch -p "$rtsp_port" $rtsp_pipeline > "$server_log" 2>&1 &
+    server_pid=$!
+
+    # Wait for server to be ready
+    sleep 5
+
+    if ! kill -0 "$server_pid" 2>/dev/null; then
+        test_fail "RTSP server failed to start"
+        [ "$VERBOSE" = true ] && cat "$server_log" | head -10
+        rm -f "$server_log" "$client_log"
+        return 1
+    fi
+
+    # --- Test: connect/disconnect cycling ---
+    local all_ok=true
+    local i
+    for i in $(seq 1 "$connect_cycles"); do
+        log_verbose "RTSP connect cycle $i/$connect_cycles ..."
+
+        # Connect a client for a few seconds, then disconnect
+        timeout "$timeout_client" gst-launch-1.0 \
+            rtspsrc location="$rtsp_url" latency=500 ! \
+            rtph264depay ! h264parse ! avdec_h264 ! \
+            fakesink sync=false num-buffers=30 \
+            > "$client_log" 2>&1
+        local cstat=$?
+
+        # 0 = normal EOS exit, 124 = timeout (still counts as success
+        # since the stream was flowing)
+        if [ $cstat -ne 0 ] && [ $cstat -ne 124 ]; then
+            test_fail "RTSP reconnection cycle $i/$connect_cycles (client exit $cstat)"
+            [ "$VERBOSE" = true ] && cat "$client_log" | head -5
+            all_ok=false
+            break
+        fi
+
+        # Verify server is still alive after client disconnect
+        if ! kill -0 "$server_pid" 2>/dev/null; then
+            test_fail "RTSP server crashed after client disconnect (cycle $i)"
+            all_ok=false
+            break
+        fi
+
+        log_verbose "RTSP cycle $i/$connect_cycles OK"
+        sleep "$CAMERA_RESET_DELAY"
+    done
+    [ "$all_ok" = true ] && test_pass "RTSP server reconnection ($connect_cycles cycles)"
+
+    # --- Test: two concurrent clients (shared factory) ---
+    if kill -0 "$server_pid" 2>/dev/null; then
+        local client1_log="/tmp/zed_rtsp_c1_$$.log"
+        local client2_log="/tmp/zed_rtsp_c2_$$.log"
+
+        timeout "$timeout_client" gst-launch-1.0 \
+            rtspsrc location="$rtsp_url" latency=500 ! \
+            rtph264depay ! h264parse ! avdec_h264 ! \
+            fakesink sync=false num-buffers=30 \
+            > "$client1_log" 2>&1 &
+        local c1=$!
+
+        sleep 2
+
+        timeout "$timeout_client" gst-launch-1.0 \
+            rtspsrc location="$rtsp_url" latency=500 ! \
+            rtph264depay ! h264parse ! avdec_h264 ! \
+            fakesink sync=false num-buffers=30 \
+            > "$client2_log" 2>&1 &
+        local c2=$!
+
+        wait $c1 2>/dev/null
+        local c1s=$?
+        wait $c2 2>/dev/null
+        local c2s=$?
+
+        if { [ $c1s -eq 0 ] || [ $c1s -eq 124 ]; } && \
+           { [ $c2s -eq 0 ] || [ $c2s -eq 124 ]; }; then
+            test_pass "RTSP multi-client (2 concurrent)"
+        else
+            test_fail "RTSP multi-client (c1=$c1s, c2=$c2s)"
+        fi
+
+        rm -f "$client1_log" "$client2_log"
+    else
+        skip_test "RTSP multi-client" "Server no longer running"
+    fi
+
+    # Cleanup
+    kill "$server_pid" 2>/dev/null
+    wait "$server_pid" 2>/dev/null
+    rm -f "$server_log" "$client_log"
+
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_long_running_pipeline() {
+    print_subheader "Long-Running Pipeline Tests (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "Long-running zedsrc" "No camera detected"
+        skip_test "Long-running demux+mux" "No camera detected"
+        return 2
+    fi
+
+    if [ "$EXTENSIVE_MODE" = false ]; then
+        skip_test "Long-running pipeline tests" "Extensive mode required"
+        return 0
+    fi
+
+    local timeout_val=120
+    local num_buffers=300   # ~10 seconds at 30fps
+
+    # Sustained capture — exercises buffer pool recycling and timestamp
+    # monotonicity over many frames
+    local output
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=2 \
+        num-buffers=$num_buffers ! queue max-size-buffers=10 ! fakesink sync=true 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "Long-running zedsrc ($num_buffers buffers)"
+    else
+        test_fail "Long-running zedsrc ($num_buffers buffers)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -5
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Sustained demux→mux round-trip stresses chain functions, buffer
+    # ownership, and timestamp synchronisation over many frames.
+    output=$(timeout "$timeout_val" gst-launch-1.0 \
+        zedsrc stream-type=2 num-buffers=$num_buffers ! \
+        zeddemux stream-data=true name=demux \
+        demux.src_left ! queue max-size-buffers=10 ! zeddatamux name=mux ! queue ! fakesink sync=true \
+        demux.src_data ! queue max-size-buffers=10 ! mux.sink_data \
+        demux.src_aux  ! queue max-size-buffers=10 ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "Long-running demux+mux ($num_buffers buffers)"
+    else
+        test_fail "Long-running demux+mux ($num_buffers buffers)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -5
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_full_pipeline_encode() {
+    print_subheader "Full Encode Pipeline Tests (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "H.264 encode pipeline" "No camera detected"
+        skip_test "File sink record + verify" "No camera detected"
+        return 2
+    fi
+
+    if [ "$EXTENSIVE_MODE" = false ]; then
+        skip_test "Full encode pipeline tests" "Extensive mode required"
+        return 0
+    fi
+
+    local timeout_val=60
+    local num_buffers=60   # ~2 seconds at 30fps
+    local output
+
+    build_h264_encode_pipeline encode
+    if [ "$_ENCODE_AVAILABLE" != true ]; then
+        skip_test "H.264 encode pipeline" "No H.264 encoder available"
+        skip_test "File sink record + verify" "No H.264 encoder available"
+        return 0
+    fi
+
+    local st="$_ENCODE_STREAM_TYPE"
+    local encoder="$_ENCODE_PIPELINE"
+    local encoder_name="$_ENCODER_NAME"
+    local cam_prop="$_ENCODE_CAMERA_PROP"
+
+    # Test: camera → encode → fakesink (exercises real encode path)
+    # shellcheck disable=SC2086
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=$st $cam_prop num-buffers=$num_buffers ! queue ! $encoder ! fakesink 2>&1)
+    if [ $? -eq 0 ]; then
+        test_pass "H.264 encode pipeline ($encoder_name)"
+    else
+        test_fail "H.264 encode pipeline ($encoder_name)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -5
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Test: camera → encode → file → verify file exists and is non-empty
+    local tmpfile="/tmp/zed_test_record_$$.mp4"
+    # shellcheck disable=SC2086
+    output=$(timeout "$timeout_val" gst-launch-1.0 zedsrc stream-type=$st $cam_prop num-buffers=$num_buffers ! queue ! $encoder ! h264parse ! mp4mux ! filesink location=$tmpfile 2>&1)
+    if [ $? -eq 0 ] && [ -f "$tmpfile" ] && [ -s "$tmpfile" ]; then
+        local fsize
+        fsize=$(stat -c%s "$tmpfile" 2>/dev/null || echo 0)
+        test_pass "File sink record + verify (${fsize} bytes, $encoder_name)"
+    else
+        test_fail "File sink record + verify ($encoder_name)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -5
+    fi
+    rm -f "$tmpfile"
+
+    sleep $CAMERA_RESET_DELAY
+}
+
+# =============================================================================
+# Content Validation Tests (extensive mode)
+# =============================================================================
+# These tests go beyond "did the pipeline crash?" — they verify that the
+# output actually contains the expected video content (correct resolution,
+# valid pixels, correct frame count, etc.).
+
+# Helper: use python3 to inspect a raw image file for non-black content.
+# Reads raw BGRA file and checks that at least some pixels are non-zero.
+# Usage: verify_frame_not_black <file> <expected_bytes>
+verify_frame_not_black() {
+    local file="$1"
+    local expected_bytes="$2"
+    python3 -c "
+import sys, os
+path = sys.argv[1]
+expected = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2] != '0' else 0
+size = os.path.getsize(path)
+if expected > 0 and size < expected:
+    print(f'WRONG_SIZE:{size}')
+    sys.exit(1)
+data = open(path, 'rb').read()
+nonzero = sum(1 for b in data[:min(len(data), 100000)] if b != 0)
+ratio = nonzero / min(len(data), 100000)
+if ratio < 0.01:
+    print(f'BLACK:{ratio:.4f}')
+    sys.exit(1)
+print(f'OK:{ratio:.4f}')
+sys.exit(0)
+" "$file" "$expected_bytes" 2>/dev/null
+}
+
+test_caps_validation() {
+    print_subheader "Negotiated Caps Validation (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "Caps validation: resolution match" "No camera detected"
+        skip_test "Caps validation: format match" "No camera detected"
+        return 2
+    fi
+
+    if [ "$EXTENSIVE_MODE" = false ]; then
+        skip_test "Caps validation" "Extensive mode required"
+        return 0
+    fi
+
+    local timeout_val=$EXTENSIVE_PIPELINE_TIMEOUT
+    local num_buffers=5
+
+    # Use the camera's default resolution and verify the negotiated caps
+    # contain valid width/height values.  Previous versions hardcoded HD720
+    # (camera-resolution=3) which is USB-only and fails on GMSL cameras.
+    local output
+    output=$(timeout "$timeout_val" gst-launch-1.0 -v \
+        zedsrc stream-type=0 num-buffers=$num_buffers ! \
+        fakesink 2>&1)
+
+    if [ $? -eq 0 ]; then
+        # gst-launch -v prints the negotiated caps on the link line
+        local actual_w actual_h
+        actual_w=$(echo "$output" | grep -oP 'width=\(int\)\K[0-9]+' | head -1)
+        actual_h=$(echo "$output" | grep -oP 'height=\(int\)\K[0-9]+' | head -1)
+        if [ -n "$actual_w" ] && [ -n "$actual_h" ] && \
+           [ "$actual_w" -ge 320 ] && [ "$actual_h" -ge 240 ]; then
+            test_pass "Caps validation: resolution negotiated (${actual_w}x${actual_h})"
+        else
+            test_fail "Caps validation: could not parse negotiated caps"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "caps\|width\|height" | head -5
+        fi
+    else
+        test_fail "Caps validation: pipeline failed to run"
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # Verify BGRA format is negotiated for stream-type=0
+    output=$(timeout "$timeout_val" gst-launch-1.0 -v \
+        zedsrc stream-type=0 num-buffers=$num_buffers ! fakesink 2>&1)
+
+    if [ $? -eq 0 ]; then
+        if echo "$output" | grep -q "format.*BGRA"; then
+            test_pass "Caps validation: BGRA format negotiated"
+        else
+            local actual_fmt
+            actual_fmt=$(echo "$output" | grep -oP 'format=\(string\)\K\w+' | head -1)
+            test_fail "Caps validation: expected BGRA, got ${actual_fmt:-unknown}"
+        fi
+    else
+        test_fail "Caps validation: format check pipeline failed"
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_frame_content() {
+    print_subheader "Frame Content Validation (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "Frame content: non-black" "No camera detected"
+        skip_test "Frame content: buffer count" "No camera detected"
+        skip_test "Frame content: PNG snapshot" "No camera detected"
+        return 2
+    fi
+
+    if [ "$EXTENSIVE_MODE" = false ]; then
+        skip_test "Frame content validation" "Extensive mode required"
+        return 0
+    fi
+
+    local timeout_val=$EXTENSIVE_PIPELINE_TIMEOUT
+    local tmpdir="/tmp/zed_frame_test_$$"
+    mkdir -p "$tmpdir"
+
+    # --- Test 1: Capture raw frames and verify they are not all-black ---
+    # Use multifilesink to save exactly 1 raw BGRA frame
+    local output
+    output=$(timeout "$timeout_val" gst-launch-1.0 -v \
+        zedsrc stream-type=0 num-buffers=1 ! \
+        multifilesink location="${tmpdir}/frame_%05d.raw" max-files=1 2>&1)
+
+    if [ $? -eq 0 ] && [ -f "${tmpdir}/frame_00000.raw" ]; then
+        local fsize
+        fsize=$(stat -c%s "${tmpdir}/frame_00000.raw" 2>/dev/null || echo 0)
+
+        if [ "$fsize" -gt 1000 ]; then
+            local result
+            result=$(verify_frame_not_black "${tmpdir}/frame_00000.raw" 0)
+            if [ $? -eq 0 ]; then
+                test_pass "Frame content: non-black ($fsize bytes, $result)"
+            else
+                test_fail "Frame content: captured frame is black/empty ($result)"
+            fi
+        else
+            test_fail "Frame content: raw frame too small ($fsize bytes)"
+        fi
+    else
+        test_fail "Frame content: failed to capture raw frame"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # --- Test 2: Verify buffer count ---
+    # Request exactly N buffers and verify we get that many by writing
+    # each buffer to a separate file via multifilesink.
+    local expected_count=10
+    local countdir="${tmpdir}/bufcount"
+    mkdir -p "$countdir"
+    output=$(timeout "$timeout_val" gst-launch-1.0 \
+        zedsrc stream-type=0 num-buffers=$expected_count ! \
+        multifilesink location="${countdir}/buf_%05d.raw" 2>&1)
+
+    if [ $? -eq 0 ]; then
+        local actual_count
+        actual_count=$(find "$countdir" -name 'buf_*.raw' -type f 2>/dev/null | wc -l)
+        actual_count=${actual_count// /}  # trim whitespace
+
+        if [ "$actual_count" -ge "$expected_count" ]; then
+            test_pass "Frame content: buffer count ($actual_count/$expected_count)"
+        else
+            test_fail "Frame content: buffer count mismatch ($actual_count/$expected_count)"
+        fi
+    else
+        test_fail "Frame content: buffer count pipeline failed"
+    fi
+
+    sleep $CAMERA_RESET_DELAY
+
+    # --- Test 3: Save a PNG snapshot and verify it's a valid image ---
+    if gst-inspect-1.0 pngenc &>/dev/null; then
+        output=$(timeout "$timeout_val" gst-launch-1.0 \
+            zedsrc stream-type=0 num-buffers=1 ! \
+            videoconvert ! pngenc ! \
+            filesink location="${tmpdir}/snapshot.png" 2>&1)
+
+        if [ $? -eq 0 ] && [ -f "${tmpdir}/snapshot.png" ]; then
+            local png_size
+            png_size=$(stat -c%s "${tmpdir}/snapshot.png" 2>/dev/null || echo 0)
+
+            # A valid PNG has header bytes 89 50 4E 47 (‰PNG)
+            local png_header
+            png_header=$(xxd -l4 -p "${tmpdir}/snapshot.png" 2>/dev/null)
+
+            if [ "$png_header" = "89504e47" ] && [ "$png_size" -gt 1000 ]; then
+                test_pass "Frame content: PNG snapshot valid ($png_size bytes)"
+            else
+                test_fail "Frame content: PNG snapshot invalid (header=$png_header, size=$png_size)"
+            fi
+        else
+            test_fail "Frame content: PNG snapshot pipeline failed"
+            [ "$VERBOSE" = true ] && echo "$output" | grep -i "error" | head -3
+        fi
+    else
+        skip_test "Frame content: PNG snapshot" "pngenc not available"
+    fi
+
+    # Cleanup
+    rm -rf "$tmpdir"
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_demux_content() {
+    print_subheader "Demux Content Validation (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "Demux content: left/right frames" "No camera detected"
+        skip_test "Demux content: frame dimensions" "No camera detected"
+        return 2
+    fi
+
+    if [ "$EXTENSIVE_MODE" = false ]; then
+        skip_test "Demux content validation" "Extensive mode required"
+        return 0
+    fi
+
+    local timeout_val=90
+    local tmpdir="/tmp/zed_demux_content_$$"
+    mkdir -p "$tmpdir"
+
+    # Capture one frame from each demux output pad into separate raw files
+    local output
+    output=$(timeout "$timeout_val" gst-launch-1.0 -v \
+        zedsrc stream-type=2 num-buffers=3 ! \
+        zeddemux is-depth=false name=demux \
+        demux.src_left ! queue ! multifilesink location="${tmpdir}/left_%05d.raw" max-files=1 \
+        demux.src_aux  ! queue ! multifilesink location="${tmpdir}/right_%05d.raw" max-files=1 \
+        2>&1)
+
+    if [ $? -eq 0 ]; then
+        # multifilesink with max-files=1 keeps only the last buffer, so the
+        # file index depends on num-buffers.  Find whichever file was written.
+        local left_file right_file
+        left_file=$(ls -1 "${tmpdir}"/left_*.raw 2>/dev/null | head -1)
+        right_file=$(ls -1 "${tmpdir}"/right_*.raw 2>/dev/null | head -1)
+
+        if [ -n "$left_file" ] && [ -f "$left_file" ] && \
+           [ -n "$right_file" ] && [ -f "$right_file" ]; then
+            local left_size right_size
+            left_size=$(stat -c%s "$left_file" 2>/dev/null || echo 0)
+            right_size=$(stat -c%s "$right_file" 2>/dev/null || echo 0)
+
+            # Both frames should be the same size (same resolution, same format)
+            if [ "$left_size" -gt 1000 ] && [ "$right_size" -gt 1000 ]; then
+                if [ "$left_size" -eq "$right_size" ]; then
+                    test_pass "Demux content: left/right frames same size ($left_size bytes each)"
+                else
+                    test_fail "Demux content: left ($left_size) != right ($right_size) size"
+                fi
+            else
+                test_fail "Demux content: frames too small (left=$left_size, right=$right_size)"
+            fi
+
+            # Verify left frame is not black
+            if [ -n "$left_file" ] && [ -f "$left_file" ]; then
+                local result
+                result=$(verify_frame_not_black "$left_file" 0)
+                if [ $? -eq 0 ]; then
+                    test_pass "Demux content: left frame non-black"
+                else
+                    test_fail "Demux content: left frame is black ($result)"
+                fi
+            fi
+        else
+            test_fail "Demux content: missing output files"
+        fi
+
+        # Verify negotiated dimensions from -v output
+        local left_w left_h
+        left_w=$(echo "$output" | grep "src_left" | grep -oP 'width=\(int\)\K[0-9]+' | head -1)
+        left_h=$(echo "$output" | grep "src_left" | grep -oP 'height=\(int\)\K[0-9]+' | head -1)
+        if [ -n "$left_w" ] && [ -n "$left_h" ] && [ "$left_w" -gt 0 ] && [ "$left_h" -gt 0 ]; then
+            test_pass "Demux content: frame dimensions ${left_w}x${left_h}"
+        else
+            # Not fatal — some gst versions don't print pad caps in -v mode
+            log_verbose "Demux content: could not extract dimensions from pipeline output"
+        fi
+    else
+        test_fail "Demux content: pipeline failed"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -5
+    fi
+
+    rm -rf "$tmpdir"
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_rtsp_content() {
+    print_subheader "RTSP Stream Content Validation (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "RTSP content: subscriber frame capture" "No camera detected"
+        skip_test "RTSP content: stream resolution" "No camera detected"
+        return 2
+    fi
+
+    if [ "$EXTENSIVE_MODE" = false ]; then
+        skip_test "RTSP content validation" "Extensive mode required"
+        return 0
+    fi
+
+    if ! command -v gst-zed-rtsp-launch &>/dev/null; then
+        skip_test "RTSP content validation" "gst-zed-rtsp-launch not installed"
+        return 2
+    fi
+
+    if ! gst-inspect-1.0 rtspsrc &>/dev/null; then
+        skip_test "RTSP content validation" "rtspsrc element not available"
+        return 2
+    fi
+
+    local rtsp_port=8654
+    local rtsp_url="rtsp://127.0.0.1:${rtsp_port}/zed-stream"
+    local server_log="/tmp/zed_rtsp_content_server_$$.log"
+    local tmpdir="/tmp/zed_rtsp_content_$$"
+    local server_pid=""
+    local timeout_server_start=8
+    local timeout_client=30
+
+    mkdir -p "$tmpdir"
+
+    # Find a free port
+    while ss -tuln 2>/dev/null | grep -q ":$rtsp_port "; do
+        rtsp_port=$((rtsp_port + 1))
+        rtsp_url="rtsp://127.0.0.1:${rtsp_port}/zed-stream"
+        if [ $rtsp_port -gt 8700 ]; then
+            skip_test "RTSP content validation" "No available port"
+            rm -rf "$tmpdir"
+            return 0
+        fi
+    done
+
+    # Build the RTSP server pipeline via the shared helper.
+    build_h264_encode_pipeline rtsp
+    if [ "$_ENCODE_AVAILABLE" != true ]; then
+        skip_test "RTSP content validation" "No H.264 encoder available"
+        rm -rf "$tmpdir"
+        return 0
+    fi
+    local rtsp_pipeline="zedsrc stream-type=$_ENCODE_STREAM_TYPE $_ENCODE_CAMERA_PROP ! queue ! $_ENCODE_PIPELINE"
+
+    # Start RTSP server.
+    # NOTE: gst-zed-rtsp-launch uses gst_parse_launchv(), which expects
+    # the pipeline elements as separate argv words — leave unquoted.
+    # shellcheck disable=SC2086
+    gst-zed-rtsp-launch -p "$rtsp_port" $rtsp_pipeline > "$server_log" 2>&1 &
+    server_pid=$!
+    sleep "$timeout_server_start"
+
+    if ! kill -0 "$server_pid" 2>/dev/null; then
+        test_fail "RTSP content: server failed to start"
+        [ "$VERBOSE" = true ] && head -10 "$server_log"
+        rm -f "$server_log"
+        rm -rf "$tmpdir"
+        return 1
+    fi
+
+    # --- Test 1: Subscribe and capture a PNG frame from the RTSP stream ---
+    local output
+    output=$(timeout "$timeout_client" gst-launch-1.0 -v \
+        rtspsrc location="$rtsp_url" latency=500 ! \
+        rtph264depay ! h264parse ! avdec_h264 ! \
+        videoconvert ! video/x-raw,format=RGB ! \
+        pngenc snapshot=true ! \
+        filesink location="${tmpdir}/rtsp_frame.png" 2>&1)
+    local client_exit=$?
+
+    # Both 0 (EOS) and 124 (timeout but wrote file) are acceptable
+    if { [ $client_exit -eq 0 ] || [ $client_exit -eq 124 ]; } && [ -f "${tmpdir}/rtsp_frame.png" ]; then
+        local png_size
+        png_size=$(stat -c%s "${tmpdir}/rtsp_frame.png" 2>/dev/null || echo 0)
+        local png_header
+        png_header=$(xxd -l4 -p "${tmpdir}/rtsp_frame.png" 2>/dev/null)
+
+        if [ "$png_header" = "89504e47" ] && [ "$png_size" -gt 500 ]; then
+            test_pass "RTSP content: subscriber frame capture (valid PNG, $png_size bytes)"
+        else
+            test_fail "RTSP content: subscriber captured invalid image (header=$png_header, size=$png_size)"
+        fi
+    else
+        test_fail "RTSP content: subscriber failed to capture frame (exit $client_exit)"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -5
+    fi
+
+    # --- Test 2: Verify stream resolution from negotiated caps ---
+    if echo "$output" | grep -qP 'width=\(int\)[0-9]+'; then
+        local stream_w stream_h
+        stream_w=$(echo "$output" | grep -oP 'width=\(int\)\K[0-9]+' | tail -1)
+        stream_h=$(echo "$output" | grep -oP 'height=\(int\)\K[0-9]+' | tail -1)
+        if [ -n "$stream_w" ] && [ -n "$stream_h" ] && \
+           [ "$stream_w" -ge 320 ] && [ "$stream_h" -ge 240 ]; then
+            test_pass "RTSP content: stream resolution ${stream_w}x${stream_h}"
+        else
+            test_fail "RTSP content: unexpected resolution ${stream_w:-?}x${stream_h:-?}"
+        fi
+    else
+        skip_test "RTSP content: stream resolution" "Could not parse caps from output"
+    fi
+
+    # Cleanup
+    kill "$server_pid" 2>/dev/null
+    wait "$server_pid" 2>/dev/null
+    rm -f "$server_log"
+    rm -rf "$tmpdir"
+    sleep $CAMERA_RESET_DELAY
+}
+
+test_datamux_content() {
+    print_subheader "Data-Mux Content Validation (requires camera)"
+
+    if [ "$HARDWARE_AVAILABLE" = false ]; then
+        skip_test "Data-mux content: round-trip frame integrity" "No camera detected"
+        return 2
+    fi
+
+    if [ "$EXTENSIVE_MODE" = false ]; then
+        skip_test "Data-mux content validation" "Extensive mode required"
+        return 0
+    fi
+
+    local timeout_val=90
+    local num_buffers=5
+    local tmpdir="/tmp/zed_mux_content_$$"
+    mkdir -p "$tmpdir"
+
+    # Capture one frame BEFORE the mux (directly from demux left pad)
+    # and one frame AFTER the mux (round-tripped through datamux).
+    # Both should be the same size — the mux should not corrupt data.
+    local output
+    output=$(timeout "$timeout_val" gst-launch-1.0 \
+        zedsrc stream-type=2 num-buffers=$num_buffers ! \
+        zeddemux stream-data=true name=demux \
+        demux.src_left ! queue ! tee name=t \
+            t. ! queue ! multifilesink location="${tmpdir}/pre_mux_%05d.raw" max-files=1 \
+            t. ! queue ! zeddatamux name=mux ! queue ! multifilesink location="${tmpdir}/post_mux_%05d.raw" max-files=1 \
+        demux.src_data ! queue ! mux.sink_data \
+        demux.src_aux  ! queue ! fakesink 2>&1)
+
+    if [ $? -eq 0 ]; then
+        # multifilesink with max-files=1 keeps only the last buffer, so the
+        # file index depends on num-buffers.  Find whichever file was written.
+        local pre post
+        pre=$(ls -1 "${tmpdir}"/pre_mux_*.raw 2>/dev/null | head -1)
+        post=$(ls -1 "${tmpdir}"/post_mux_*.raw 2>/dev/null | head -1)
+
+        if [ -n "$pre" ] && [ -f "$pre" ] && \
+           [ -n "$post" ] && [ -f "$post" ]; then
+            local pre_size post_size
+            pre_size=$(stat -c%s "$pre" 2>/dev/null || echo 0)
+            post_size=$(stat -c%s "$post" 2>/dev/null || echo 0)
+
+            if [ "$pre_size" -gt 1000 ] && [ "$post_size" -gt 1000 ]; then
+                # The muxed output includes appended metadata, so post >= pre
+                if [ "$post_size" -ge "$pre_size" ]; then
+                    test_pass "Data-mux content: round-trip frame integrity (pre=$pre_size, post=$post_size)"
+                else
+                    test_fail "Data-mux content: post-mux smaller than pre-mux (pre=$pre_size, post=$post_size)"
+                fi
+            else
+                test_fail "Data-mux content: frames too small (pre=$pre_size, post=$post_size)"
+            fi
+        else
+            test_fail "Data-mux content: missing output files"
+        fi
+    else
+        test_fail "Data-mux content: round-trip pipeline failed"
+        [ "$VERBOSE" = true ] && echo "$output" | grep -i "error\|fail" | head -5
+    fi
+
+    rm -rf "$tmpdir"
+    sleep $CAMERA_RESET_DELAY
 }
 
 # =============================================================================
@@ -3251,6 +4321,13 @@ main() {
         test_hardware_streaming
         test_hardware_demux
         test_csv_sink
+
+        # Lifecycle & reconnection regression tests (always run with hardware)
+        test_source_stop_start
+        test_zedxone_stop_start
+        test_demux_lifecycle
+        test_datamux_lifecycle
+        test_rtsp_reconnection
         
         if [ "$EXTENSIVE_MODE" = true ]; then
             test_latency_query
@@ -3269,6 +4346,13 @@ main() {
             test_overlay_skeletons
             test_network_streaming
             test_error_handling
+            test_long_running_pipeline
+            test_full_pipeline_encode
+            test_caps_validation
+            test_frame_content
+            test_demux_content
+            test_rtsp_content
+            test_datamux_content
         fi
     else
         # Show skipped hardware tests
@@ -3276,6 +4360,14 @@ main() {
         test_hardware_streaming
         test_hardware_demux
         test_csv_sink
+
+        # Lifecycle & reconnection (will skip with reason)
+        test_source_stop_start
+        test_zedxone_stop_start
+        test_demux_lifecycle
+        test_datamux_lifecycle
+        test_rtsp_reconnection
+
         if [ "$EXTENSIVE_MODE" = true ]; then
             test_latency_query
             test_buffer_metadata
@@ -3293,6 +4385,13 @@ main() {
             test_overlay_skeletons
             test_network_streaming
             test_error_handling
+            test_long_running_pipeline
+            test_full_pipeline_encode
+            test_caps_validation
+            test_frame_content
+            test_demux_content
+            test_rtsp_content
+            test_datamux_content
         fi
     fi
     

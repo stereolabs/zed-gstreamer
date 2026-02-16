@@ -10,5 +10,5 @@
 gst-launch-1.0 \
 zedxonesrc ! \
 zeddemux is-mono=TRUE stream-data=TRUE name=demux \
-demux.src_mono ! queue ! autovideoconvert ! fpsdisplaysink \
+demux.src_mono ! queue ! nvvideoconvert ! nv3dsink sync=false \
 demux.src_data ! queue ! zeddatacsvsink location="${HOME}/test_csv.csv" append=FALSE

@@ -39,6 +39,14 @@ zedsrc_supports_nv12() {
     return 1
 }
 
+# Check if zedxonesrc plugin supports NV12 zero-copy (stream-type=1)
+zedxonesrc_supports_nv12() {
+    if gst-inspect-1.0 zedxonesrc 2>/dev/null | grep -q "NV12 zero-copy"; then
+        return 0
+    fi
+    return 1
+}
+
 # Detect if a GMSL camera (ZED X / ZED X Mini) is available
 # Returns 0 if GMSL camera is detected, 1 if USB camera or no camera
 detect_gmsl_camera() {

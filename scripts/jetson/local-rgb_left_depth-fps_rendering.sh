@@ -10,5 +10,5 @@
 gst-launch-1.0 \
 zedsrc stream-type=4 depth-mode=3 ! queue ! \
 zeddemux name=demux \
-demux.src_left ! queue ! autovideoconvert ! fpsdisplaysink \
-demux.src_aux ! queue ! autovideoconvert ! fpsdisplaysink
+demux.src_left ! queue ! nvvideoconvert ! nv3dsink sync=false \
+demux.src_aux ! queue ! nvvideoconvert ! nv3dsink sync=false
