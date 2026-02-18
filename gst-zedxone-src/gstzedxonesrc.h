@@ -111,6 +111,7 @@ struct _GstZedXOneSrc {
     // Resolution and format tracking for flexible output caps
     guint _cameraWidth;             // Native camera resolution width
     guint _cameraHeight;            // Native camera resolution height
+
     guint _outputWidth;             // Negotiated output resolution width
     guint _outputHeight;            // Negotiated output resolution height
     GstVideoFormat _outputFormat;   // Negotiated pixel format (BGRA, BGR, GRAY8...)

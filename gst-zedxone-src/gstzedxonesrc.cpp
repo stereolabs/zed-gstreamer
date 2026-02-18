@@ -1039,6 +1039,13 @@ void gst_zedxonesrc_finalize(GObject *object) {
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_finalize");
 
+    /* Ensure camera is closed even if stop() was never called
+     * (e.g. abnormal shutdown, signal interruption) */
+    if (src->_zed->isOpened()) {
+        GST_WARNING_OBJECT(src, "Camera still open in finalize — forcing close");
+        src->_zed->close();
+    }
+
     /* clean up object here */
     if (src->_caps) {
         gst_caps_unref(src->_caps);
@@ -1176,14 +1183,22 @@ static sl::RESOLUTION gst_zedxonesrc_get_sl_resolution(GstZedXOneSrcRes resol) {
 static sl::MODEL gst_zedxonesrc_detect_camera_model(GstZedXOneSrc *src) {
     auto devices = sl::CameraOne::getDeviceList();
     if (devices.empty()) {
-        GST_WARNING("No ZED X One cameras detected, falling back to ZED_XM");
-        return sl::MODEL::ZED_XM;
+        GST_ERROR_OBJECT(src, "No ZED X One cameras detected");
+        return sl::MODEL::LAST;
     }
 
-    // If a specific camera was requested, match it directly
+    // CameraOne::getDeviceList() may return stereo ZED X cameras on
+    // multi-camera rigs (known SDK bug).  Always validate with isCameraOne().
+
+    // If a specific camera was requested, match it — but verify it is mono.
     if (src->_cameraId != -1) {
         for (const auto &dev : devices) {
             if (dev.id == static_cast<unsigned int>(src->_cameraId)) {
+                if (!sl::isCameraOne(dev.camera_model)) {
+                    GST_WARNING("camera-id %d matched %s which is not a mono camera, ignoring",
+                                src->_cameraId, sl::toString(dev.camera_model).c_str());
+                    break;   // fall through to auto-detect below
+                }
                 GST_INFO("Detected camera model: %s (camera-id %d)",
                          sl::toString(dev.camera_model).c_str(), src->_cameraId);
                 return dev.camera_model;
@@ -1192,6 +1207,12 @@ static sl::MODEL gst_zedxonesrc_detect_camera_model(GstZedXOneSrc *src) {
     } else if (src->_cameraSN != 0) {
         for (const auto &dev : devices) {
             if (dev.serial_number == static_cast<unsigned int>(src->_cameraSN)) {
+                if (!sl::isCameraOne(dev.camera_model)) {
+                    GST_WARNING("camera-sn %u matched %s which is not a mono camera, ignoring",
+                                static_cast<unsigned int>(src->_cameraSN),
+                                sl::toString(dev.camera_model).c_str());
+                    break;   // fall through to auto-detect below
+                }
                 GST_INFO("Detected camera model: %s (S/N %u)",
                          sl::toString(dev.camera_model).c_str(),
                          static_cast<unsigned int>(src->_cameraSN));
@@ -1200,9 +1221,7 @@ static sl::MODEL gst_zedxonesrc_detect_camera_model(GstZedXOneSrc *src) {
         }
     }
 
-    // No explicit camera specified — find the first genuine mono camera.
-    // CameraOne::getDeviceList() may return stereo ZED X cameras on
-    // multi-camera rigs.
+    // Find the first genuine mono camera in the list.
     for (const auto &dev : devices) {
         if (sl::isCameraOne(dev.camera_model)) {
             GST_INFO("Detected camera model: %s (auto, device %d)",
@@ -1211,10 +1230,10 @@ static sl::MODEL gst_zedxonesrc_detect_camera_model(GstZedXOneSrc *src) {
         }
     }
 
-    // Fallback: no mono camera found, use first device's model
-    GST_WARNING("No mono camera in device list, using %s from device %d",
-                sl::toString(devices[0].camera_model).c_str(), devices[0].id);
-    return devices[0].camera_model;
+    // No mono camera at all — do NOT blindly use a stereo model.
+    GST_ERROR_OBJECT(src, "No mono (ZED X One) camera found among %zu device(s)",
+                     devices.size());
+    return sl::MODEL::LAST;
 }
 
 /*
@@ -1432,6 +1451,10 @@ static void gst_zedxonesrc_resolve_auto_resolution(GstZedXOneSrc *src) {
 
     /* Detect camera model to filter incompatible resolutions */
     sl::MODEL camera_model = gst_zedxonesrc_detect_camera_model(src);
+    if (camera_model == sl::MODEL::LAST) {
+        GST_ERROR_OBJECT(src, "Cannot resolve AUTO resolution: no camera detected");
+        return;
+    }
 
     /* First: find the closest valid FPS across compatible modes */
     const auto &candidate_fps = sl::getAvailableCameraFPS();
@@ -1532,15 +1555,14 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         }
         if (!found) {
             if (!devices.empty()) {
-                // No mono camera found — fall back to first device and let
-                // CameraOne::open() report the real error.
-                init_params.input.setFromCameraID(devices[0].id);
-                GST_WARNING("No mono (ZED X One) camera found in device list, "
-                            "falling back to device %d (%s)",
-                            devices[0].id, sl::toString(devices[0].camera_model).c_str());
+                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                    ("No mono (ZED X One) camera found — %zu device(s) are all stereo",
+                     devices.size()), (NULL));
             } else {
-                GST_WARNING("No cameras found in device list, using SDK default");
+                GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
+                    ("No ZED cameras detected"), (NULL));
             }
+            return FALSE;
         }
     }
 
@@ -1882,11 +1904,10 @@ static GstCaps *gst_zedxonesrc_fixate(GstBaseSrc *bsrc, GstCaps *caps) {
     caps = gst_caps_make_writable(caps);
     structure = gst_caps_get_structure(caps, 0);
 
-    // Default output to camera native resolution when downstream doesn't constrain
-    if (src->_outputWidth > 0 && src->_outputHeight > 0) {
-        gst_structure_fixate_field_nearest_int(structure, "width", src->_outputWidth);
-        gst_structure_fixate_field_nearest_int(structure, "height", src->_outputHeight);
-    }
+    // Default output to camera native resolution when downstream doesn't constrain.
+    // _outputWidth/_outputHeight are always initialized in start() before fixate is called.
+    gst_structure_fixate_field_nearest_int(structure, "width", src->_outputWidth);
+    gst_structure_fixate_field_nearest_int(structure, "height", src->_outputHeight);
 
     // Default framerate to the camera_fps (already clamped in start()).
     // If downstream constrained the FPS list, pick the closest valid one.

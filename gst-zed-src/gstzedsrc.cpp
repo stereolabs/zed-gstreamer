@@ -2537,6 +2537,13 @@ void gst_zedsrc_finalize(GObject *object) {
 
     GST_TRACE_OBJECT(src, "gst_zedsrc_finalize");
 
+    /* Ensure camera is closed even if stop() was never called
+     * (e.g. abnormal shutdown, signal interruption) */
+    if (src->zed.isOpened()) {
+        GST_WARNING_OBJECT(src, "Camera still open in finalize — forcing close");
+        src->zed.close();
+    }
+
     /* clean up object here */
     if (src->caps) {
         gst_caps_unref(src->caps);
@@ -2631,8 +2638,8 @@ static const guint zed_camera_modes_count = G_N_ELEMENTS(zed_camera_modes);
 static sl::MODEL gst_zedsrc_detect_camera_model(GstZedSrc *src) {
     auto devices = sl::Camera::getDeviceList();
     if (devices.empty()) {
-        GST_WARNING("No ZED cameras detected, falling back to ZED2");
-        return sl::MODEL::ZED2;
+        GST_ERROR_OBJECT(src, "No ZED cameras detected");
+        return sl::MODEL::LAST;
     }
 
     sl::MODEL model = devices[0].camera_model;
@@ -2734,6 +2741,10 @@ static void gst_zedsrc_resolve_auto_resolution(GstZedSrc *src) {
 
     /* Detect camera model to filter incompatible resolutions */
     sl::MODEL camera_model = gst_zedsrc_detect_camera_model(src);
+    if (camera_model == sl::MODEL::LAST) {
+        GST_ERROR_OBJECT(src, "Cannot resolve AUTO resolution: no camera detected");
+        return;
+    }
 
     /* First: find the closest valid FPS across compatible modes */
     const auto &candidate_fps = sl::getAvailableCameraFPS();
@@ -3556,11 +3567,9 @@ static GstCaps *gst_zedsrc_fixate(GstBaseSrc *bsrc, GstCaps *caps) {
     structure = gst_caps_get_structure(caps, 0);
 
     // Default output to camera native resolution when downstream doesn't constrain.
-    // output_width/height are initialized to the (possibly doubled for stereo) native dims.
-    if (src->output_width > 0 && src->output_height > 0) {
-        gst_structure_fixate_field_nearest_int(structure, "width", src->output_width);
-        gst_structure_fixate_field_nearest_int(structure, "height", src->output_height);
-    }
+    // output_width/height are always initialized in start() before fixate is called.
+    gst_structure_fixate_field_nearest_int(structure, "width", src->output_width);
+    gst_structure_fixate_field_nearest_int(structure, "height", src->output_height);
 
     // Default framerate to the camera_fps (already clamped in start()).
     // If downstream constrained the FPS list, pick the closest valid one.
