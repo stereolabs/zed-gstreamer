@@ -11,4 +11,4 @@
 gst-launch-1.0 \
 zedsrc stream-type=0 od-enabled=true ! queue ! \
 zedodoverlay ! queue ! \
-autovideoconvert ! fpsdisplaysink
+nvvideoconvert ! nv3dsink sync=false

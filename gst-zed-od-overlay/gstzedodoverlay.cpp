@@ -358,8 +358,14 @@ gboolean gst_zedoddisplaysink_event(GstBaseTransform *base, GstEvent *event) {
         gst_video_info_from_caps(&vinfo_in, caps);
         filter->img_left_w = vinfo_in.width;
         filter->img_left_h = vinfo_in.height;
-        if (vinfo_in.height == 752 || vinfo_in.height == 1440 || vinfo_in.height == 2160 ||
-            vinfo_in.height == 2484) {
+
+        // Detect composite (stacked) stereo streams by their doubled height.
+        // Known stereo heights: VGA=752, HD720=1440, HD1080=2160, HD1200=2400, HD2K=2484.
+        // Disambiguation: 3840×2160 is 4K mono (ZED X One), NOT stereo.
+        // HD1080 stereo is 1920×2160 — only halve when width <= 2208.
+        if (vinfo_in.height == 752 || vinfo_in.height == 1440 || vinfo_in.height == 2400 ||
+            vinfo_in.height == 2484 ||
+            (vinfo_in.height == 2160 && vinfo_in.width <= 2208)) {
             filter->img_left_h /= 2;   // Only half buffer size if the stream is composite
         }
 
@@ -384,8 +390,9 @@ static GstFlowReturn gst_zed_od_overlay_transform_ip(GstBaseTransform *base, Gst
         gst_object_sync_values(GST_OBJECT(filter), GST_BUFFER_TIMESTAMP(outbuf));
 
     if (FALSE == gst_buffer_map(outbuf, &map_buf, GstMapFlags(GST_MAP_READ | GST_MAP_WRITE))) {
-        GST_WARNING_OBJECT(filter, "Could not map buffer for write/read");
-        return GST_FLOW_OK;
+        GST_ELEMENT_ERROR(filter, RESOURCE, FAILED,
+                          ("Could not map buffer for write/read"), (NULL));
+        return GST_FLOW_ERROR;
     }
 
     // Get left image (upper half memory buffer)
@@ -396,6 +403,7 @@ static GstFlowReturn gst_zed_od_overlay_transform_ip(GstBaseTransform *base, Gst
 
     if (meta == NULL)   // Metadata not found
     {
+        gst_buffer_unmap(outbuf, &map_buf);
         GST_ELEMENT_ERROR(filter, RESOURCE, FAILED,
                           ("No ZED metadata [GstZedSrcMeta] found in the stream'"), (NULL));
         return GST_FLOW_ERROR;

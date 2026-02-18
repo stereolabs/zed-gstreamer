@@ -10,4 +10,4 @@
 gst-launch-1.0 \
 zedsrc stream-type=0 bt-enabled=true bt-detection-model=2 bt-format=2 ! queue ! \
 zedodoverlay ! queue ! \
-autovideoconvert ! fpsdisplaysink
+nvvideoconvert ! nv3dsink sync=false

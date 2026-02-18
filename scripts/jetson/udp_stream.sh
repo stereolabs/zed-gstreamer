@@ -9,7 +9,7 @@
 #   - Uses zero-copy NV12 for maximum performance
 #
 # For USB cameras or older SDK:
-#   - Uses BGRA with nvvideoconvert to NVMM NV12
+#   - Uses BGRA with $NVVIDCONV to NVMM NV12
 #
 # Usage:
 #   ./udp_stream.sh [client_ip] [port] [fps] [resolution] [bitrate]
@@ -95,7 +95,7 @@ echo "Starting UDP stream..."
 if is_zero_copy_available; then
     SOURCE="zedsrc stream-type=6 camera-resolution=$RESOLUTION camera-fps=$FPS"
 else
-    SOURCE="zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! nvvideoconvert ! video/x-raw(memory:NVMM),format=NV12"
+    SOURCE="zedsrc stream-type=0 camera-resolution=$RESOLUTION camera-fps=$FPS ! $NVVIDCONV ! video/x-raw(memory:NVMM),format=NV12"
 fi
 
 # Select encoder based on hardware availability

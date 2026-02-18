@@ -21,7 +21,7 @@
 GStreamer package for ZED Cameras. The package is composed of several elements:
 
 * [`zedsrc`](./gst-zed-src): acquires camera color image and depth map and pushes them in a GStreamer pipeline. Supports zero-copy NV12 output on Jetson for GMSL cameras (ZED X, ZED X Mini) with SDK 5.2+.
-* [`zedxonesrc`](./gst-zedxone-src): acquires camera color image from a ZED X One GS or ZED X One 4K camera and pushes them in a GStreamer pipeline. Note: this element does not use the ZED SDK, but a porting of the [zedx-one-capture](https://github.com/stereolabs/zedx-one-capture) library.
+* [`zedxonesrc`](./gst-zedxone-src): acquires camera color image from a ZED X One GS or ZED X One 4K camera and pushes them in a GStreamer pipeline. Uses the ZED SDK (`sl::CameraOne` API). Supports zero-copy NV12 output on Jetson with SDK 5.2+.
 * [`zedmeta`](./gst-zed-meta): GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data).
 * [`zeddemux`](./gst-zed-demux): receives a composite `zedsrc` stream (`color left + color right` data or `color left + depth map` + metadata),
   processes the eventual depth data and pushes them in two separated new streams named `src_left` and `src_aux`. A third source pad is created for metadata to be externally processed.
@@ -34,13 +34,13 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 ### Prerequisites
 
-* [ZED SDK v5.1](https://www.stereolabs.com/developers/release/5.1)
+* [ZED SDK v5.2](https://www.stereolabs.com/developers/release/5.2)
 * CMake (v3.6+)
 * GStreamer 1.0
 
 ### Windows installation
 
-* Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/5.1) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
+* Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/5.2) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
 * Install [Git](https://git-scm.com/) or download a ZIP archive
 * Install [CMake](https://cmake.org/)
 * Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
@@ -61,7 +61,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 #### Install prerequisites
 
-* Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/5.1)
+* Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/5.2)
 
 * Update the list of `apt` available packages
 
@@ -136,6 +136,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   area-file-path      : Area localization file that describes the surroundings, saved from a previous tracking session.
                         flags: readable, writable
                         String. Default: ""
+  async-grab-camera-recovery: Async Grab Camera Recovery
+                        flags: readable, writable
+                        Boolean. Default: false
   blocksize           : Size in bytes to read per buffer (-1 = default)
                         flags: readable, writable
                         Unsigned Integer. Range: 0 - 4294967295 Default: 4096 
@@ -183,7 +186,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Boolean. Default: false
   camera-fps          : Camera frame rate
                         flags: readable, writable
-                        Enum "GstZedSrcFPS" Default: 15, "15  FPS"
+                        Enum "GstZedSrcFPS" Default: 30, "30  FPS"
                            (120): 120 FPS          - only SVGA (GMSL2) resolution
                            (100): 100 FPS          - only VGA (USB3) resolution
                            (60): 60  FPS          - VGA (USB3), HD720, HD1080 (GMSL2), and HD1200 (GMSL2) resolutions
@@ -216,7 +219,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Integer. Range: 0 - 100 Default: 50 
   coordinate-system   : 3D Coordinate System
                         flags: readable, writable
-                        Enum "GstZedsrcStreamType" Default: 0, "Image"
+                        Enum "GstZedsrcCoordSys" Default: 0, "Image"
                            (0): Image            - Standard coordinates system in computer vision. Used in OpenCV.
                            (1): Left handed, Y up - Left-Handed with Y up and Z forward. Used in Unity with DirectX.
                            (2): Right handed, Y up - Right-Handed with Y pointing up and Z backward. Used in OpenGL.
@@ -308,6 +311,12 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   enable-area-memory  : This mode enables the camera to remember its surroundings. This helps correct positional tracking drift, and can be helpful for positioning different cameras relative to one other in space.
                         flags: readable, writable
                         Boolean. Default: true
+  enable-image-enhancement: Enable Image Enhancement
+                        flags: readable, writable
+                        Boolean. Default: true
+  enable-image-validity-check: Enable Image Validity Check
+                        flags: readable, writable
+                        Boolean. Default: true
   enable-imu-fusion   : This setting allows you to enable or disable IMU fusion. When set to false, only the optical odometry will be used.
                         flags: readable, writable
                         Boolean. Default: true
@@ -320,6 +329,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   fill-mode           : Specify the Depth Fill Mode
                         flags: readable, writable
                         Boolean. Default: false
+  grab-compute-capping-fps: Grab Compute Capping FPS
+                        flags: readable, writable
+                        Float. Range:               0 -            1000 Default:               0
   initial-world-transform-pitch: Pitch orientation of the camera in the world frame when the camera is started
                         flags: readable, writable
                         Float. Range:               0 -             360 Default:               0 
@@ -344,6 +356,12 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   input-stream-port   : Specify port when using streaming input
                         flags: readable, writable
                         Integer. Range: 1 - 65535 Default: 30000 
+  max-working-res-h   : Maximum Working Resolution Height
+                        flags: readable, writable
+                        Integer. Range: 0 - 10000 Default: 0
+  max-working-res-w   : Maximum Working Resolution Width
+                        flags: readable, writable
+                        Integer. Range: 0 - 10000 Default: 0
   measure3D-reference-frame: Specify the 3D Reference Frame
                         flags: readable, writable
                         Enum "GstZedsrc3dMeasRefFrame" Default: 0, "WORLD"
@@ -412,13 +430,25 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   od-enabled          : Set to TRUE to enable Object Detection
                         flags: readable, writable
                         Boolean. Default: false
+  od-instance-id      : Object Detection Instance ID
+                        flags: readable, writable
+                        Unsigned Integer. Range: 0 - 4294967295 Default: 0
+  od-max-range        : Maximum Detection Range
+                        flags: readable, writable
+                        Boolean. Default: false
   od-max-range        : Maximum Detection Range
                         flags: readable, writable
                         Float. Range:              -1 -           20000 Default:           20000 
   od-prediction-timeout-s: Object prediction timeout (sec)
                         flags: readable, writable
                         Float. Range:               0 -               1 Default:             0.2 
+  open-timeout-sec    : Open Timeout Seconds
+                        flags: readable, writable
+                        Float. Range:               0 -             600 Default:               5
   opencv-calibration-file: Optional OpenCV Calibration File
+                        flags: readable, writable
+                        String. Default: ""
+  optional-settings-path: Optional Settings Path
                         flags: readable, writable
                         String. Default: ""
   parent              : The parent of the object
@@ -445,12 +475,24 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   roi-x               : Region of interest top left 'X' coordinate (-1 to not set ROI)
                         flags: readable, writable
                         Integer. Range: -1 - 2208 Default: -1 
+  remove-saturated-areas: Remove Saturated Areas
+                        flags: readable, writable
+                        Boolean. Default: false
   roi-y               : Region of interest top left 'Y' coordinate (-1 to not set ROI)
                         flags: readable, writable
                         Integer. Range: -1 - 1242 Default: -1 
+  sdk-gpu-id          : SDK GPU ID
+                        flags: readable, writable
+                        Integer. Range: -1 - 128 Default: -1
   sdk-verbose         : ZED SDK Verbose level
                         flags: readable, writable
                         Integer. Range: 0 - 1000 Default: 0 
+  sdk-verbose-log-file: SDK Verbose Log File
+                        flags: readable, writable
+                        String. Default: ""
+  sensors-required    : Sensors Required
+                        flags: readable, writable
+                        Boolean. Default: false
   set-as-static       : Set to TRUE if the camera is static
                         flags: readable, writable
                         Boolean. Default: false
@@ -462,15 +504,22 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Boolean. Default: true
   stream-type         : Image stream type
                         flags: readable, writable
-                        Enum "GstZedSrcCoordSys" Default: 0, "Left image [BGRA]"
-                           (0): Left image [BGRA] - 8 bits- 4 channels Left image
-                           (1): Right image [BGRA] - 8 bits- 4 channels Right image
-                           (2): Stereo couple up/down [BGRA] - 8 bits- 4 channels bit Left and Right
+                        Enum "GstZedSrcStreamType" Default: 0, "Left image [BGRA/BGR/GRAY8]"
+                           (-1): Auto [prefer NV12 zero-copy] - Auto-negotiate format based on downstream
+                           (0): Left image [BGRA/BGR/GRAY8] - Left image
+                           (1): Right image [BGRA/BGR/GRAY8] - Right image
+                           (2): Stereo couple up/down [BGRA/BGR/GRAY8] - Left and Right top/bottom
                            (3): Depth image [GRAY16_LE] - 16 bits depth
-                           (4): Left and Depth up/down [BGRA] - 8 bits- 4 channels Left and Depth(image)
+                           (4): Left and Depth up/down [BGRA/BGR/GRAY8] - Left and Depth(image) top/bottom
+                           (5): Stereo couple left/right [BGRA/BGR/GRAY8] - Left and Right side-by-side
+                           (6): Raw NV12 zero-copy [NV12] - Zero-copy NV12 raw buffer (GMSL cameras only)
+                           (7): Raw NV12 stereo zero-copy [NV12] - Zero-copy NV12 stereo side-by-side
   svo-file-path       : Input from SVO file
                         flags: readable, writable
                         String. Default: ""
+  svo-real-time-mode  : SVO Real Time Mode
+                        flags: readable, writable
+                        Boolean. Default: false
   svo-recording-compression: Compression mode for SVO recording
                         flags: readable, writable
                         Enum "GstZedsrcSvoCompression" Default: 2, "H265"
@@ -493,6 +542,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
 ### `ZED X One Video Source Element` properties
 
 ```bash
+  async-grab-camera-recovery: Async Grab Camera Recovery
+                        flags: readable, writable
+                        Boolean. Default: false
   blocksize           : Size in bytes to read per buffer (-1 = default)
                         flags: readable, writable
                         Unsigned Integer. Range: 0 - 4294967295 Default: 4096 
@@ -523,6 +575,23 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   camera-timeout      : Connection opening timeout in seconds
                         flags: readable, writable
                         Float. Range:             0.5 -           86400 Default:               5 
+  coordinate-system   : SDK Coordinate System
+                        flags: readable, writable
+                        Enum "GstZedXOneSrcCoordSys" Default: 0, "IMAGE"
+                           (0): IMAGE            - Standard image (0,0) at top left corner
+                           (1): LEFT_HANDED_Y_UP - Left handed, Y up and Z forward
+                           (2): RIGHT_HANDED_Y_UP - Right handed, Y up and Z backward
+                           (3): RIGHT_HANDED_Z_UP - Right handed, Z up and Y forward
+                           (4): LEFT_HANDED_Z_UP - Left handed, Z up and Y forward
+                           (5): RIGHT_HANDED_Z_UP_X_FWD - Right handed, Z up and X forward
+  coordinate-units    : SDK Coordinate Units
+                        flags: readable, writable
+                        Enum "GstZedXOneSrcUnit" Default: 0, "MILLIMETER"
+                           (0): MILLIMETER       - Millimeter
+                           (1): CENTIMETER       - Centimeter
+                           (2): METER            - Meter
+                           (3): INCH             - Inch
+                           (4): FOOT             - Foot
   ctrl-analog-gain    : Camera control: Analog Gain value
                         flags: readable, writable
                         Integer. Range: 1000 - 30000 Default: 30000 
@@ -586,6 +655,12 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   enable-hdr          : Enable HDR if supported by resolution and frame rate.
                         flags: readable, writable
                         Boolean. Default: false
+  input-stream-ip     : Specify IP address when using streaming input
+                        flags: readable, writable
+                        String. Default: ""
+  input-stream-port   : Specify port when using streaming input
+                        flags: readable, writable
+                        Integer. Range: 1 - 65535 Default: 30000
   name                : The name of the object
                         flags: readable, writable, 0x2000
                         String. Default: "zedxonesrc0"
@@ -595,12 +670,30 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   opencv-calibration-file: Optional OpenCV Calibration File
                         flags: readable, writable
                         String. Default: ""
+  optional-settings-path: Optional Settings Path
+                        flags: readable, writable
+                        String. Default: ""
   output-rectified-image: Enable image rectification (disable for custom optics without calibration)
                         flags: readable, writable
                         Boolean. Default: true
   parent              : The parent of the object
                         flags: readable, writable, 0x2000
                         Object of type "GstObject"
+  sdk-verbose-log-file: SDK Verbose Log File
+                        flags: readable, writable
+                        String. Default: ""
+  stream-type         : Image stream type
+                        flags: readable, writable
+                        Enum "GstZedXOneSrcStreamType" Default: -1, "Auto [prefer NV12 zero-copy]"
+                           (-1): Auto [prefer NV12 zero-copy] - Auto-negotiate format based on downstream
+                           (0): Image [BGRA/BGR/GRAY8] - Single image
+                           (1): Raw NV12 zero-copy [NV12] - Zero-copy NV12 raw buffer (Jetson only)
+  svo-file-path       : Input from SVO file
+                        flags: readable, writable
+                        String. Default: ""
+  svo-real-time-mode  : SVO Real Time Mode
+                        flags: readable, writable
+                        Boolean. Default: false
   typefind            : Run typefind before negotiating (deprecated, non-functional)
                         flags: readable, writable, deprecated
                         Boolean. Default: false
