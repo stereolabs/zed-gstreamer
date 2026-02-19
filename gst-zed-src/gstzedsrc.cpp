@@ -4084,6 +4084,19 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
 
         NvBufSurfaceParams *params_l = &nvbuf->surfaceList[0];
         NvBufSurfaceParams *params_r = &nvbuf_right->surfaceList[0];
+        if (params_l->width != params_r->width || params_l->height != params_r->height ||
+            params_l->colorFormat != params_r->colorFormat) {
+            GST_ELEMENT_ERROR(
+                src, RESOURCE, FAILED,
+                ("Stereo RawBuffer surfaces mismatch: L=%ux%u fmt=%d, R=%ux%u fmt=%d",
+                 params_l->width, params_l->height, params_l->colorFormat, params_r->width,
+                 params_r->height, params_r->colorFormat),
+                (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+
         uint32_t single_w = params_l->width;
         uint32_t single_h = params_l->height;
         uint32_t stereo_w = single_w * 2;
@@ -4172,6 +4185,14 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
                     NvBufSurfaceDestroy(surf);
                 }
             });
+        if (!buf) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to wrap stereo composite NvBufSurface into GstBuffer"),
+                              (NULL));
+            NvBufSurfaceDestroy(dst_surf);
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
         // <---- Stereo side-by-side
     } else if (stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
         // ----> Right-eye NV12 zero-copy: wrap the right NvBufSurface directly
@@ -4195,6 +4216,13 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
             raw_buffer,                 // User data for destroy callback
             raw_buffer_destroy_notify   // Called when buffer is unreffed
         );
+        if (!buf) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to wrap right-eye NvBufSurface into GstBuffer"), (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
         // <---- Right-eye NV12 zero-copy
     } else {
         // ----> Left-eye NV12 zero-copy: wrap the left NvBufSurface directly
@@ -4209,6 +4237,13 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
             raw_buffer,                 // User data for destroy callback
             raw_buffer_destroy_notify   // Called when buffer is unreffed
         );
+        if (!buf) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to wrap left-eye NvBufSurface into GstBuffer"), (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
         // <---- Left-eye NV12 zero-copy
     }
 
