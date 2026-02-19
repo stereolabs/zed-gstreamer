@@ -470,8 +470,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (3): Depth image [GRAY16_LE] - 16 bits depth
                            (4): Left and Depth up/down [BGRA] - 8 bits- 4 channels Left and Depth(image)
                            (5): Stereo couple left/right [BGRA] - 8 bits- 4 channels Left and Right side-by-side
-                           (6): Raw NV12 zero-copy [NV12] - Zero-copy NV12 raw buffer (GMSL cameras only, SDK 5.2+)
-                           (7): Raw NV12 stereo zero-copy [NV12] - Zero-copy NV12 stereo left + right side-by-side (GMSL only, SDK 5.2+)
+                           (6): Raw NV12 left zero-copy [NV12] - Zero-copy NV12 raw buffer (ZED X cameras only, SDK 5.2+)
+                           (7): Raw NV12 stereo zero-copy [NV12] - Zero-copy NV12 stereo left + right side-by-side (ZED X cameras only, SDK 5.2+)
+                           (8): Raw NV12 right zero-copy [NV12] - Zero-copy NV12 right eye only (ZED X cameras only, SDK 5.2+)
   svo-file-path       : Input from SVO file
                         flags: readable, writable
                         String. Default: ""

@@ -222,7 +222,8 @@ typedef enum {
     GST_ZEDSRC_LEFT_RIGHT_SBS = 5,   // Side-by-side stereo (BGRA) for VR/stereo displays
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
     GST_ZEDSRC_RAW_NV12 = 6,         // Zero-copy NV12 raw buffer (GMSL cameras only)
-    GST_ZEDSRC_RAW_NV12_STEREO = 7   // Zero-copy NV12 stereo (left + right)
+    GST_ZEDSRC_RAW_NV12_STEREO = 7,  // Zero-copy NV12 stereo (left + right)
+    GST_ZEDSRC_RAW_NV12_RIGHT = 8    // Zero-copy NV12 right eye only (GMSL cameras only)
 #endif
 } GstZedSrcStreamType;
 
@@ -558,6 +559,8 @@ static GType gst_zedsrc_stream_type_get_type(void) {
              "Raw NV12 zero-copy [NV12]"},
             {GST_ZEDSRC_RAW_NV12_STEREO, "Zero-copy NV12 stereo (left + right side by side)",
              "Raw NV12 stereo zero-copy [NV12]"},
+            {GST_ZEDSRC_RAW_NV12_RIGHT, "Zero-copy NV12 right eye only (GMSL cameras only)",
+             "Raw NV12 right zero-copy [NV12]"},
 #endif
             {0, NULL, NULL},
         };
@@ -2753,7 +2756,8 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
         format = GST_VIDEO_FORMAT_GRAY16_LE;
     }
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    else if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+    else if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO ||
+             stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
         format = GST_VIDEO_FORMAT_NV12;
     }
 #endif
@@ -2789,7 +2793,8 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
         // Add memory:NVMM feature for zero-copy NV12 modes
-        if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO ||
+            stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
             GstCapsFeatures *features = gst_caps_features_new("memory:NVMM", NULL);
             gst_caps_set_features(src->caps, 0, features);
             GST_INFO_OBJECT(src, "Added memory:NVMM feature for zero-copy");
@@ -3854,7 +3859,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     mapped = TRUE;
 
     // ----> Mats retrieving
-    // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_STEREO) are handled
+    // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_RIGHT, GST_ZEDSRC_RAW_NV12_STEREO) are handled
     // by gst_zedsrc_create() which wraps NvBufSurface directly without memcpy.
     // This fill() function only handles non-NVMM stream types.
     if (stream_type == GST_ZEDSRC_ONLY_LEFT) {
@@ -3948,7 +3953,8 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     // Use resolved_stream_type which accounts for AUTO negotiation
     gint stream_type = src->resolved_stream_type;
 
-    if (stream_type != GST_ZEDSRC_RAW_NV12 && stream_type != GST_ZEDSRC_RAW_NV12_STEREO) {
+    if (stream_type != GST_ZEDSRC_RAW_NV12 && stream_type != GST_ZEDSRC_RAW_NV12_STEREO &&
+        stream_type != GST_ZEDSRC_RAW_NV12_RIGHT) {
         GstBuffer *buf;
         GstFlowReturn ret;
         GstBaseSrc *basesrc = GST_BASE_SRC(psrc);
@@ -4167,8 +4173,31 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
                 }
             });
         // <---- Stereo side-by-side
+    } else if (stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
+        // ----> Right-eye NV12 zero-copy: wrap the right NvBufSurface directly
+        NvBufSurface *nvbuf_r = static_cast<NvBufSurface *>(raw_buffer->getRawBufferRight());
+        if (!nvbuf_r || nvbuf_r->numFilled == 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("RawBuffer returned null or empty right NvBufSurface"), (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+        GST_DEBUG_OBJECT(src, "NvBufSurface R: %p, FD: %ld, size: %d",
+                         nvbuf_r, nvbuf_r->surfaceList[0].bufferDesc,
+                         nvbuf_r->surfaceList[0].dataSize);
+        buf = gst_buffer_new_wrapped_full(
+            (GstMemoryFlags) 0,
+            nvbuf_r,                    // Data pointer is the NvBufSurface*
+            sizeof(NvBufSurface),       // Max size
+            0,                          // Offset
+            sizeof(NvBufSurface),       // Size
+            raw_buffer,                 // User data for destroy callback
+            raw_buffer_destroy_notify   // Called when buffer is unreffed
+        );
+        // <---- Right-eye NV12 zero-copy
     } else {
-        // ----> Mono NV12 zero-copy: wrap the left NvBufSurface directly
+        // ----> Left-eye NV12 zero-copy: wrap the left NvBufSurface directly
         // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
         // DeepStream and other NVIDIA elements expect this format
         buf = gst_buffer_new_wrapped_full(
@@ -4180,7 +4209,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
             raw_buffer,                 // User data for destroy callback
             raw_buffer_destroy_notify   // Called when buffer is unreffed
         );
-        // <---- Mono NV12 zero-copy
+        // <---- Left-eye NV12 zero-copy
     }
 
     // Attach Unified Metadata
