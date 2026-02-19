@@ -462,7 +462,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                         Boolean. Default: true
   stream-type         : Image stream type
                         flags: readable, writable
-                        Enum "GstZedSrcCoordSys" Default: 0, "Left image [BGRA]"
+                        Enum "GstZedSrcStreamType" Default: 0, "Left image [BGRA]"
                            (-1): Auto [prefer NV12 zero-copy] - Auto-negotiate format based on downstream
                            (0): Left image [BGRA] - 8 bits- 4 channels Left image
                            (1): Right image [BGRA] - 8 bits- 4 channels Right image

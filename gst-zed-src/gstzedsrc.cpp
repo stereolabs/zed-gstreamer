@@ -221,9 +221,9 @@ typedef enum {
     GST_ZEDSRC_LEFT_DEPTH = 4,
     GST_ZEDSRC_LEFT_RIGHT_SBS = 5,   // Side-by-side stereo (BGRA) for VR/stereo displays
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    GST_ZEDSRC_RAW_NV12 = 6,         // Zero-copy NV12 raw buffer (GMSL cameras only)
-    GST_ZEDSRC_RAW_NV12_STEREO = 7,  // Zero-copy NV12 stereo (left + right)
-    GST_ZEDSRC_RAW_NV12_RIGHT = 8    // Zero-copy NV12 right eye only (GMSL cameras only)
+    GST_ZEDSRC_RAW_NV12 = 6,          // Zero-copy NV12 raw buffer (GMSL cameras only)
+    GST_ZEDSRC_RAW_NV12_STEREO = 7,   // Zero-copy NV12 stereo (left + right)
+    GST_ZEDSRC_RAW_NV12_RIGHT = 8     // Zero-copy NV12 right eye only (GMSL cameras only)
 #endif
 } GstZedSrcStreamType;
 
@@ -565,7 +565,7 @@ static GType gst_zedsrc_stream_type_get_type(void) {
             {0, NULL, NULL},
         };
 
-        zedsrc_stream_type_type = g_enum_register_static("GstZedSrcCoordSys", pattern_types);
+        zedsrc_stream_type_type = g_enum_register_static("GstZedSrcStreamType", pattern_types);
     }
 
     return zedsrc_stream_type_type;
@@ -924,6 +924,18 @@ static GstStaticPadTemplate gst_zedsrc_src_template = GST_STATIC_PAD_TEMPLATE(
                      "width = (int)3840, "
                      "height = (int)1200, "
                      "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 stereo HD1080 (side-by-side)
+                     "format = (string)NV12, "
+                     "width = (int)3840, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 stereo SVGA (side-by-side)
+                     "format = (string)NV12, "
+                     "width = (int)1920, "
+                     "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
 #endif
                      )));
 
@@ -3859,9 +3871,9 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     mapped = TRUE;
 
     // ----> Mats retrieving
-    // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_RIGHT, GST_ZEDSRC_RAW_NV12_STEREO) are handled
-    // by gst_zedsrc_create() which wraps NvBufSurface directly without memcpy.
-    // This fill() function only handles non-NVMM stream types.
+    // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_RIGHT,
+    // GST_ZEDSRC_RAW_NV12_STEREO) are handled by gst_zedsrc_create() which wraps NvBufSurface
+    // directly without memcpy. This fill() function only handles non-NVMM stream types.
     if (stream_type == GST_ZEDSRC_ONLY_LEFT) {
         CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
     } else if (stream_type == GST_ZEDSRC_ONLY_RIGHT) {
@@ -4071,8 +4083,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
 
     if (stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
         // ----> Stereo side-by-side: composite L + R into a double-width surface
-        NvBufSurface *nvbuf_right =
-            static_cast<NvBufSurface *>(raw_buffer->getRawBufferRight());
+        NvBufSurface *nvbuf_right = static_cast<NvBufSurface *>(raw_buffer->getRawBufferRight());
         if (!nvbuf_right || nvbuf_right->numFilled == 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
                               ("RawBuffer returned null or empty right NvBufSurface for stereo"),
@@ -4086,12 +4097,11 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         NvBufSurfaceParams *params_r = &nvbuf_right->surfaceList[0];
         if (params_l->width != params_r->width || params_l->height != params_r->height ||
             params_l->colorFormat != params_r->colorFormat) {
-            GST_ELEMENT_ERROR(
-                src, RESOURCE, FAILED,
-                ("Stereo RawBuffer surfaces mismatch: L=%ux%u fmt=%d, R=%ux%u fmt=%d",
-                 params_l->width, params_l->height, params_l->colorFormat, params_r->width,
-                 params_r->height, params_r->colorFormat),
-                (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Stereo RawBuffer surfaces mismatch: L=%ux%u fmt=%d, R=%ux%u fmt=%d",
+                               params_l->width, params_l->height, params_l->colorFormat,
+                               params_r->width, params_r->height, params_r->colorFormat),
+                              (NULL));
             delete raw_buffer;
             cuCtxPopCurrent_v2(NULL);
             return GST_FLOW_ERROR;
@@ -4101,29 +4111,26 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         uint32_t single_h = params_l->height;
         uint32_t stereo_w = single_w * 2;
 
-        GST_DEBUG_OBJECT(src,
-                         "Stereo composite: L=%ux%u R=%ux%u -> SbS=%ux%u",
-                         params_l->width, params_l->height,
-                         params_r->width, params_r->height,
-                         stereo_w, single_h);
+        GST_DEBUG_OBJECT(src, "Stereo composite: L=%ux%u R=%ux%u -> SbS=%ux%u", params_l->width,
+                         params_l->height, params_r->width, params_r->height, stereo_w, single_h);
 
-        // Allocate destination NvBufSurface (double-width, same height, NV12)
+        // Allocate destination NvBufSurface (double-width, same height, matching source memory)
         NvBufSurfaceCreateParams create_params = {0};
-        create_params.gpuId = 0;
+        create_params.gpuId = nvbuf->gpuId;
         create_params.width = stereo_w;
         create_params.height = single_h;
         create_params.size = 0;
         create_params.isContiguous = true;
-        create_params.colorFormat = params_l->colorFormat;   // NV12
-        create_params.layout = NVBUF_LAYOUT_PITCH;
-        create_params.memType = NVBUF_MEM_DEFAULT;
+        create_params.colorFormat = params_l->colorFormat;
+        create_params.layout = params_l->layout;
+        create_params.memType = nvbuf->memType;
 
         NvBufSurface *dst_surf = NULL;
         if (NvBufSurfaceCreate(&dst_surf, 1, &create_params) != 0 || !dst_surf) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                              ("Failed to allocate stereo composite NvBufSurface %ux%u",
-                               stereo_w, single_h),
-                              (NULL));
+            GST_ELEMENT_ERROR(
+                src, RESOURCE, FAILED,
+                ("Failed to allocate stereo composite NvBufSurface %ux%u", stereo_w, single_h),
+                (NULL));
             delete raw_buffer;
             cuCtxPopCurrent_v2(NULL);
             return GST_FLOW_ERROR;
@@ -4139,8 +4146,8 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
 
         NvBufSurfTransform_Error terr = NvBufSurfTransform(nvbuf, dst_surf, &xform_l);
         if (terr != NvBufSurfTransformError_Success) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                              ("NvBufSurfTransform (left) failed: %d", terr), (NULL));
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("NvBufSurfTransform (left) failed: %d", terr),
+                              (NULL));
             NvBufSurfaceDestroy(dst_surf);
             delete raw_buffer;
             cuCtxPopCurrent_v2(NULL);
@@ -4173,11 +4180,11 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         // Use a custom destroy callback to free the allocated surface
         buf = gst_buffer_new_wrapped_full(
             (GstMemoryFlags) 0,
-            dst_surf,                        // Data pointer is the NvBufSurface*
-            sizeof(NvBufSurface),            // Max size
-            0,                               // Offset
-            sizeof(NvBufSurface),            // Size
-            dst_surf,                        // User data for destroy callback
+            dst_surf,               // Data pointer is the NvBufSurface*
+            sizeof(NvBufSurface),   // Max size
+            0,                      // Offset
+            sizeof(NvBufSurface),   // Size
+            dst_surf,               // User data for destroy callback
             [](gpointer data) {
                 NvBufSurface *surf = static_cast<NvBufSurface *>(data);
                 if (surf) {
@@ -4204,9 +4211,8 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
             cuCtxPopCurrent_v2(NULL);
             return GST_FLOW_ERROR;
         }
-        GST_DEBUG_OBJECT(src, "NvBufSurface R: %p, FD: %ld, size: %d",
-                         nvbuf_r, nvbuf_r->surfaceList[0].bufferDesc,
-                         nvbuf_r->surfaceList[0].dataSize);
+        GST_DEBUG_OBJECT(src, "NvBufSurface R: %p, FD: %ld, size: %d", nvbuf_r,
+                         nvbuf_r->surfaceList[0].bufferDesc, nvbuf_r->surfaceList[0].dataSize);
         buf = gst_buffer_new_wrapped_full(
             (GstMemoryFlags) 0,
             nvbuf_r,                    // Data pointer is the NvBufSurface*

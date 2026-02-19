@@ -97,9 +97,11 @@ if(L4T_FOUND)
     endif()
     # NvBufSurfTransform for stereo side-by-side compositing
     find_library(NVBUFSURFTRANSFORM_LIB nvbufsurftransform
-        PATHS /usr/lib/aarch64-linux-gnu/tegra /usr/lib/aarch64-linux-gnu/nvidia)
+        PATHS /usr/lib/aarch64-linux-gnu/tegra /usr/lib/aarch64-linux-gnu/nvidia /usr/lib/aarch64-linux-gnu)
     if(NVBUFSURFTRANSFORM_LIB)
         list(APPEND ZEROCOPY_LIBS ${NVBUFSURFTRANSFORM_LIB})
+    elseif((ZED_VERSION_MAJOR GREATER 5) OR (ZED_VERSION_MAJOR EQUAL 5 AND ZED_VERSION_MINOR GREATER_EQUAL 2))
+        message(FATAL_ERROR "nvbufsurftransform is required for Advanced Capture API (SDK >= 5.2) but was not found. Install Jetson Multimedia API runtime/devel packages or provide library path.")
     endif()
 endif()
 
