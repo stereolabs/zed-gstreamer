@@ -46,6 +46,9 @@ GST_DEBUG_CATEGORY_STATIC(gst_zedsrc_controls_debug);
 
 // Magic number constants
 #define GST_ZEDSRC_MAX_OBJECTS 256
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+#define GST_ZEDSRC_STEREO_SBS_POOL_SIZE 4
+#endif
 
 /* prototypes */
 static void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value,
@@ -66,6 +69,129 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *src, GstBuffer *buf);
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
 static GstFlowReturn gst_zedsrc_create(GstPushSrc *src, GstBuffer **buf);
+
+typedef struct {
+    GstZedSrc *src;
+    NvBufSurface *surf;
+    gint pool_index;
+} StereoSbsWrappedCtx;
+
+static void gst_zedsrc_stereo_sbs_release_slot(GstZedSrc *src, gint pool_index) {
+    if (pool_index >= 0 && pool_index < GST_ZEDSRC_STEREO_SBS_POOL_SIZE) {
+        g_atomic_int_set(&src->stereo_sbs_pool_in_use[pool_index], 0);
+    }
+}
+
+static gboolean gst_zedsrc_stereo_sbs_pool_any_in_use(GstZedSrc *src) {
+    for (gint i = 0; i < GST_ZEDSRC_STEREO_SBS_POOL_SIZE; ++i) {
+        if (g_atomic_int_get(&src->stereo_sbs_pool_in_use[i]) != 0) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static void gst_zedsrc_stereo_sbs_pool_cleanup(GstZedSrc *src, gboolean force) {
+    for (gint i = 0; i < GST_ZEDSRC_STEREO_SBS_POOL_SIZE; ++i) {
+        if (!force && g_atomic_int_get(&src->stereo_sbs_pool_in_use[i]) != 0) {
+            continue;
+        }
+
+        NvBufSurface *surf = static_cast<NvBufSurface *>(src->stereo_sbs_pool[i]);
+        if (surf) {
+            NvBufSurfaceDestroy(surf);
+            src->stereo_sbs_pool[i] = NULL;
+        }
+
+        if (force) {
+            g_atomic_int_set(&src->stereo_sbs_pool_in_use[i], 0);
+        }
+    }
+
+    if (force || !gst_zedsrc_stereo_sbs_pool_any_in_use(src)) {
+        src->stereo_sbs_pool_width = 0;
+        src->stereo_sbs_pool_height = 0;
+        src->stereo_sbs_pool_gpu_id = -1;
+        src->stereo_sbs_pool_mem_type = -1;
+        src->stereo_sbs_pool_layout = -1;
+        src->stereo_sbs_pool_color_format = -1;
+    }
+}
+
+static NvBufSurface *gst_zedsrc_stereo_sbs_pool_acquire(GstZedSrc *src, guint32 width,
+                                                        guint32 height, gint gpu_id, gint mem_type,
+                                                        gint layout, gint color_format,
+                                                        gint *pool_index) {
+    *pool_index = -1;
+
+    gboolean configured = (src->stereo_sbs_pool_width != 0 && src->stereo_sbs_pool_height != 0);
+    gboolean matches =
+        configured && src->stereo_sbs_pool_width == width &&
+        src->stereo_sbs_pool_height == height && src->stereo_sbs_pool_gpu_id == gpu_id &&
+        src->stereo_sbs_pool_mem_type == mem_type && src->stereo_sbs_pool_layout == layout &&
+        src->stereo_sbs_pool_color_format == color_format;
+
+    if (!matches) {
+        gst_zedsrc_stereo_sbs_pool_cleanup(src, FALSE);
+        if (gst_zedsrc_stereo_sbs_pool_any_in_use(src)) {
+            return NULL;
+        }
+
+        src->stereo_sbs_pool_width = width;
+        src->stereo_sbs_pool_height = height;
+        src->stereo_sbs_pool_gpu_id = gpu_id;
+        src->stereo_sbs_pool_mem_type = mem_type;
+        src->stereo_sbs_pool_layout = layout;
+        src->stereo_sbs_pool_color_format = color_format;
+    }
+
+    for (gint i = 0; i < GST_ZEDSRC_STEREO_SBS_POOL_SIZE; ++i) {
+        if (!g_atomic_int_compare_and_exchange(&src->stereo_sbs_pool_in_use[i], 0, 1)) {
+            continue;
+        }
+
+        NvBufSurface *surf = static_cast<NvBufSurface *>(src->stereo_sbs_pool[i]);
+        if (!surf) {
+            NvBufSurfaceCreateParams create_params = {0};
+            create_params.gpuId = gpu_id;
+            create_params.width = width;
+            create_params.height = height;
+            create_params.size = 0;
+            create_params.isContiguous = true;
+            create_params.colorFormat = static_cast<NvBufSurfaceColorFormat>(color_format);
+            create_params.layout = static_cast<NvBufSurfaceLayout>(layout);
+            create_params.memType = static_cast<NvBufSurfaceMemType>(mem_type);
+
+            if (NvBufSurfaceCreate(&surf, 1, &create_params) != 0 || !surf) {
+                g_atomic_int_set(&src->stereo_sbs_pool_in_use[i], 0);
+                continue;
+            }
+
+            src->stereo_sbs_pool[i] = surf;
+        }
+
+        *pool_index = i;
+        return surf;
+    }
+
+    return NULL;
+}
+
+static void stereo_sbs_wrapped_buffer_destroy_notify(gpointer data) {
+    StereoSbsWrappedCtx *ctx = static_cast<StereoSbsWrappedCtx *>(data);
+    if (!ctx) {
+        return;
+    }
+
+    if (ctx->pool_index >= 0) {
+        gst_zedsrc_stereo_sbs_release_slot(ctx->src, ctx->pool_index);
+    } else if (ctx->surf) {
+        NvBufSurfaceDestroy(ctx->surf);
+    }
+
+    gst_object_unref(ctx->src);
+    g_free(ctx);
+}
 #endif
 
 static gboolean gst_zedsrc_query(GstBaseSrc *src, GstQuery *query);
@@ -597,7 +723,7 @@ static GType gst_zedsrc_coord_sys_get_type(void) {
             {0, NULL, NULL},
         };
 
-        zedsrc_coord_sys_type = g_enum_register_static("GstZedsrcStreamType", pattern_types);
+        zedsrc_coord_sys_type = g_enum_register_static("GstZedsrcCoordSys", pattern_types);
     }
 
     return zedsrc_coord_sys_type;
@@ -1716,6 +1842,10 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 }
 
 static void gst_zedsrc_reset(GstZedSrc *src) {
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    gst_zedsrc_stereo_sbs_pool_cleanup(src, FALSE);
+#endif
+
     if (src->zed.isOpened()) {
         src->zed.close();
     }
@@ -1866,6 +1996,19 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 
     src->stop_requested = FALSE;
     src->caps = NULL;
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    for (gint i = 0; i < GST_ZEDSRC_STEREO_SBS_POOL_SIZE; ++i) {
+        src->stereo_sbs_pool[i] = NULL;
+        g_atomic_int_set(&src->stereo_sbs_pool_in_use[i], 0);
+    }
+    src->stereo_sbs_pool_width = 0;
+    src->stereo_sbs_pool_height = 0;
+    src->stereo_sbs_pool_gpu_id = -1;
+    src->stereo_sbs_pool_mem_type = -1;
+    src->stereo_sbs_pool_layout = -1;
+    src->stereo_sbs_pool_color_format = -1;
+#endif
 
     gst_zedsrc_reset(src);
 }
@@ -2641,6 +2784,10 @@ void gst_zedsrc_finalize(GObject *object) {
     GST_TRACE_OBJECT(src, "gst_zedsrc_finalize");
 
     /* clean up object here */
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    gst_zedsrc_stereo_sbs_pool_cleanup(src, TRUE);
+#endif
+
     if (src->caps) {
         gst_caps_unref(src->caps);
         src->caps = NULL;
@@ -4114,59 +4261,88 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         GST_DEBUG_OBJECT(src, "Stereo composite: L=%ux%u R=%ux%u -> SbS=%ux%u", params_l->width,
                          params_l->height, params_r->width, params_r->height, stereo_w, single_h);
 
-        // Allocate destination NvBufSurface (double-width, same height, matching source memory)
-        NvBufSurfaceCreateParams create_params = {0};
-        create_params.gpuId = nvbuf->gpuId;
-        create_params.width = stereo_w;
-        create_params.height = single_h;
-        create_params.size = 0;
-        create_params.isContiguous = true;
-        create_params.colorFormat = params_l->colorFormat;
-        create_params.layout = params_l->layout;
-        create_params.memType = nvbuf->memType;
+        // Acquire reusable destination surface from pool (fallback to one-off if pool busy)
+        gint pool_index = -1;
+        NvBufSurface *dst_surf = gst_zedsrc_stereo_sbs_pool_acquire(
+            src, stereo_w, single_h, nvbuf->gpuId, nvbuf->memType, params_l->layout,
+            params_l->colorFormat, &pool_index);
+        gboolean from_pool = (pool_index >= 0 && dst_surf != NULL);
 
-        NvBufSurface *dst_surf = NULL;
-        if (NvBufSurfaceCreate(&dst_surf, 1, &create_params) != 0 || !dst_surf) {
-            GST_ELEMENT_ERROR(
-                src, RESOURCE, FAILED,
-                ("Failed to allocate stereo composite NvBufSurface %ux%u", stereo_w, single_h),
-                (NULL));
-            delete raw_buffer;
-            cuCtxPopCurrent_v2(NULL);
-            return GST_FLOW_ERROR;
+        if (!dst_surf) {
+            NvBufSurfaceCreateParams create_params = {0};
+            create_params.gpuId = nvbuf->gpuId;
+            create_params.width = stereo_w;
+            create_params.height = single_h;
+            create_params.size = 0;
+            create_params.isContiguous = true;
+            create_params.colorFormat = params_l->colorFormat;
+            create_params.layout = params_l->layout;
+            create_params.memType = nvbuf->memType;
+
+            if (NvBufSurfaceCreate(&dst_surf, 1, &create_params) != 0 || !dst_surf) {
+                GST_ELEMENT_ERROR(
+                    src, RESOURCE, FAILED,
+                    ("Failed to allocate stereo composite NvBufSurface %ux%u", stereo_w, single_h),
+                    (NULL));
+                delete raw_buffer;
+                cuCtxPopCurrent_v2(NULL);
+                return GST_FLOW_ERROR;
+            }
         }
 
-        // Transform left eye into the left half of dst
-        NvBufSurfTransformRect src_rect_l = {0, 0, single_w, single_h};
-        NvBufSurfTransformRect dst_rect_l = {0, 0, single_w, single_h};
-        NvBufSurfTransformParams xform_l = {0};
-        xform_l.transform_flag = NVBUFSURF_TRANSFORM_CROP_SRC | NVBUFSURF_TRANSFORM_CROP_DST;
-        xform_l.src_rect = &src_rect_l;
-        xform_l.dst_rect = &dst_rect_l;
+        // Composite left+right into destination in one call
+        NvBufSurfTransformCompositeParams comp_params;
+        memset(&comp_params, 0, sizeof(comp_params));
+        comp_params.composite_flag = NVBUFSURF_TRANSFORM_COMPOSITE;
+        comp_params.input_buf_count = 2;
 
-        NvBufSurfTransform_Error terr = NvBufSurfTransform(nvbuf, dst_surf, &xform_l);
-        if (terr != NvBufSurfTransformError_Success) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("NvBufSurfTransform (left) failed: %d", terr),
-                              (NULL));
-            NvBufSurfaceDestroy(dst_surf);
-            delete raw_buffer;
-            cuCtxPopCurrent_v2(NULL);
-            return GST_FLOW_ERROR;
-        }
+        NvBufSurfTransformRect src_rect[2];
+        NvBufSurfTransformRect dst_rect[2];
 
-        // Transform right eye into the right half of dst
-        NvBufSurfTransformRect src_rect_r = {0, 0, single_w, single_h};
-        NvBufSurfTransformRect dst_rect_r = {0, single_w, single_w, single_h};
-        NvBufSurfTransformParams xform_r = {0};
-        xform_r.transform_flag = NVBUFSURF_TRANSFORM_CROP_SRC | NVBUFSURF_TRANSFORM_CROP_DST;
-        xform_r.src_rect = &src_rect_r;
-        xform_r.dst_rect = &dst_rect_r;
+        src_rect[0].left = 0;
+        src_rect[0].top = 0;
+        src_rect[0].width = single_w;
+        src_rect[0].height = single_h;
 
-        terr = NvBufSurfTransform(nvbuf_right, dst_surf, &xform_r);
-        if (terr != NvBufSurfTransformError_Success) {
+        src_rect[1].left = 0;
+        src_rect[1].top = 0;
+        src_rect[1].width = single_w;
+        src_rect[1].height = single_h;
+
+        // Side-by-side destination placement
+        dst_rect[0].left = 0;
+        dst_rect[0].top = 0;
+        dst_rect[0].width = single_w;
+        dst_rect[0].height = single_h;
+
+        dst_rect[1].left = single_w;
+        dst_rect[1].top = 0;
+        dst_rect[1].width = single_w;
+        dst_rect[1].height = single_h;
+
+        comp_params.src_comp_rect = src_rect;
+        comp_params.dst_comp_rect = dst_rect;
+
+        NvBufSurface batch;
+        memset(&batch, 0, sizeof(batch));
+        NvBufSurfaceParams batch_surfaces[2] = {};
+        batch.surfaceList = batch_surfaces;
+        batch.surfaceList[0] = params_l[0];
+        batch.surfaceList[1] = params_r[0];
+        batch.batchSize = 2;
+        batch.numFilled = 2;
+        batch.gpuId = nvbuf->gpuId;
+        batch.memType = nvbuf->memType;
+
+        int comp_ret = NvBufSurfTransformComposite(&batch, dst_surf, &comp_params);
+        if (comp_ret != 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                              ("NvBufSurfTransform (right) failed: %d", terr), (NULL));
-            NvBufSurfaceDestroy(dst_surf);
+                              ("NvBufSurfTransformComposite failed: %d", comp_ret), (NULL));
+            if (from_pool) {
+                gst_zedsrc_stereo_sbs_release_slot(src, pool_index);
+            } else {
+                NvBufSurfaceDestroy(dst_surf);
+            }
             delete raw_buffer;
             cuCtxPopCurrent_v2(NULL);
             return GST_FLOW_ERROR;
@@ -4176,27 +4352,24 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         delete raw_buffer;
         raw_buffer = NULL;
 
+        StereoSbsWrappedCtx *stereo_ctx = g_new0(StereoSbsWrappedCtx, 1);
+        stereo_ctx->src = GST_ZED_SRC(gst_object_ref(src));
+        stereo_ctx->surf = dst_surf;
+        stereo_ctx->pool_index = from_pool ? pool_index : -1;
+
         // Wrap the composited dst_surf into GstBuffer
-        // Use a custom destroy callback to free the allocated surface
-        buf = gst_buffer_new_wrapped_full(
-            (GstMemoryFlags) 0,
-            dst_surf,               // Data pointer is the NvBufSurface*
-            sizeof(NvBufSurface),   // Max size
-            0,                      // Offset
-            sizeof(NvBufSurface),   // Size
-            dst_surf,               // User data for destroy callback
-            [](gpointer data) {
-                NvBufSurface *surf = static_cast<NvBufSurface *>(data);
-                if (surf) {
-                    GST_DEBUG("Destroying stereo composite NvBufSurface");
-                    NvBufSurfaceDestroy(surf);
-                }
-            });
+        buf = gst_buffer_new_wrapped_full((GstMemoryFlags) 0,
+                                          dst_surf,   // Data pointer is the NvBufSurface*
+                                          sizeof(NvBufSurface),   // Max size
+                                          0,                      // Offset
+                                          sizeof(NvBufSurface),   // Size
+                                          stereo_ctx,             // User data for destroy callback
+                                          stereo_sbs_wrapped_buffer_destroy_notify);
         if (!buf) {
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
                               ("Failed to wrap stereo composite NvBufSurface into GstBuffer"),
                               (NULL));
-            NvBufSurfaceDestroy(dst_surf);
+            stereo_sbs_wrapped_buffer_destroy_notify(stereo_ctx);
             cuCtxPopCurrent_v2(NULL);
             return GST_FLOW_ERROR;
         }
