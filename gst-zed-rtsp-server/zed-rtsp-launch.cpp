@@ -140,15 +140,6 @@ int main(int argc, char *argv[]) {
     factory = gst_rtsp_media_factory_new();
     gst_rtsp_media_factory_set_launch(factory, rtsp_pipeline.c_str());
     gst_rtsp_media_factory_set_shared(factory, TRUE);
-    
-    /* Don't suspend/reset the pipeline when no clients - ZED camera takes time to initialize */
-    gst_rtsp_media_factory_set_suspend_mode(factory, GST_RTSP_SUSPEND_MODE_NONE);
-    
-    /* Don't send EOS when last client disconnects */
-    gst_rtsp_media_factory_set_eos_shutdown(factory, FALSE);
-    
-    /* Set buffer mode to allow for camera startup latency */
-    gst_rtsp_media_factory_set_latency(factory, 500);  /* 500ms buffer */
 
     /* attach the test factory to the /test url */
     gst_rtsp_mount_points_add_factory(mounts, "/zed-stream", factory);
@@ -161,43 +152,13 @@ int main(int argc, char *argv[]) {
 
     g_signal_connect(server, "client-connected", (GCallback) client_connected, NULL);
 
-    /* Pre-create and prepare the media so camera initializes before clients connect */
+    /* start serving */
     g_print(" ZED RTSP Server \n");
     g_print("-----------------\n");
-    g_print(" * Initializing camera (this may take a few seconds)...\n");
-    
-    GstRTSPUrl *url = NULL;
-    GstRTSPResult parse_result = gst_rtsp_url_parse(("rtsp://" + std::string(host) + ":" + std::string(port) + "/zed-stream").c_str(), &url);
-    GstRTSPMedia *media = NULL;
-    if (parse_result != GST_RTSP_OK || url == NULL) {
-        g_printerr(" * Warning: Failed to parse RTSP URL, media will not be pre-created\n");
-    } else {
-        media = gst_rtsp_media_factory_construct(factory, url);
-        gst_rtsp_url_free(url);
-    }
-    
-    if (media) {
-        GstRTSPThread *thread = gst_rtsp_thread_pool_get_thread(
-            gst_rtsp_server_get_thread_pool(server),
-            GST_RTSP_THREAD_TYPE_MEDIA, NULL);
-        if (gst_rtsp_media_prepare(media, thread)) {
-            g_print(" * Camera ready!\n");
-        } else {
-            g_printerr(" * Warning: Failed to prepare media, clients may experience delays\n");
-            g_object_unref(media);
-            media = NULL;
-        }
-    }
-    
     g_print(" * Stream ready at rtsp://%s:%s/zed-stream\n", host, port);
+    g_print(" * Note: First connection may take a few seconds while the camera initializes.\n");
     g_print("-----------------\n");
     g_main_loop_run(loop);
-    
-    /* Cleanup */
-    if (media) {
-        gst_rtsp_media_unprepare(media);
-        g_object_unref(media);
-    }
 
     return 0;
 }

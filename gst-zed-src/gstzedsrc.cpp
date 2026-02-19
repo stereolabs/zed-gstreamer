@@ -417,7 +417,7 @@ typedef enum {
 #define DEFAULT_PROP_OPENCV_CALIB_FILE ""
 #define DEFAULT_PROP_STREAM_IP ""
 #define DEFAULT_PROP_STREAM_PORT 30000
-#define DEFAULT_PROP_STREAM_TYPE 0
+#define DEFAULT_PROP_STREAM_TYPE -1  /* GST_ZEDSRC_STREAM_AUTO */
 #define DEFAULT_PROP_DEPTH_MIN 300.f
 #define DEFAULT_PROP_DEPTH_MAX 20000.f
 #define DEFAULT_PROP_DEPTH_MODE static_cast<gint>(sl::DEPTH_MODE::NONE)
@@ -2823,41 +2823,44 @@ void gst_zedsrc_finalize(GObject *object) {
     G_OBJECT_CLASS(gst_zedsrc_parent_class)->finalize(object);
 }
 
-/* Helper function to check if downstream accepts NV12 NVMM caps */
-static gboolean gst_zedsrc_downstream_accepts_nv12_nvmm(GstZedSrc *src) {
+/* Helper function to check if downstream explicitly rejects NV12 NVMM caps.
+ * Returns TRUE if downstream is known to NOT accept NVMM (e.g. videoconvert).
+ * Returns FALSE if downstream accepts NVMM, or if we can't determine (e.g. inside RTSP bins,
+ * ghost pads, or if the peer caps query is inconclusive). */
+static gboolean gst_zedsrc_downstream_rejects_nvmm(GstZedSrc *src) {
     GstPad *srcpad = GST_BASE_SRC_PAD(src);
     GstCaps *peer_caps = gst_pad_peer_query_caps(srcpad, NULL);
-    gboolean accepts_nv12_nvmm = FALSE;
 
-    if (peer_caps) {
-        GST_DEBUG_OBJECT(src, "Peer caps for auto-negotiation: %" GST_PTR_FORMAT, peer_caps);
-
-        // Check if any structure has memory:NVMM feature and NV12 format
-        for (guint i = 0; i < gst_caps_get_size(peer_caps); i++) {
-            GstCapsFeatures *features = gst_caps_get_features(peer_caps, i);
-            GstStructure *structure = gst_caps_get_structure(peer_caps, i);
-
-            if (features && gst_caps_features_contains(features, "memory:NVMM")) {
-                const gchar *format = gst_structure_get_string(structure, "format");
-                if (format && g_strcmp0(format, "NV12") == 0) {
-                    accepts_nv12_nvmm = TRUE;
-                    GST_INFO_OBJECT(src, "Downstream accepts NV12 in NVMM memory");
-                    break;
-                }
-                // Also check if format is not specified (accepts any)
-                if (!format) {
-                    accepts_nv12_nvmm = TRUE;
-                    GST_INFO_OBJECT(src, "Downstream accepts NVMM memory (format unspecified)");
-                    break;
-                }
-            }
-        }
-        gst_caps_unref(peer_caps);
-    } else {
-        GST_DEBUG_OBJECT(src, "No peer caps available for auto-negotiation");
+    if (!peer_caps) {
+        GST_DEBUG_OBJECT(src, "No peer caps available - cannot determine, assuming NVMM is OK");
+        return FALSE;
     }
 
-    return accepts_nv12_nvmm;
+    GST_DEBUG_OBJECT(src, "Peer caps for auto-negotiation: %" GST_PTR_FORMAT, peer_caps);
+
+    // ANY or EMPTY caps: inconclusive, don't reject
+    if (gst_caps_is_any(peer_caps) || gst_caps_is_empty(peer_caps)) {
+        GST_INFO_OBJECT(src, "Peer caps are %s, assuming NVMM is OK",
+                        gst_caps_is_any(peer_caps) ? "ANY" : "EMPTY");
+        gst_caps_unref(peer_caps);
+        return FALSE;
+    }
+
+    // Check if ANY structure in the peer caps has the memory:NVMM feature
+    for (guint i = 0; i < gst_caps_get_size(peer_caps); i++) {
+        GstCapsFeatures *features = gst_caps_get_features(peer_caps, i);
+        if (features && (gst_caps_features_is_any(features) ||
+                         gst_caps_features_contains(features, "memory:NVMM"))) {
+            GST_INFO_OBJECT(src, "Downstream accepts NVMM memory");
+            gst_caps_unref(peer_caps);
+            return FALSE;
+        }
+    }
+
+    // Peer caps are specific and don't include NVMM - downstream rejects it
+    GST_INFO_OBJECT(src, "Downstream does not accept NVMM memory");
+    gst_caps_unref(peer_caps);
+    return TRUE;
 }
 
 /* Resolve stream-type=AUTO to actual stream type based on downstream caps and SDK capability */
@@ -2873,9 +2876,9 @@ static void gst_zedsrc_resolve_stream_type(GstZedSrc *src) {
     GST_INFO_OBJECT(src, "stream-type=AUTO, checking downstream capabilities...");
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    // Check if downstream accepts NV12 NVMM
-    if (gst_zedsrc_downstream_accepts_nv12_nvmm(src)) {
-        // Check if camera is GMSL stereo (ZED X) - NV12 zero-copy only works with GMSL cameras
+    // Check if downstream accepts NV12 NVMM (or is inconclusive, e.g. RTSP bins)
+    if (!gst_zedsrc_downstream_rejects_nvmm(src)) {
+        // Check if camera is GMSL - NV12 zero-copy only works with GMSL cameras
         // Note: ZED X One (mono) cameras use zedxonesrc plugin, not zedsrc
         sl::MODEL model = src->zed.getCameraInformation().camera_model;
         if (model == sl::MODEL::ZED_X || model == sl::MODEL::ZED_XM) {
@@ -2890,7 +2893,7 @@ static void gst_zedsrc_resolve_stream_type(GstZedSrc *src) {
                             sl::toString(model).c_str());
         }
     } else {
-        GST_INFO_OBJECT(src, "Downstream does not accept NV12 NVMM, falling back to BGRA");
+        GST_INFO_OBJECT(src, "Downstream rejects NVMM, falling back to BGRA");
     }
 #else
     GST_INFO_OBJECT(src, "NV12 zero-copy not available (SDK < 5.2), using BGRA");
