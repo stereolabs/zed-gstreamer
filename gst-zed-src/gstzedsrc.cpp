@@ -26,6 +26,7 @@
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
 #include <gst/allocators/gstdmabuf.h>
 #include <nvbufsurface.h>
+#include <nvbufsurftransform.h>
 #endif
 
 #include "gst-zed-meta/gstzedmeta.h"
@@ -4038,7 +4039,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         return GST_FLOW_ERROR;
     }
 
-    // Get NvBufSurface
+    // Get NvBufSurface for left eye
     NvBufSurface *nvbuf = static_cast<NvBufSurface *>(raw_buffer->getRawBuffer());
     if (!nvbuf) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("RawBuffer returned null NvBufSurface"), (NULL));
@@ -4051,30 +4052,136 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         GST_WARNING_OBJECT(src, "NvBufSurface has no filled surfaces");
         delete raw_buffer;
         cuCtxPopCurrent_v2(NULL);
-        // We cannot return NO_BUFFER here easily without implementing a retry loop.
-        // For debugging purposes, let's fail softly.
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("NvBufSurface empty"), (NULL));
         return GST_FLOW_ERROR;
     }
 
     // Log buffer info
     NvBufSurfaceParams *params = &nvbuf->surfaceList[0];
-    GST_DEBUG_OBJECT(src, "NvBufSurface: %p, FD: %ld, size: %d, memType: %d, format: %d", nvbuf,
+    GST_DEBUG_OBJECT(src, "NvBufSurface L: %p, FD: %ld, size: %d, memType: %d, format: %d", nvbuf,
                      params->bufferDesc, params->dataSize, nvbuf->memType, params->colorFormat);
 
-    // Create GstBuffer wrapping the NvBufSurface pointer directly
-    // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
-    // DeepStream and other NVIDIA elements expect this format
-    GstBuffer *buf = gst_buffer_new_wrapped_full(
-        (GstMemoryFlags) 0,         // NVIDIA elements require writable memory even for reading   //
-                                    // NVIDIA elements require writable memory even for reading
-        nvbuf,                      // Data pointer is the NvBufSurface*
-        sizeof(NvBufSurface),       // Max size
-        0,                          // Offset
-        sizeof(NvBufSurface),       // Size
-        raw_buffer,                 // User data for destroy callback
-        raw_buffer_destroy_notify   // Called when buffer is unreffed
-    );
+    GstBuffer *buf = NULL;
+
+    if (stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        // ----> Stereo side-by-side: composite L + R into a double-width surface
+        NvBufSurface *nvbuf_right =
+            static_cast<NvBufSurface *>(raw_buffer->getRawBufferRight());
+        if (!nvbuf_right || nvbuf_right->numFilled == 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("RawBuffer returned null or empty right NvBufSurface for stereo"),
+                              (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+
+        NvBufSurfaceParams *params_l = &nvbuf->surfaceList[0];
+        NvBufSurfaceParams *params_r = &nvbuf_right->surfaceList[0];
+        uint32_t single_w = params_l->width;
+        uint32_t single_h = params_l->height;
+        uint32_t stereo_w = single_w * 2;
+
+        GST_DEBUG_OBJECT(src,
+                         "Stereo composite: L=%ux%u R=%ux%u -> SbS=%ux%u",
+                         params_l->width, params_l->height,
+                         params_r->width, params_r->height,
+                         stereo_w, single_h);
+
+        // Allocate destination NvBufSurface (double-width, same height, NV12)
+        NvBufSurfaceCreateParams create_params = {0};
+        create_params.gpuId = 0;
+        create_params.width = stereo_w;
+        create_params.height = single_h;
+        create_params.size = 0;
+        create_params.isContiguous = true;
+        create_params.colorFormat = params_l->colorFormat;   // NV12
+        create_params.layout = NVBUF_LAYOUT_PITCH;
+        create_params.memType = NVBUF_MEM_DEFAULT;
+
+        NvBufSurface *dst_surf = NULL;
+        if (NvBufSurfaceCreate(&dst_surf, 1, &create_params) != 0 || !dst_surf) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to allocate stereo composite NvBufSurface %ux%u",
+                               stereo_w, single_h),
+                              (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+
+        // Transform left eye into the left half of dst
+        NvBufSurfTransformRect src_rect_l = {0, 0, single_w, single_h};
+        NvBufSurfTransformRect dst_rect_l = {0, 0, single_w, single_h};
+        NvBufSurfTransformParams xform_l = {0};
+        xform_l.transform_flag = NVBUFSURF_TRANSFORM_CROP_SRC | NVBUFSURF_TRANSFORM_CROP_DST;
+        xform_l.src_rect = &src_rect_l;
+        xform_l.dst_rect = &dst_rect_l;
+
+        NvBufSurfTransform_Error terr = NvBufSurfTransform(nvbuf, dst_surf, &xform_l);
+        if (terr != NvBufSurfTransformError_Success) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("NvBufSurfTransform (left) failed: %d", terr), (NULL));
+            NvBufSurfaceDestroy(dst_surf);
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+
+        // Transform right eye into the right half of dst
+        NvBufSurfTransformRect src_rect_r = {0, 0, single_w, single_h};
+        NvBufSurfTransformRect dst_rect_r = {0, single_w, single_w, single_h};
+        NvBufSurfTransformParams xform_r = {0};
+        xform_r.transform_flag = NVBUFSURF_TRANSFORM_CROP_SRC | NVBUFSURF_TRANSFORM_CROP_DST;
+        xform_r.src_rect = &src_rect_r;
+        xform_r.dst_rect = &dst_rect_r;
+
+        terr = NvBufSurfTransform(nvbuf_right, dst_surf, &xform_r);
+        if (terr != NvBufSurfTransformError_Success) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("NvBufSurfTransform (right) failed: %d", terr), (NULL));
+            NvBufSurfaceDestroy(dst_surf);
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+
+        // We no longer need the source raw_buffer; the pixels are in dst_surf
+        delete raw_buffer;
+        raw_buffer = NULL;
+
+        // Wrap the composited dst_surf into GstBuffer
+        // Use a custom destroy callback to free the allocated surface
+        buf = gst_buffer_new_wrapped_full(
+            (GstMemoryFlags) 0,
+            dst_surf,                        // Data pointer is the NvBufSurface*
+            sizeof(NvBufSurface),            // Max size
+            0,                               // Offset
+            sizeof(NvBufSurface),            // Size
+            dst_surf,                        // User data for destroy callback
+            [](gpointer data) {
+                NvBufSurface *surf = static_cast<NvBufSurface *>(data);
+                if (surf) {
+                    GST_DEBUG("Destroying stereo composite NvBufSurface");
+                    NvBufSurfaceDestroy(surf);
+                }
+            });
+        // <---- Stereo side-by-side
+    } else {
+        // ----> Mono NV12 zero-copy: wrap the left NvBufSurface directly
+        // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
+        // DeepStream and other NVIDIA elements expect this format
+        buf = gst_buffer_new_wrapped_full(
+            (GstMemoryFlags) 0,
+            nvbuf,                      // Data pointer is the NvBufSurface*
+            sizeof(NvBufSurface),       // Max size
+            0,                          // Offset
+            sizeof(NvBufSurface),       // Size
+            raw_buffer,                 // User data for destroy callback
+            raw_buffer_destroy_notify   // Called when buffer is unreffed
+        );
+        // <---- Mono NV12 zero-copy
+    }
 
     // Attach Unified Metadata
     gst_zedsrc_attach_metadata(src, buf, clock_time);

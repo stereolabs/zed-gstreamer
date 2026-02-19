@@ -463,11 +463,15 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   stream-type         : Image stream type
                         flags: readable, writable
                         Enum "GstZedSrcCoordSys" Default: 0, "Left image [BGRA]"
+                           (-1): Auto [prefer NV12 zero-copy] - Auto-negotiate format based on downstream
                            (0): Left image [BGRA] - 8 bits- 4 channels Left image
                            (1): Right image [BGRA] - 8 bits- 4 channels Right image
                            (2): Stereo couple up/down [BGRA] - 8 bits- 4 channels bit Left and Right
                            (3): Depth image [GRAY16_LE] - 16 bits depth
                            (4): Left and Depth up/down [BGRA] - 8 bits- 4 channels Left and Depth(image)
+                           (5): Stereo couple left/right [BGRA] - 8 bits- 4 channels Left and Right side-by-side
+                           (6): Raw NV12 zero-copy [NV12] - Zero-copy NV12 raw buffer (GMSL cameras only, SDK 5.2+)
+                           (7): Raw NV12 stereo zero-copy [NV12] - Zero-copy NV12 stereo left + right side-by-side (GMSL only, SDK 5.2+)
   svo-file-path       : Input from SVO file
                         flags: readable, writable
                         String. Default: ""

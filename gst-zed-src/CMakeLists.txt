@@ -95,6 +95,12 @@ if(L4T_FOUND)
     if(NVBUFSURFACE_LIB)
         list(APPEND ZEROCOPY_LIBS ${NVBUFSURFACE_LIB})
     endif()
+    # NvBufSurfTransform for stereo side-by-side compositing
+    find_library(NVBUFSURFTRANSFORM_LIB nvbufsurftransform
+        PATHS /usr/lib/aarch64-linux-gnu/tegra /usr/lib/aarch64-linux-gnu/nvidia)
+    if(NVBUFSURFTRANSFORM_LIB)
+        list(APPEND ZEROCOPY_LIBS ${NVBUFSURFTRANSFORM_LIB})
+    endif()
 endif()
 
 add_dependencies (${libname} gstzedmeta)
