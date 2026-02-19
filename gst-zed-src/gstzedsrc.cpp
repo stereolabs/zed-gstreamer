@@ -26,6 +26,9 @@
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
 #include <gst/allocators/gstdmabuf.h>
 #include <nvbufsurface.h>
+#ifdef HAVE_NVBUFSURFTRANSFORM
+#include <nvbufsurftransform.h>
+#endif
 #endif
 
 #include "gst-zed-meta/gstzedmeta.h"
@@ -45,7 +48,6 @@ GST_DEBUG_CATEGORY_STATIC(gst_zedsrc_controls_debug);
 
 // Magic number constants
 #define GST_ZEDSRC_MAX_OBJECTS 256
-
 /* prototypes */
 static void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value,
                                     GParamSpec *pspec);
@@ -65,7 +67,132 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *src, GstBuffer *buf);
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
 static GstFlowReturn gst_zedsrc_create(GstPushSrc *src, GstBuffer **buf);
-#endif
+
+#ifdef HAVE_NVBUFSURFTRANSFORM
+typedef struct {
+    GstZedSrc *src;
+    NvBufSurface *surf;
+    gint pool_index;
+} StereoSbsWrappedCtx;
+
+static void gst_zedsrc_stereo_sbs_release_slot(GstZedSrc *src, gint pool_index) {
+    if (pool_index >= 0 && pool_index < GST_ZEDSRC_STEREO_SBS_POOL_SIZE) {
+        g_atomic_int_set(&src->stereo_sbs_pool_in_use[pool_index], 0);
+    }
+}
+
+static gboolean gst_zedsrc_stereo_sbs_pool_any_in_use(GstZedSrc *src) {
+    for (gint i = 0; i < GST_ZEDSRC_STEREO_SBS_POOL_SIZE; ++i) {
+        if (g_atomic_int_get(&src->stereo_sbs_pool_in_use[i]) != 0) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static void gst_zedsrc_stereo_sbs_pool_cleanup(GstZedSrc *src, gboolean force) {
+    for (gint i = 0; i < GST_ZEDSRC_STEREO_SBS_POOL_SIZE; ++i) {
+        if (!force && g_atomic_int_get(&src->stereo_sbs_pool_in_use[i]) != 0) {
+            continue;
+        }
+
+        NvBufSurface *surf = static_cast<NvBufSurface *>(src->stereo_sbs_pool[i]);
+        if (surf) {
+            NvBufSurfaceDestroy(surf);
+            src->stereo_sbs_pool[i] = NULL;
+        }
+
+        if (force) {
+            g_atomic_int_set(&src->stereo_sbs_pool_in_use[i], 0);
+        }
+    }
+
+    if (force || !gst_zedsrc_stereo_sbs_pool_any_in_use(src)) {
+        src->stereo_sbs_pool_width = 0;
+        src->stereo_sbs_pool_height = 0;
+        src->stereo_sbs_pool_gpu_id = -1;
+        src->stereo_sbs_pool_mem_type = -1;
+        src->stereo_sbs_pool_layout = -1;
+        src->stereo_sbs_pool_color_format = -1;
+    }
+}
+
+static NvBufSurface *gst_zedsrc_stereo_sbs_pool_acquire(GstZedSrc *src, guint32 width,
+                                                        guint32 height, gint gpu_id, gint mem_type,
+                                                        gint layout, gint color_format,
+                                                        gint *pool_index) {
+    *pool_index = -1;
+
+    gboolean configured = (src->stereo_sbs_pool_width != 0 && src->stereo_sbs_pool_height != 0);
+    gboolean matches =
+        configured && src->stereo_sbs_pool_width == width &&
+        src->stereo_sbs_pool_height == height && src->stereo_sbs_pool_gpu_id == gpu_id &&
+        src->stereo_sbs_pool_mem_type == mem_type && src->stereo_sbs_pool_layout == layout &&
+        src->stereo_sbs_pool_color_format == color_format;
+
+    if (!matches) {
+        gst_zedsrc_stereo_sbs_pool_cleanup(src, FALSE);
+        if (gst_zedsrc_stereo_sbs_pool_any_in_use(src)) {
+            return NULL;
+        }
+
+        src->stereo_sbs_pool_width = width;
+        src->stereo_sbs_pool_height = height;
+        src->stereo_sbs_pool_gpu_id = gpu_id;
+        src->stereo_sbs_pool_mem_type = mem_type;
+        src->stereo_sbs_pool_layout = layout;
+        src->stereo_sbs_pool_color_format = color_format;
+    }
+
+    for (gint i = 0; i < GST_ZEDSRC_STEREO_SBS_POOL_SIZE; ++i) {
+        if (!g_atomic_int_compare_and_exchange(&src->stereo_sbs_pool_in_use[i], 0, 1)) {
+            continue;
+        }
+
+        NvBufSurface *surf = static_cast<NvBufSurface *>(src->stereo_sbs_pool[i]);
+        if (!surf) {
+            NvBufSurfaceCreateParams create_params = {0};
+            create_params.gpuId = gpu_id;
+            create_params.width = width;
+            create_params.height = height;
+            create_params.size = 0;
+            create_params.isContiguous = true;
+            create_params.colorFormat = static_cast<NvBufSurfaceColorFormat>(color_format);
+            create_params.layout = static_cast<NvBufSurfaceLayout>(layout);
+            create_params.memType = static_cast<NvBufSurfaceMemType>(mem_type);
+
+            if (NvBufSurfaceCreate(&surf, 1, &create_params) != 0 || !surf) {
+                g_atomic_int_set(&src->stereo_sbs_pool_in_use[i], 0);
+                continue;
+            }
+
+            src->stereo_sbs_pool[i] = surf;
+        }
+
+        *pool_index = i;
+        return surf;
+    }
+
+    return NULL;
+}
+
+static void stereo_sbs_wrapped_buffer_destroy_notify(gpointer data) {
+    StereoSbsWrappedCtx *ctx = static_cast<StereoSbsWrappedCtx *>(data);
+    if (!ctx) {
+        return;
+    }
+
+    if (ctx->pool_index >= 0) {
+        gst_zedsrc_stereo_sbs_release_slot(ctx->src, ctx->pool_index);
+    } else if (ctx->surf) {
+        NvBufSurfaceDestroy(ctx->surf);
+    }
+
+    gst_object_unref(ctx->src);
+    g_free(ctx);
+}
+#endif  // HAVE_NVBUFSURFTRANSFORM
+#endif  // SL_ENABLE_ADVANCED_CAPTURE_API
 
 static gboolean gst_zedsrc_query(GstBaseSrc *src, GstQuery *query);
 
@@ -220,8 +347,9 @@ typedef enum {
     GST_ZEDSRC_LEFT_DEPTH = 4,
     GST_ZEDSRC_LEFT_RIGHT_SBS = 5,   // Side-by-side stereo (BGRA) for VR/stereo displays
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    GST_ZEDSRC_RAW_NV12 = 6,         // Zero-copy NV12 raw buffer (GMSL cameras only)
-    GST_ZEDSRC_RAW_NV12_STEREO = 7   // Zero-copy NV12 stereo (left + right)
+    GST_ZEDSRC_RAW_NV12 = 6,          // Zero-copy NV12 raw buffer (GMSL cameras only)
+    GST_ZEDSRC_RAW_NV12_STEREO = 7,   // Zero-copy NV12 stereo (left + right)
+    GST_ZEDSRC_RAW_NV12_RIGHT = 8     // Zero-copy NV12 right eye only (GMSL cameras only)
 #endif
 } GstZedSrcStreamType;
 
@@ -557,11 +685,13 @@ static GType gst_zedsrc_stream_type_get_type(void) {
              "Raw NV12 zero-copy [NV12]"},
             {GST_ZEDSRC_RAW_NV12_STEREO, "Zero-copy NV12 stereo (left + right side by side)",
              "Raw NV12 stereo zero-copy [NV12]"},
+            {GST_ZEDSRC_RAW_NV12_RIGHT, "Zero-copy NV12 right eye only (GMSL cameras only)",
+             "Raw NV12 right zero-copy [NV12]"},
 #endif
             {0, NULL, NULL},
         };
 
-        zedsrc_stream_type_type = g_enum_register_static("GstZedSrcCoordSys", pattern_types);
+        zedsrc_stream_type_type = g_enum_register_static("GstZedSrcStreamType", pattern_types);
     }
 
     return zedsrc_stream_type_type;
@@ -593,7 +723,7 @@ static GType gst_zedsrc_coord_sys_get_type(void) {
             {0, NULL, NULL},
         };
 
-        zedsrc_coord_sys_type = g_enum_register_static("GstZedsrcStreamType", pattern_types);
+        zedsrc_coord_sys_type = g_enum_register_static("GstZedsrcCoordSys", pattern_types);
     }
 
     return zedsrc_coord_sys_type;
@@ -914,13 +1044,27 @@ static GstStaticPadTemplate gst_zedsrc_src_template = GST_STATIC_PAD_TEMPLATE(
                      "width = (int)960, "
                      "height = (int)600, "
                      "framerate = (fraction) { 15, 30, 60, 120 }"
+#ifdef HAVE_NVBUFSURFTRANSFORM
                      ";"
                      "video/x-raw(memory:NVMM), "   // NV12 stereo HD1200 (side-by-side)
                      "format = (string)NV12, "
                      "width = (int)3840, "
                      "height = (int)1200, "
                      "framerate = (fraction) { 15, 30, 60 }"
-#endif
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 stereo HD1080 (side-by-side)
+                     "format = (string)NV12, "
+                     "width = (int)3840, "
+                     "height = (int)1080, "
+                     "framerate = (fraction) { 15, 30, 60 }"
+                     ";"
+                     "video/x-raw(memory:NVMM), "   // NV12 stereo SVGA (side-by-side)
+                     "format = (string)NV12, "
+                     "width = (int)1920, "
+                     "height = (int)600, "
+                     "framerate = (fraction) { 15, 30, 60, 120 }"
+#endif  // HAVE_NVBUFSURFTRANSFORM
+#endif  // SL_ENABLE_ADVANCED_CAPTURE_API
                      )));
 
 /* class initialization */
@@ -1700,6 +1844,10 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 }
 
 static void gst_zedsrc_reset(GstZedSrc *src) {
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
+    gst_zedsrc_stereo_sbs_pool_cleanup(src, FALSE);
+#endif
+
     if (src->zed.isOpened()) {
         src->zed.close();
     }
@@ -1850,6 +1998,19 @@ static void gst_zedsrc_init(GstZedSrc *src) {
 
     src->stop_requested = FALSE;
     src->caps = NULL;
+
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
+    for (gint i = 0; i < GST_ZEDSRC_STEREO_SBS_POOL_SIZE; ++i) {
+        src->stereo_sbs_pool[i] = NULL;
+        g_atomic_int_set(&src->stereo_sbs_pool_in_use[i], 0);
+    }
+    src->stereo_sbs_pool_width = 0;
+    src->stereo_sbs_pool_height = 0;
+    src->stereo_sbs_pool_gpu_id = -1;
+    src->stereo_sbs_pool_mem_type = -1;
+    src->stereo_sbs_pool_layout = -1;
+    src->stereo_sbs_pool_color_format = -1;
+#endif
 
     gst_zedsrc_reset(src);
 }
@@ -2625,6 +2786,10 @@ void gst_zedsrc_finalize(GObject *object) {
     GST_TRACE_OBJECT(src, "gst_zedsrc_finalize");
 
     /* clean up object here */
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
+    gst_zedsrc_stereo_sbs_pool_cleanup(src, TRUE);
+#endif
+
     if (src->caps) {
         gst_caps_unref(src->caps);
         src->caps = NULL;
@@ -2752,7 +2917,8 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
         format = GST_VIDEO_FORMAT_GRAY16_LE;
     }
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    else if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+    else if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO ||
+             stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
         format = GST_VIDEO_FORMAT_NV12;
     }
 #endif
@@ -2767,7 +2933,7 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
     } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
         width *= 2;   // Side-by-side stereo (BGRA)
     }
-#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
     else if (stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
         width *= 2;   // Side-by-side stereo (NV12)
     }
@@ -2788,7 +2954,8 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
         // Add memory:NVMM feature for zero-copy NV12 modes
-        if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+        if (stream_type == GST_ZEDSRC_RAW_NV12 || stream_type == GST_ZEDSRC_RAW_NV12_STEREO ||
+            stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
             GstCapsFeatures *features = gst_caps_features_new("memory:NVMM", NULL);
             gst_caps_set_features(src->caps, 0, features);
             GST_INFO_OBJECT(src, "Added memory:NVMM feature for zero-copy");
@@ -3853,9 +4020,9 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     mapped = TRUE;
 
     // ----> Mats retrieving
-    // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_STEREO) are handled
-    // by gst_zedsrc_create() which wraps NvBufSurface directly without memcpy.
-    // This fill() function only handles non-NVMM stream types.
+    // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_RIGHT,
+    // GST_ZEDSRC_RAW_NV12_STEREO) are handled by gst_zedsrc_create() which wraps NvBufSurface
+    // directly without memcpy. This fill() function only handles non-NVMM stream types.
     if (stream_type == GST_ZEDSRC_ONLY_LEFT) {
         CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
     } else if (stream_type == GST_ZEDSRC_ONLY_RIGHT) {
@@ -3947,7 +4114,8 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     // Use resolved_stream_type which accounts for AUTO negotiation
     gint stream_type = src->resolved_stream_type;
 
-    if (stream_type != GST_ZEDSRC_RAW_NV12 && stream_type != GST_ZEDSRC_RAW_NV12_STEREO) {
+    if (stream_type != GST_ZEDSRC_RAW_NV12 && stream_type != GST_ZEDSRC_RAW_NV12_STEREO &&
+        stream_type != GST_ZEDSRC_RAW_NV12_RIGHT) {
         GstBuffer *buf;
         GstFlowReturn ret;
         GstBaseSrc *basesrc = GST_BASE_SRC(psrc);
@@ -4038,7 +4206,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         return GST_FLOW_ERROR;
     }
 
-    // Get NvBufSurface
+    // Get NvBufSurface for left eye
     NvBufSurface *nvbuf = static_cast<NvBufSurface *>(raw_buffer->getRawBuffer());
     if (!nvbuf) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("RawBuffer returned null NvBufSurface"), (NULL));
@@ -4051,30 +4219,225 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         GST_WARNING_OBJECT(src, "NvBufSurface has no filled surfaces");
         delete raw_buffer;
         cuCtxPopCurrent_v2(NULL);
-        // We cannot return NO_BUFFER here easily without implementing a retry loop.
-        // For debugging purposes, let's fail softly.
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("NvBufSurface empty"), (NULL));
         return GST_FLOW_ERROR;
     }
 
     // Log buffer info
     NvBufSurfaceParams *params = &nvbuf->surfaceList[0];
-    GST_DEBUG_OBJECT(src, "NvBufSurface: %p, FD: %ld, size: %d, memType: %d, format: %d", nvbuf,
+    GST_DEBUG_OBJECT(src, "NvBufSurface L: %p, FD: %ld, size: %d, memType: %d, format: %d", nvbuf,
                      params->bufferDesc, params->dataSize, nvbuf->memType, params->colorFormat);
 
-    // Create GstBuffer wrapping the NvBufSurface pointer directly
-    // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
-    // DeepStream and other NVIDIA elements expect this format
-    GstBuffer *buf = gst_buffer_new_wrapped_full(
-        (GstMemoryFlags) 0,         // NVIDIA elements require writable memory even for reading   //
-                                    // NVIDIA elements require writable memory even for reading
-        nvbuf,                      // Data pointer is the NvBufSurface*
-        sizeof(NvBufSurface),       // Max size
-        0,                          // Offset
-        sizeof(NvBufSurface),       // Size
-        raw_buffer,                 // User data for destroy callback
-        raw_buffer_destroy_notify   // Called when buffer is unreffed
-    );
+    GstBuffer *buf = NULL;
+
+    if (stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+#ifndef HAVE_NVBUFSURFTRANSFORM
+        GST_ELEMENT_ERROR(src, STREAM, NOT_IMPLEMENTED,
+                          ("stream-type=7 (NV12 stereo SbS) requires nvbufsurftransform which was "
+                           "not available at build time. Rebuild with the Jetson Multimedia API "
+                           "packages installed."),
+                          (NULL));
+        delete raw_buffer;
+        cuCtxPopCurrent_v2(NULL);
+        return GST_FLOW_ERROR;
+#else
+        // ----> Stereo side-by-side: composite L + R into a double-width surface
+        NvBufSurface *nvbuf_right = static_cast<NvBufSurface *>(raw_buffer->getRawBufferRight());
+        if (!nvbuf_right || nvbuf_right->numFilled == 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("RawBuffer returned null or empty right NvBufSurface for stereo"),
+                              (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+
+        NvBufSurfaceParams *params_l = &nvbuf->surfaceList[0];
+        NvBufSurfaceParams *params_r = &nvbuf_right->surfaceList[0];
+        if (params_l->width != params_r->width || params_l->height != params_r->height ||
+            params_l->colorFormat != params_r->colorFormat) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Stereo RawBuffer surfaces mismatch: L=%ux%u fmt=%d, R=%ux%u fmt=%d",
+                               params_l->width, params_l->height, params_l->colorFormat,
+                               params_r->width, params_r->height, params_r->colorFormat),
+                              (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+
+        uint32_t single_w = params_l->width;
+        uint32_t single_h = params_l->height;
+        uint32_t stereo_w = single_w * 2;
+
+        GST_DEBUG_OBJECT(src, "Stereo composite: L=%ux%u R=%ux%u -> SbS=%ux%u", params_l->width,
+                         params_l->height, params_r->width, params_r->height, stereo_w, single_h);
+
+        // Acquire reusable destination surface from pool (fallback to one-off if pool busy)
+        gint pool_index = -1;
+        NvBufSurface *dst_surf = gst_zedsrc_stereo_sbs_pool_acquire(
+            src, stereo_w, single_h, nvbuf->gpuId, nvbuf->memType, params_l->layout,
+            params_l->colorFormat, &pool_index);
+        gboolean from_pool = (pool_index >= 0 && dst_surf != NULL);
+
+        if (!dst_surf) {
+            NvBufSurfaceCreateParams create_params = {0};
+            create_params.gpuId = nvbuf->gpuId;
+            create_params.width = stereo_w;
+            create_params.height = single_h;
+            create_params.size = 0;
+            create_params.isContiguous = true;
+            create_params.colorFormat = params_l->colorFormat;
+            create_params.layout = params_l->layout;
+            create_params.memType = nvbuf->memType;
+
+            if (NvBufSurfaceCreate(&dst_surf, 1, &create_params) != 0 || !dst_surf) {
+                GST_ELEMENT_ERROR(
+                    src, RESOURCE, FAILED,
+                    ("Failed to allocate stereo composite NvBufSurface %ux%u", stereo_w, single_h),
+                    (NULL));
+                delete raw_buffer;
+                cuCtxPopCurrent_v2(NULL);
+                return GST_FLOW_ERROR;
+            }
+        }
+
+        // Composite left+right into destination in one call
+        NvBufSurfTransformCompositeParams comp_params;
+        memset(&comp_params, 0, sizeof(comp_params));
+        comp_params.composite_flag = NVBUFSURF_TRANSFORM_COMPOSITE;
+        comp_params.input_buf_count = 2;
+
+        NvBufSurfTransformRect src_rect[2];
+        NvBufSurfTransformRect dst_rect[2];
+
+        src_rect[0].left = 0;
+        src_rect[0].top = 0;
+        src_rect[0].width = single_w;
+        src_rect[0].height = single_h;
+
+        src_rect[1].left = 0;
+        src_rect[1].top = 0;
+        src_rect[1].width = single_w;
+        src_rect[1].height = single_h;
+
+        // Side-by-side destination placement
+        dst_rect[0].left = 0;
+        dst_rect[0].top = 0;
+        dst_rect[0].width = single_w;
+        dst_rect[0].height = single_h;
+
+        dst_rect[1].left = single_w;
+        dst_rect[1].top = 0;
+        dst_rect[1].width = single_w;
+        dst_rect[1].height = single_h;
+
+        comp_params.src_comp_rect = src_rect;
+        comp_params.dst_comp_rect = dst_rect;
+
+        NvBufSurface batch;
+        memset(&batch, 0, sizeof(batch));
+        NvBufSurfaceParams batch_surfaces[2] = {};
+        batch.surfaceList = batch_surfaces;
+        batch.surfaceList[0] = params_l[0];
+        batch.surfaceList[1] = params_r[0];
+        batch.batchSize = 2;
+        batch.numFilled = 2;
+        batch.gpuId = nvbuf->gpuId;
+        batch.memType = nvbuf->memType;
+
+        int comp_ret = NvBufSurfTransformComposite(&batch, dst_surf, &comp_params);
+        if (comp_ret != 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("NvBufSurfTransformComposite failed: %d", comp_ret), (NULL));
+            if (from_pool) {
+                gst_zedsrc_stereo_sbs_release_slot(src, pool_index);
+            } else {
+                NvBufSurfaceDestroy(dst_surf);
+            }
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+
+        // We no longer need the source raw_buffer; the pixels are in dst_surf
+        delete raw_buffer;
+        raw_buffer = NULL;
+
+        StereoSbsWrappedCtx *stereo_ctx = g_new0(StereoSbsWrappedCtx, 1);
+        stereo_ctx->src = GST_ZED_SRC(gst_object_ref(src));
+        stereo_ctx->surf = dst_surf;
+        stereo_ctx->pool_index = from_pool ? pool_index : -1;
+
+        // Wrap the composited dst_surf into GstBuffer
+        buf = gst_buffer_new_wrapped_full((GstMemoryFlags) 0,
+                                          dst_surf,   // Data pointer is the NvBufSurface*
+                                          sizeof(NvBufSurface),   // Max size
+                                          0,                      // Offset
+                                          sizeof(NvBufSurface),   // Size
+                                          stereo_ctx,             // User data for destroy callback
+                                          stereo_sbs_wrapped_buffer_destroy_notify);
+        if (!buf) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to wrap stereo composite NvBufSurface into GstBuffer"),
+                              (NULL));
+            stereo_sbs_wrapped_buffer_destroy_notify(stereo_ctx);
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+        // <---- Stereo side-by-side
+#endif  // HAVE_NVBUFSURFTRANSFORM
+    } else if (stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
+        // ----> Right-eye NV12 zero-copy: wrap the right NvBufSurface directly
+        NvBufSurface *nvbuf_r = static_cast<NvBufSurface *>(raw_buffer->getRawBufferRight());
+        if (!nvbuf_r || nvbuf_r->numFilled == 0) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("RawBuffer returned null or empty right NvBufSurface"), (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+        GST_DEBUG_OBJECT(src, "NvBufSurface R: %p, FD: %ld, size: %d", nvbuf_r,
+                         nvbuf_r->surfaceList[0].bufferDesc, nvbuf_r->surfaceList[0].dataSize);
+        buf = gst_buffer_new_wrapped_full(
+            (GstMemoryFlags) 0,
+            nvbuf_r,                    // Data pointer is the NvBufSurface*
+            sizeof(NvBufSurface),       // Max size
+            0,                          // Offset
+            sizeof(NvBufSurface),       // Size
+            raw_buffer,                 // User data for destroy callback
+            raw_buffer_destroy_notify   // Called when buffer is unreffed
+        );
+        if (!buf) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to wrap right-eye NvBufSurface into GstBuffer"), (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+        // <---- Right-eye NV12 zero-copy
+    } else {
+        // ----> Left-eye NV12 zero-copy: wrap the left NvBufSurface directly
+        // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
+        // DeepStream and other NVIDIA elements expect this format
+        buf = gst_buffer_new_wrapped_full(
+            (GstMemoryFlags) 0,
+            nvbuf,                      // Data pointer is the NvBufSurface*
+            sizeof(NvBufSurface),       // Max size
+            0,                          // Offset
+            sizeof(NvBufSurface),       // Size
+            raw_buffer,                 // User data for destroy callback
+            raw_buffer_destroy_notify   // Called when buffer is unreffed
+        );
+        if (!buf) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to wrap left-eye NvBufSurface into GstBuffer"), (NULL));
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+        // <---- Left-eye NV12 zero-copy
+    }
 
     // Attach Unified Metadata
     gst_zedsrc_attach_metadata(src, buf, clock_time);

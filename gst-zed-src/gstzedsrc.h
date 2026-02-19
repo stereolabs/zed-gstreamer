@@ -186,6 +186,19 @@ struct _GstZedSrc {
     guint out_framesize;
 
     gboolean stop_requested;
+
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
+    // Reusable destination surfaces for NV12 stereo side-by-side composition
+#define GST_ZEDSRC_STEREO_SBS_POOL_SIZE 4
+    gpointer stereo_sbs_pool[GST_ZEDSRC_STEREO_SBS_POOL_SIZE];
+    gint stereo_sbs_pool_in_use[GST_ZEDSRC_STEREO_SBS_POOL_SIZE];
+    guint32 stereo_sbs_pool_width;
+    guint32 stereo_sbs_pool_height;
+    gint stereo_sbs_pool_gpu_id;
+    gint stereo_sbs_pool_mem_type;
+    gint stereo_sbs_pool_layout;
+    gint stereo_sbs_pool_color_format;
+#endif
 };
 
 struct _GstZedSrcClass {

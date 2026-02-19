@@ -95,6 +95,18 @@ if(L4T_FOUND)
     if(NVBUFSURFACE_LIB)
         list(APPEND ZEROCOPY_LIBS ${NVBUFSURFACE_LIB})
     endif()
+    # NvBufSurfTransform for stereo side-by-side compositing
+    find_library(NVBUFSURFTRANSFORM_LIB nvbufsurftransform
+        PATHS /usr/lib/aarch64-linux-gnu/tegra /usr/lib/aarch64-linux-gnu/nvidia /usr/lib/aarch64-linux-gnu)
+    if(NVBUFSURFTRANSFORM_LIB)
+        list(APPEND ZEROCOPY_LIBS ${NVBUFSURFTRANSFORM_LIB})
+        add_definitions(-DHAVE_NVBUFSURFTRANSFORM)
+        message(STATUS "Found nvbufsurftransform: stereo SbS compositing (stream-type=7) enabled")
+    elseif((ZED_VERSION_MAJOR GREATER 5) OR (ZED_VERSION_MAJOR EQUAL 5 AND ZED_VERSION_MINOR GREATER_EQUAL 2))
+        message(WARNING "nvbufsurftransform not found. Stereo side-by-side compositing (stream-type=7) will be disabled. "
+                        "stream-type=6/8 (mono NV12 zero-copy) still available. "
+                        "Install Jetson Multimedia API runtime/devel packages or provide library path to enable it.")
+    endif()
 endif()
 
 add_dependencies (${libname} gstzedmeta)
