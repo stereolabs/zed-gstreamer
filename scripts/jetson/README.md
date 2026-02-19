@@ -35,7 +35,7 @@ The `zedsrc` plugin supports these stream types:
 - `stream-type=5` - **Stereo BGRA SBS**: Left and right side-by-side (for VR)
 - `stream-type=6` - **Raw NV12 zero-copy**: GMSL cameras only, SDK 5.2+
 - `stream-type=7` - **Raw NV12 stereo zero-copy**: Side-by-side stereo, GMSL only
-- `stream-type=8` - **Raw NV12 right zero-copy**: Right eye only, GMSL only
+- `stream-type=8` - **Raw NV12 right zero-copy**: Right eye only, GMSL cameras only, SDK 5.2+
 
 ## Scripts
 

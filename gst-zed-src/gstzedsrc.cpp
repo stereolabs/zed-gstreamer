@@ -26,7 +26,9 @@
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
 #include <gst/allocators/gstdmabuf.h>
 #include <nvbufsurface.h>
+#ifdef HAVE_NVBUFSURFTRANSFORM
 #include <nvbufsurftransform.h>
+#endif
 #endif
 
 #include "gst-zed-meta/gstzedmeta.h"
@@ -46,10 +48,6 @@ GST_DEBUG_CATEGORY_STATIC(gst_zedsrc_controls_debug);
 
 // Magic number constants
 #define GST_ZEDSRC_MAX_OBJECTS 256
-#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-#define GST_ZEDSRC_STEREO_SBS_POOL_SIZE 4
-#endif
-
 /* prototypes */
 static void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *value,
                                     GParamSpec *pspec);
@@ -70,6 +68,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *src, GstBuffer *buf);
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
 static GstFlowReturn gst_zedsrc_create(GstPushSrc *src, GstBuffer **buf);
 
+#ifdef HAVE_NVBUFSURFTRANSFORM
 typedef struct {
     GstZedSrc *src;
     NvBufSurface *surf;
@@ -192,7 +191,8 @@ static void stereo_sbs_wrapped_buffer_destroy_notify(gpointer data) {
     gst_object_unref(ctx->src);
     g_free(ctx);
 }
-#endif
+#endif  // HAVE_NVBUFSURFTRANSFORM
+#endif  // SL_ENABLE_ADVANCED_CAPTURE_API
 
 static gboolean gst_zedsrc_query(GstBaseSrc *src, GstQuery *query);
 
@@ -1044,6 +1044,7 @@ static GstStaticPadTemplate gst_zedsrc_src_template = GST_STATIC_PAD_TEMPLATE(
                      "width = (int)960, "
                      "height = (int)600, "
                      "framerate = (fraction) { 15, 30, 60, 120 }"
+#ifdef HAVE_NVBUFSURFTRANSFORM
                      ";"
                      "video/x-raw(memory:NVMM), "   // NV12 stereo HD1200 (side-by-side)
                      "format = (string)NV12, "
@@ -1062,7 +1063,8 @@ static GstStaticPadTemplate gst_zedsrc_src_template = GST_STATIC_PAD_TEMPLATE(
                      "width = (int)1920, "
                      "height = (int)600, "
                      "framerate = (fraction) { 15, 30, 60, 120 }"
-#endif
+#endif  // HAVE_NVBUFSURFTRANSFORM
+#endif  // SL_ENABLE_ADVANCED_CAPTURE_API
                      )));
 
 /* class initialization */
@@ -1842,7 +1844,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
 }
 
 static void gst_zedsrc_reset(GstZedSrc *src) {
-#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
     gst_zedsrc_stereo_sbs_pool_cleanup(src, FALSE);
 #endif
 
@@ -1997,7 +1999,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->stop_requested = FALSE;
     src->caps = NULL;
 
-#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
     for (gint i = 0; i < GST_ZEDSRC_STEREO_SBS_POOL_SIZE; ++i) {
         src->stereo_sbs_pool[i] = NULL;
         g_atomic_int_set(&src->stereo_sbs_pool_in_use[i], 0);
@@ -2784,7 +2786,7 @@ void gst_zedsrc_finalize(GObject *object) {
     GST_TRACE_OBJECT(src, "gst_zedsrc_finalize");
 
     /* clean up object here */
-#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
     gst_zedsrc_stereo_sbs_pool_cleanup(src, TRUE);
 #endif
 
@@ -2931,7 +2933,7 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
     } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
         width *= 2;   // Side-by-side stereo (BGRA)
     }
-#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
     else if (stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
         width *= 2;   // Side-by-side stereo (NV12)
     }
@@ -4229,6 +4231,16 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     GstBuffer *buf = NULL;
 
     if (stream_type == GST_ZEDSRC_RAW_NV12_STEREO) {
+#ifndef HAVE_NVBUFSURFTRANSFORM
+        GST_ELEMENT_ERROR(src, STREAM, NOT_IMPLEMENTED,
+                          ("stream-type=7 (NV12 stereo SbS) requires nvbufsurftransform which was "
+                           "not available at build time. Rebuild with the Jetson Multimedia API "
+                           "packages installed."),
+                          (NULL));
+        delete raw_buffer;
+        cuCtxPopCurrent_v2(NULL);
+        return GST_FLOW_ERROR;
+#else
         // ----> Stereo side-by-side: composite L + R into a double-width surface
         NvBufSurface *nvbuf_right = static_cast<NvBufSurface *>(raw_buffer->getRawBufferRight());
         if (!nvbuf_right || nvbuf_right->numFilled == 0) {
@@ -4374,6 +4386,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
             return GST_FLOW_ERROR;
         }
         // <---- Stereo side-by-side
+#endif  // HAVE_NVBUFSURFTRANSFORM
     } else if (stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
         // ----> Right-eye NV12 zero-copy: wrap the right NvBufSurface directly
         NvBufSurface *nvbuf_r = static_cast<NvBufSurface *>(raw_buffer->getRawBufferRight());

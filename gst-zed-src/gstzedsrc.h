@@ -187,10 +187,11 @@ struct _GstZedSrc {
 
     gboolean stop_requested;
 
-#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
     // Reusable destination surfaces for NV12 stereo side-by-side composition
-    gpointer stereo_sbs_pool[4];
-    gint stereo_sbs_pool_in_use[4];
+#define GST_ZEDSRC_STEREO_SBS_POOL_SIZE 4
+    gpointer stereo_sbs_pool[GST_ZEDSRC_STEREO_SBS_POOL_SIZE];
+    gint stereo_sbs_pool_in_use[GST_ZEDSRC_STEREO_SBS_POOL_SIZE];
     guint32 stereo_sbs_pool_width;
     guint32 stereo_sbs_pool_height;
     gint stereo_sbs_pool_gpu_id;
