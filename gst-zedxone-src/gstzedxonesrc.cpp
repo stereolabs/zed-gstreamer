@@ -75,6 +75,9 @@ enum {
     PROP_OPENCV_CALIB_FILE,
     PROP_IMAGE_FLIP,
     PROP_ENABLE_HDR,
+    PROP_SVO_REC_ENABLE,
+    PROP_SVO_REC_FILENAME,
+    PROP_SVO_REC_COMPRESSION,
     PROP_SVO_REAL_TIME,
     PROP_COORD_UNIT,
     PROP_COORD_SYS,
@@ -188,7 +191,41 @@ typedef enum {
 #define DEFAULT_PROP_DENOISING 50
 #define DEFAULT_PROP_OUTPUT_RECTIFIED_IMAGE TRUE
 #define DEFAULT_PROP_STREAM_TYPE GST_ZEDXONESRC_STREAM_AUTO
+
+// SVO RECORDING
+#define DEFAULT_PROP_SVO_REC_ENABLE FALSE
+#define DEFAULT_PROP_SVO_REC_FILENAME ""
+#define DEFAULT_PROP_SVO_REC_COMPRESSION GST_ZEDXONESRC_SVO_COMPRESSION_H265
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+typedef enum {
+    GST_ZEDXONESRC_SVO_COMPRESSION_LOSSLESS = 0,
+    GST_ZEDXONESRC_SVO_COMPRESSION_H264 = 1,
+    GST_ZEDXONESRC_SVO_COMPRESSION_H265 = 2,
+    GST_ZEDXONESRC_SVO_COMPRESSION_H264_LOSSLESS = 3,
+    GST_ZEDXONESRC_SVO_COMPRESSION_H265_LOSSLESS = 4,
+} GstZedXOneSrcSvoCompression;
+
+#define GST_TYPE_ZEDXONE_SVO_COMPRESSION (gst_zedxonesrc_svo_compression_get_type())
+static GType gst_zedxonesrc_svo_compression_get_type(void) {
+    static GType zedxonesrc_svo_compression_type = 0;
+
+    if (!zedxonesrc_svo_compression_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDXONESRC_SVO_COMPRESSION_LOSSLESS, "Lossless (PNG/ZSTD, CPU)", "LOSSLESS"},
+            {GST_ZEDXONESRC_SVO_COMPRESSION_H264, "H264 (GPU)", "H264"},
+            {GST_ZEDXONESRC_SVO_COMPRESSION_H265, "H265/HEVC (GPU)", "H265"},
+            {GST_ZEDXONESRC_SVO_COMPRESSION_H264_LOSSLESS, "H264 Lossless (GPU)", "H264_LOSSLESS"},
+            {GST_ZEDXONESRC_SVO_COMPRESSION_H265_LOSSLESS, "H265 Lossless (GPU)", "H265_LOSSLESS"},
+            {0, NULL, NULL},
+        };
+
+        zedxonesrc_svo_compression_type =
+            g_enum_register_static("GstZedXOneSrcSvoCompression", pattern_types);
+    }
+
+    return zedxonesrc_svo_compression_type;
+}
 
 #define GST_TYPE_ZEDXONE_STREAM_TYPE (gst_zedxonesrc_stream_type_get_type())
 static GType gst_zedxonesrc_stream_type_get_type(void) {
@@ -519,6 +556,29 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
             "enable-hdr", "HDR status", "Enable HDR if supported by resolution and frame rate.",
             DEFAULT_PROP_ENABLE_HDR, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    // SVO Recording properties
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_REC_ENABLE,
+        g_param_spec_boolean(
+            "svo-recording-enable", "SVO Recording: Enable",
+            "Start/stop SVO recording at runtime (requires svo-recording-filename to be set)",
+            DEFAULT_PROP_SVO_REC_ENABLE,
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_REC_FILENAME,
+        g_param_spec_string("svo-recording-filename", "SVO Recording: Filename",
+                            "Output filename for SVO recording (.svo2 extension recommended)",
+                            DEFAULT_PROP_SVO_REC_FILENAME,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_REC_COMPRESSION,
+        g_param_spec_enum("svo-recording-compression", "SVO Recording: Compression Mode",
+                          "Compression mode for SVO recording", GST_TYPE_ZEDXONE_SVO_COMPRESSION,
+                          DEFAULT_PROP_SVO_REC_COMPRESSION,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property(
         gobject_class, PROP_SVO_REAL_TIME,
         g_param_spec_boolean("svo-real-time-mode", "SVO Real Time Mode", "SVO Real Time Mode",
@@ -715,6 +775,47 @@ static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
     }
 }
 
+/* Try to enable SVO recording on an open camera.
+ * Returns TRUE if recording was successfully started, FALSE otherwise.
+ * Note: _svoRecEnable is never modified here — only set_property controls it. */
+static gboolean gst_zedxonesrc_start_svo_recording(GstZedXOneSrc *src) {
+    if (src->_svoRecActive) {
+        return TRUE;   // Already recording
+    }
+
+    if (!src->_svoRecFilename || src->_svoRecFilename->len == 0) {
+        GST_WARNING_OBJECT(src, "Cannot start SVO recording: filename not set");
+        return FALSE;
+    }
+
+    sl::RecordingParameters rec_params;
+    rec_params.video_filename.set(src->_svoRecFilename->str);
+    rec_params.compression_mode = static_cast<sl::SVO_COMPRESSION_MODE>(src->_svoRecCompression);
+
+    sl::ERROR_CODE err = src->_zed->enableRecording(rec_params);
+    if (err == sl::ERROR_CODE::SUCCESS) {
+        src->_svoRecActive = TRUE;
+        GST_INFO_OBJECT(src, "SVO recording started: %s", src->_svoRecFilename->str);
+        return TRUE;
+    }
+
+    GST_WARNING_OBJECT(src, "Failed to start SVO recording: %s", sl::toString(err).c_str());
+    return FALSE;
+}
+
+/* Stop SVO recording if currently active.
+ * Only resets _svoRecActive — _svoRecEnable is never modified here
+ * (only set_property controls the user's intent). */
+static void gst_zedxonesrc_stop_svo_recording(GstZedXOneSrc *src) {
+    if (!src->_svoRecActive) {
+        return;   // Not recording, nothing to do
+    }
+
+    src->_zed->disableRecording();
+    src->_svoRecActive = FALSE;
+    GST_INFO_OBJECT(src, "SVO recording stopped");
+}
+
 static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     /* set source as live (no preroll) */
     gst_base_src_set_live(GST_BASE_SRC(src), TRUE);
@@ -735,6 +836,11 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_opencvCalibrationFile = g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
     src->_cameraImageFlip = DEFAULT_PROP_CAM_FLIP;
     src->_enableHDR = DEFAULT_PROP_ENABLE_HDR;
+    // SVO Recording
+    src->_svoRecEnable = DEFAULT_PROP_SVO_REC_ENABLE;
+    src->_svoRecFilename = g_string_new(DEFAULT_PROP_SVO_REC_FILENAME);
+    src->_svoRecCompression = DEFAULT_PROP_SVO_REC_COMPRESSION;
+    src->_svoRecActive = FALSE;
     src->_svoRealTime = DEFAULT_PROP_SVO_REAL_TIME;
     src->_coordUnit = DEFAULT_PROP_COORD_UNIT;
     src->_coordSys = DEFAULT_PROP_COORD_SYS;
@@ -828,6 +934,24 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_ENABLE_HDR:
         src->_enableHDR = g_value_get_boolean(value);
+        break;
+    case PROP_SVO_REC_ENABLE:
+        src->_svoRecEnable = g_value_get_boolean(value);
+        // Handle runtime recording toggle
+        if (src->_zed && src->_zed->isOpened()) {
+            if (src->_svoRecEnable && !src->_svoRecActive) {
+                gst_zedxonesrc_start_svo_recording(src);
+            } else if (!src->_svoRecEnable && src->_svoRecActive) {
+                gst_zedxonesrc_stop_svo_recording(src);
+            }
+        }
+        break;
+    case PROP_SVO_REC_FILENAME:
+        str = g_value_get_string(value);
+        g_string_assign(src->_svoRecFilename, (str != NULL) ? str : "");
+        break;
+    case PROP_SVO_REC_COMPRESSION:
+        src->_svoRecCompression = g_value_get_enum(value);
         break;
     case PROP_SVO_REAL_TIME:
         src->_svoRealTime = g_value_get_boolean(value);
@@ -964,6 +1088,15 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
     case PROP_ENABLE_HDR:
         g_value_set_boolean(value, src->_enableHDR);
         break;
+    case PROP_SVO_REC_ENABLE:
+        g_value_set_boolean(value, src->_svoRecActive);   // Return actual state
+        break;
+    case PROP_SVO_REC_FILENAME:
+        g_value_set_string(value, src->_svoRecFilename ? src->_svoRecFilename->str : "");
+        break;
+    case PROP_SVO_REC_COMPRESSION:
+        g_value_set_enum(value, src->_svoRecCompression);
+        break;
     case PROP_SVO_REAL_TIME:
         g_value_set_boolean(value, src->_svoRealTime);
         break;
@@ -1078,6 +1211,9 @@ void gst_zedxonesrc_finalize(GObject *object) {
         src->_caps = NULL;
     }
 
+    if (src->_svoRecFilename) {
+        g_string_free(src->_svoRecFilename, TRUE);
+    }
     if (src->_svoFile) {
         g_string_free(src->_svoFile, TRUE);
     }
@@ -1499,6 +1635,19 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Denoising: %d", src->_denoising);
     // <---- Camera Controls
 
+    // ----> Deferred SVO recording start
+    // When svo-recording-enable=true is set before pipeline start,
+    // the camera is not yet open so set_property only stores the flag.
+    // Now that the camera is open, actually start recording.
+    if (src->_svoRecEnable && !src->_svoRecActive) {
+        if (!gst_zedxonesrc_start_svo_recording(src)) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("SVO recording was requested but failed to start"), (NULL));
+            return FALSE;
+        }
+    }
+    // <---- Deferred SVO recording start
+
     // Resolve stream type (AUTO -> actual type based on downstream caps)
     gst_zedxonesrc_resolve_stream_type(src);
 
@@ -1513,6 +1662,9 @@ static gboolean gst_zedxonesrc_stop(GstBaseSrc *bsrc) {
     GstZedXOneSrc *src = GST_ZED_X_ONE_SRC(bsrc);
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_stop");
+
+    // Stop SVO recording if active
+    gst_zedxonesrc_stop_svo_recording(src);
 
     gst_zedxonesrc_reset(src);
 
@@ -1654,9 +1806,41 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
     // Use resolved stream type which accounts for AUTO negotiation
     gint stream_type = src->_resolvedStreamType;
 
-    // For non-NVMM modes, fall back to the default fill() path
+    // For non-NVMM modes, allocate buffer ourselves and call fill() directly.
+    // We must NOT delegate to parent->create() because when both create and
+    // fill vmethods are set on the class, the parent's default create()
+    // crashes during buffer allocation (SIGSEGV).
     if (stream_type != GST_ZEDXONESRC_RAW_NV12) {
-        return GST_PUSH_SRC_CLASS(gst_zedxonesrc_parent_class)->create(psrc, outbuf);
+        GstBuffer *buf;
+        GstFlowReturn ret;
+        GstBaseSrc *basesrc = GST_BASE_SRC(psrc);
+        GstBufferPool *pool;
+
+        // Try to use buffer pool if available
+        pool = gst_base_src_get_buffer_pool(basesrc);
+        if (pool) {
+            ret = gst_buffer_pool_acquire_buffer(pool, &buf, NULL);
+            gst_object_unref(pool);
+        } else {
+            // Allocate buffer directly using the pre-computed frame size
+            buf = gst_buffer_new_allocate(NULL, src->_outFramesize, NULL);
+            ret = (buf != NULL) ? GST_FLOW_OK : GST_FLOW_ERROR;
+        }
+
+        if (ret != GST_FLOW_OK || buf == NULL) {
+            GST_ERROR_OBJECT(src, "Failed to allocate buffer (framesize=%u)", src->_outFramesize);
+            return GST_FLOW_ERROR;
+        }
+
+        // Fill the buffer using our fill function
+        ret = gst_zedxonesrc_fill(psrc, buf);
+        if (ret != GST_FLOW_OK) {
+            gst_buffer_unref(buf);
+            return ret;
+        }
+
+        *outbuf = buf;
+        return GST_FLOW_OK;
     }
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_create (NVMM zero-copy)");
@@ -1770,9 +1954,15 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
     pose.orient[2] = 0.0;
 
     // ----> Timestamp meta-data
-    GST_BUFFER_TIMESTAMP(buf) =
-        GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
-    GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    if (GST_CLOCK_TIME_IS_VALID(clock_time)) {
+        GST_BUFFER_TIMESTAMP(buf) =
+            GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+        GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    } else {
+        GST_WARNING_OBJECT(src, "No pipeline clock available, buffer will have no timestamp");
+        GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_TIME_NONE;
+        GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
+    }
     GST_BUFFER_OFFSET(buf) = src->_bufferIndex++;
 
     guint64 offset = GST_BUFFER_OFFSET(buf);
@@ -1799,8 +1989,13 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstClockTime clock_time;
 
     if (!src->_isStarted) {
-        src->_acqStartTime = gst_clock_get_time(gst_element_get_clock(GST_ELEMENT(src)));
-
+        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (start_clock) {
+            src->_acqStartTime = gst_clock_get_time(start_clock);
+            gst_object_unref(start_clock);
+        } else {
+            src->_acqStartTime = GST_CLOCK_TIME_NONE;
+        }
         src->_isStarted = TRUE;
     }
 
@@ -1820,8 +2015,12 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // ----> Clock update
     GST_TRACE("Clock update");
     clock = gst_element_get_clock(GST_ELEMENT(src));
-    clock_time = gst_clock_get_time(clock);
-    gst_object_unref(clock);
+    if (clock) {
+        clock_time = gst_clock_get_time(clock);
+        gst_object_unref(clock);
+    } else {
+        clock_time = GST_CLOCK_TIME_NONE;
+    }
     // <---- Clock update
 
     // Memory mapping
@@ -1850,13 +2049,22 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     const sl::VIEW view_type =
         src->_outputRectifiedImage ? sl::VIEW::LEFT : sl::VIEW::LEFT_UNRECTIFIED;
     ret = src->_zed->retrieveImage(img, view_type, sl::MEM::CPU);
-    if (!check_ret(ret))
+    if (!check_ret(ret)) {
+        gst_buffer_unmap(buf, &minfo);
         return GST_FLOW_ERROR;
+    }
     // <---- Retrieve images
 
     // Memory copy
     GST_TRACE("Memory copy");
-    memcpy(minfo.data, img.getPtr<sl::uchar4>(), minfo.size);
+    sl::uchar4 *imgPtr = img.getPtr<sl::uchar4>();
+    if (!imgPtr) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("img.getPtr() returned NULL — cannot memcpy"),
+                          (NULL));
+        gst_buffer_unmap(buf, &minfo);
+        return GST_FLOW_ERROR;
+    }
+    memcpy(minfo.data, imgPtr, minfo.size);
 
     // ----> Info metadata
     GST_TRACE("Info metadata");
@@ -1913,9 +2121,15 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // ----> Timestamp meta-data
     GST_TRACE("Timestamp meta-data");
-    GST_BUFFER_TIMESTAMP(buf) =
-        GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
-    GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    if (GST_CLOCK_TIME_IS_VALID(clock_time)) {
+        GST_BUFFER_TIMESTAMP(buf) =
+            GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+        GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    } else {
+        GST_WARNING_OBJECT(src, "No pipeline clock available, buffer will have no timestamp");
+        GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_TIME_NONE;
+        GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
+    }
     GST_BUFFER_OFFSET(buf) = src->_bufferIndex++;
     // <---- Timestamp meta-data
 

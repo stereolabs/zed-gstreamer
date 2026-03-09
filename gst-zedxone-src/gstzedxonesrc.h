@@ -62,11 +62,17 @@ struct _GstZedXOneSrc {
     gboolean _cameraImageFlip;         // Camera flipped
     gboolean _enableHDR;               // HDR mode
     gboolean _svoRealTime;             // SVO Real Time Mode
-    gint _coordUnit;                   // Coordinate unit
-    gint _coordSys;                    // Coordinate system
-    GString *_sdkLogFile;              // SDK Log file path
-    GString *_settingsPath;            // Settings file path
-    gboolean _asyncRecovery;           // Async grab camera recovery
+    // SVO Recording
+    gboolean _svoRecEnable;     // SVO recording enable flag
+    GString *_svoRecFilename;   // SVO recording file name
+    gint _svoRecCompression;    // SVO recording compression mode [enum]
+    gboolean _svoRecActive;     // SVO recording active flag
+
+    gint _coordUnit;           // Coordinate unit
+    gint _coordSys;            // Coordinate system
+    GString *_sdkLogFile;      // SDK Log file path
+    GString *_settingsPath;    // Settings file path
+    gboolean _asyncRecovery;   // Async grab camera recovery
 
     gint _saturation;   // Image Saturation
     gint _sharpness;    // Image Sharpness
