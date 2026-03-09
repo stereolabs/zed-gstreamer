@@ -63,10 +63,10 @@ struct _GstZedXOneSrc {
     gboolean _enableHDR;               // HDR mode
     gboolean _svoRealTime;             // SVO Real Time Mode
     // SVO Recording
-    gboolean _svo_rec_enable;     // SVO recording enable flag
-    GString *_svo_rec_filename;   // SVO recording file name
-    gint _svo_rec_compression;    // SVO recording compression mode [enum]
-    gboolean _svo_rec_active;     // SVO recording active flag
+    gboolean _svoRecEnable;     // SVO recording enable flag
+    GString *_svoRecFilename;   // SVO recording file name
+    gint _svoRecCompression;    // SVO recording compression mode [enum]
+    gboolean _svoRecActive;     // SVO recording active flag
 
     gint _coordUnit;           // Coordinate unit
     gint _coordSys;            // Coordinate system

@@ -773,6 +773,49 @@ static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
     }
 }
 
+/* Try to enable SVO recording on an open camera.
+ * Returns TRUE if recording was successfully started, FALSE otherwise.
+ * On failure, _svoRecEnable is reset to FALSE. */
+static gboolean gst_zedxonesrc_start_svo_recording(GstZedXOneSrc *src) {
+    if (src->_svoRecActive) {
+        return TRUE;   // Already recording
+    }
+
+    if (!src->_svoRecFilename || src->_svoRecFilename->len == 0) {
+        GST_WARNING_OBJECT(src, "Cannot start SVO recording: filename not set");
+        src->_svoRecEnable = FALSE;
+        return FALSE;
+    }
+
+    sl::RecordingParameters rec_params;
+    rec_params.video_filename.set(src->_svoRecFilename->str);
+    rec_params.compression_mode = static_cast<sl::SVO_COMPRESSION_MODE>(src->_svoRecCompression);
+
+    sl::ERROR_CODE err = src->_zed->enableRecording(rec_params);
+    if (err == sl::ERROR_CODE::SUCCESS) {
+        src->_svoRecActive = TRUE;
+        GST_INFO_OBJECT(src, "SVO recording started: %s", src->_svoRecFilename->str);
+        return TRUE;
+    }
+
+    GST_WARNING_OBJECT(src, "Failed to start SVO recording: %s", sl::toString(err).c_str());
+    src->_svoRecEnable = FALSE;
+    return FALSE;
+}
+
+/* Stop SVO recording if currently active.
+ * Resets both _svoRecActive and _svoRecEnable. */
+static void gst_zedxonesrc_stop_svo_recording(GstZedXOneSrc *src) {
+    if (!src->_svoRecActive) {
+        return;   // Not recording, nothing to do
+    }
+
+    src->_zed->disableRecording();
+    src->_svoRecActive = FALSE;
+    src->_svoRecEnable = FALSE;
+    GST_INFO_OBJECT(src, "SVO recording stopped");
+}
+
 static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     /* set source as live (no preroll) */
     gst_base_src_set_live(GST_BASE_SRC(src), TRUE);
@@ -794,10 +837,10 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_cameraImageFlip = DEFAULT_PROP_CAM_FLIP;
     src->_enableHDR = DEFAULT_PROP_ENABLE_HDR;
     // SVO Recording
-    src->_svo_rec_enable = DEFAULT_PROP_SVO_REC_ENABLE;
-    src->_svo_rec_filename = g_string_new(DEFAULT_PROP_SVO_REC_FILENAME);
-    src->_svo_rec_compression = DEFAULT_PROP_SVO_REC_COMPRESSION;
-    src->_svo_rec_active = FALSE;
+    src->_svoRecEnable = DEFAULT_PROP_SVO_REC_ENABLE;
+    src->_svoRecFilename = g_string_new(DEFAULT_PROP_SVO_REC_FILENAME);
+    src->_svoRecCompression = DEFAULT_PROP_SVO_REC_COMPRESSION;
+    src->_svoRecActive = FALSE;
     src->_svoRealTime = DEFAULT_PROP_SVO_REAL_TIME;
     src->_coordUnit = DEFAULT_PROP_COORD_UNIT;
     src->_coordSys = DEFAULT_PROP_COORD_SYS;
@@ -893,44 +936,22 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         src->_enableHDR = g_value_get_boolean(value);
         break;
     case PROP_SVO_REC_ENABLE:
-        src->_svo_rec_enable = g_value_get_boolean(value);
+        src->_svoRecEnable = g_value_get_boolean(value);
         // Handle runtime recording toggle
-        if (src->_isStarted) {
-            if (src->_svo_rec_enable && !src->_svo_rec_active) {
-                // Start recording
-                if (src->_svo_rec_filename && src->_svo_rec_filename->len > 0) {
-                    sl::RecordingParameters rec_params;
-                    rec_params.video_filename.set(src->_svo_rec_filename->str);
-                    rec_params.compression_mode =
-                        static_cast<sl::SVO_COMPRESSION_MODE>(src->_svo_rec_compression);
-                    sl::ERROR_CODE err = src->_zed->enableRecording(rec_params);
-                    if (err == sl::ERROR_CODE::SUCCESS) {
-                        src->_svo_rec_active = TRUE;
-                        GST_INFO_OBJECT(src, "SVO recording started: %s",
-                                        src->_svo_rec_filename->str);
-                    } else {
-                        GST_WARNING_OBJECT(src, "Failed to start SVO recording: %s",
-                                           sl::toString(err).c_str());
-                        src->_svo_rec_enable = FALSE;
-                    }
-                } else {
-                    GST_WARNING_OBJECT(src, "Cannot start SVO recording: filename not set");
-                    src->_svo_rec_enable = FALSE;
-                }
-            } else if (!src->_svo_rec_enable && src->_svo_rec_active) {
-                // Stop recording
-                src->_zed->disableRecording();
-                src->_svo_rec_active = FALSE;
-                GST_INFO_OBJECT(src, "SVO recording stopped");
+        if (src->_zed && src->_zed->isOpened()) {
+            if (src->_svoRecEnable && !src->_svoRecActive) {
+                gst_zedxonesrc_start_svo_recording(src);
+            } else if (!src->_svoRecEnable && src->_svoRecActive) {
+                gst_zedxonesrc_stop_svo_recording(src);
             }
         }
         break;
     case PROP_SVO_REC_FILENAME:
         str = g_value_get_string(value);
-        g_string_assign(src->_svo_rec_filename, str);
+        g_string_assign(src->_svoRecFilename, (str != NULL) ? str : "");
         break;
     case PROP_SVO_REC_COMPRESSION:
-        src->_svo_rec_compression = g_value_get_enum(value);
+        src->_svoRecCompression = g_value_get_enum(value);
         break;
     case PROP_SVO_REAL_TIME:
         src->_svoRealTime = g_value_get_boolean(value);
@@ -1068,13 +1089,13 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         g_value_set_boolean(value, src->_enableHDR);
         break;
     case PROP_SVO_REC_ENABLE:
-        g_value_set_boolean(value, src->_svo_rec_active);   // Return actual state
+        g_value_set_boolean(value, src->_svoRecActive);   // Return actual state
         break;
     case PROP_SVO_REC_FILENAME:
-        g_value_set_string(value, src->_svo_rec_filename ? src->_svo_rec_filename->str : "");
+        g_value_set_string(value, src->_svoRecFilename ? src->_svoRecFilename->str : "");
         break;
     case PROP_SVO_REC_COMPRESSION:
-        g_value_set_enum(value, src->_svo_rec_compression);
+        g_value_set_enum(value, src->_svoRecCompression);
         break;
     case PROP_SVO_REAL_TIME:
         g_value_set_boolean(value, src->_svoRealTime);
@@ -1190,8 +1211,8 @@ void gst_zedxonesrc_finalize(GObject *object) {
         src->_caps = NULL;
     }
 
-    if (src->_svo_rec_filename) {
-        g_string_free(src->_svo_rec_filename, TRUE);
+    if (src->_svoRecFilename) {
+        g_string_free(src->_svoRecFilename, TRUE);
     }
     if (src->_svoFile) {
         g_string_free(src->_svoFile, TRUE);
@@ -1611,27 +1632,13 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     // ----> Deferred SVO recording start
     // When svo-recording-enable=true is set before pipeline start,
-    // _isStarted is FALSE so set_property only stores the flag.
+    // the camera is not yet open so set_property only stores the flag.
     // Now that the camera is open, actually start recording.
-    if (src->_svo_rec_enable && !src->_svo_rec_active) {
-        if (src->_svo_rec_filename && src->_svo_rec_filename->len > 0) {
-            sl::RecordingParameters rec_params;
-            rec_params.video_filename.set(src->_svo_rec_filename->str);
-            rec_params.compression_mode =
-                static_cast<sl::SVO_COMPRESSION_MODE>(src->_svo_rec_compression);
-            sl::ERROR_CODE rec_err = src->_zed->enableRecording(rec_params);
-            if (rec_err == sl::ERROR_CODE::SUCCESS) {
-                src->_svo_rec_active = TRUE;
-                GST_INFO_OBJECT(src, "SVO recording started (deferred): %s",
-                                src->_svo_rec_filename->str);
-            } else {
-                GST_WARNING_OBJECT(src, "Failed to start SVO recording: %s",
-                                   sl::toString(rec_err).c_str());
-                src->_svo_rec_enable = FALSE;
-            }
-        } else {
-            GST_WARNING_OBJECT(src, "SVO recording enabled but no filename set");
-            src->_svo_rec_enable = FALSE;
+    if (src->_svoRecEnable && !src->_svoRecActive) {
+        if (!gst_zedxonesrc_start_svo_recording(src)) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("SVO recording was requested but failed to start"), (NULL));
+            return FALSE;
         }
     }
     // <---- Deferred SVO recording start
@@ -1652,11 +1659,7 @@ static gboolean gst_zedxonesrc_stop(GstBaseSrc *bsrc) {
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_stop");
 
     // Stop SVO recording if active
-    if (src->_svo_rec_active) {
-        src->_zed->disableRecording();
-        src->_svo_rec_active = FALSE;
-        GST_INFO_OBJECT(src, "SVO recording stopped on pipeline stop");
-    }
+    gst_zedxonesrc_stop_svo_recording(src);
 
     gst_zedxonesrc_reset(src);
 
@@ -1777,9 +1780,41 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
     // Use resolved stream type which accounts for AUTO negotiation
     gint stream_type = src->_resolvedStreamType;
 
-    // For non-NVMM modes, fall back to the default fill() path
+    // For non-NVMM modes, allocate buffer ourselves and call fill() directly.
+    // We must NOT delegate to parent->create() because when both create and
+    // fill vmethods are set on the class, the parent's default create()
+    // crashes during buffer allocation (SIGSEGV).
     if (stream_type != GST_ZEDXONESRC_RAW_NV12) {
-        return GST_PUSH_SRC_CLASS(gst_zedxonesrc_parent_class)->create(psrc, outbuf);
+        GstBuffer *buf;
+        GstFlowReturn ret;
+        GstBaseSrc *basesrc = GST_BASE_SRC(psrc);
+        GstBufferPool *pool;
+
+        // Try to use buffer pool if available
+        pool = gst_base_src_get_buffer_pool(basesrc);
+        if (pool) {
+            ret = gst_buffer_pool_acquire_buffer(pool, &buf, NULL);
+            gst_object_unref(pool);
+        } else {
+            // Allocate buffer directly using the pre-computed frame size
+            buf = gst_buffer_new_allocate(NULL, src->_outFramesize, NULL);
+            ret = (buf != NULL) ? GST_FLOW_OK : GST_FLOW_ERROR;
+        }
+
+        if (ret != GST_FLOW_OK || buf == NULL) {
+            GST_ERROR_OBJECT(src, "Failed to allocate buffer (framesize=%u)", src->_outFramesize);
+            return GST_FLOW_ERROR;
+        }
+
+        // Fill the buffer using our fill function
+        ret = gst_zedxonesrc_fill(psrc, buf);
+        if (ret != GST_FLOW_OK) {
+            gst_buffer_unref(buf);
+            return ret;
+        }
+
+        *outbuf = buf;
+        return GST_FLOW_OK;
     }
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_create (NVMM zero-copy)");
@@ -1922,8 +1957,13 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstClockTime clock_time;
 
     if (!src->_isStarted) {
-        src->_acqStartTime = gst_clock_get_time(gst_element_get_clock(GST_ELEMENT(src)));
-
+        GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (start_clock) {
+            src->_acqStartTime = gst_clock_get_time(start_clock);
+            gst_object_unref(start_clock);
+        } else {
+            src->_acqStartTime = GST_CLOCK_TIME_NONE;
+        }
         src->_isStarted = TRUE;
     }
 
@@ -1943,8 +1983,12 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // ----> Clock update
     GST_TRACE("Clock update");
     clock = gst_element_get_clock(GST_ELEMENT(src));
-    clock_time = gst_clock_get_time(clock);
-    gst_object_unref(clock);
+    if (clock) {
+        clock_time = gst_clock_get_time(clock);
+        gst_object_unref(clock);
+    } else {
+        clock_time = GST_CLOCK_TIME_NONE;
+    }
     // <---- Clock update
 
     // Memory mapping
@@ -1973,13 +2017,22 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     const sl::VIEW view_type =
         src->_outputRectifiedImage ? sl::VIEW::LEFT : sl::VIEW::LEFT_UNRECTIFIED;
     ret = src->_zed->retrieveImage(img, view_type, sl::MEM::CPU);
-    if (!check_ret(ret))
+    if (!check_ret(ret)) {
+        gst_buffer_unmap(buf, &minfo);
         return GST_FLOW_ERROR;
+    }
     // <---- Retrieve images
 
     // Memory copy
     GST_TRACE("Memory copy");
-    memcpy(minfo.data, img.getPtr<sl::uchar4>(), minfo.size);
+    sl::uchar4 *imgPtr = img.getPtr<sl::uchar4>();
+    if (!imgPtr) {
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("img.getPtr() returned NULL — cannot memcpy"),
+                          (NULL));
+        gst_buffer_unmap(buf, &minfo);
+        return GST_FLOW_ERROR;
+    }
+    memcpy(minfo.data, imgPtr, minfo.size);
 
     // ----> Info metadata
     GST_TRACE("Info metadata");
