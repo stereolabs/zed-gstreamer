@@ -775,7 +775,7 @@ static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
 
 /* Try to enable SVO recording on an open camera.
  * Returns TRUE if recording was successfully started, FALSE otherwise.
- * On failure, _svoRecEnable is reset to FALSE. */
+ * Note: _svoRecEnable is never modified here — only set_property controls it. */
 static gboolean gst_zedxonesrc_start_svo_recording(GstZedXOneSrc *src) {
     if (src->_svoRecActive) {
         return TRUE;   // Already recording
@@ -783,7 +783,6 @@ static gboolean gst_zedxonesrc_start_svo_recording(GstZedXOneSrc *src) {
 
     if (!src->_svoRecFilename || src->_svoRecFilename->len == 0) {
         GST_WARNING_OBJECT(src, "Cannot start SVO recording: filename not set");
-        src->_svoRecEnable = FALSE;
         return FALSE;
     }
 
@@ -799,12 +798,12 @@ static gboolean gst_zedxonesrc_start_svo_recording(GstZedXOneSrc *src) {
     }
 
     GST_WARNING_OBJECT(src, "Failed to start SVO recording: %s", sl::toString(err).c_str());
-    src->_svoRecEnable = FALSE;
     return FALSE;
 }
 
 /* Stop SVO recording if currently active.
- * Resets both _svoRecActive and _svoRecEnable. */
+ * Only resets _svoRecActive — _svoRecEnable is never modified here
+ * (only set_property controls the user's intent). */
 static void gst_zedxonesrc_stop_svo_recording(GstZedXOneSrc *src) {
     if (!src->_svoRecActive) {
         return;   // Not recording, nothing to do
@@ -812,7 +811,6 @@ static void gst_zedxonesrc_stop_svo_recording(GstZedXOneSrc *src) {
 
     src->_zed->disableRecording();
     src->_svoRecActive = FALSE;
-    src->_svoRecEnable = FALSE;
     GST_INFO_OBJECT(src, "SVO recording stopped");
 }
 
@@ -1928,9 +1926,15 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
     pose.orient[2] = 0.0;
 
     // ----> Timestamp meta-data
-    GST_BUFFER_TIMESTAMP(buf) =
-        GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
-    GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    if (GST_CLOCK_TIME_IS_VALID(clock_time)) {
+        GST_BUFFER_TIMESTAMP(buf) =
+            GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+        GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    } else {
+        GST_WARNING_OBJECT(src, "No pipeline clock available, buffer will have no timestamp");
+        GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_TIME_NONE;
+        GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
+    }
     GST_BUFFER_OFFSET(buf) = src->_bufferIndex++;
 
     guint64 offset = GST_BUFFER_OFFSET(buf);
@@ -2089,9 +2093,15 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // ----> Timestamp meta-data
     GST_TRACE("Timestamp meta-data");
-    GST_BUFFER_TIMESTAMP(buf) =
-        GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
-    GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    if (GST_CLOCK_TIME_IS_VALID(clock_time)) {
+        GST_BUFFER_TIMESTAMP(buf) =
+            GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+        GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    } else {
+        GST_WARNING_OBJECT(src, "No pipeline clock available, buffer will have no timestamp");
+        GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_TIME_NONE;
+        GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
+    }
     GST_BUFFER_OFFSET(buf) = src->_bufferIndex++;
     // <---- Timestamp meta-data
 
