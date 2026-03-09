@@ -74,6 +74,9 @@ enum {
     PROP_OPENCV_CALIB_FILE,
     PROP_IMAGE_FLIP,
     PROP_ENABLE_HDR,
+    PROP_SVO_REC_ENABLE,
+    PROP_SVO_REC_FILENAME,
+    PROP_SVO_REC_COMPRESSION,
     PROP_SVO_REAL_TIME,
     PROP_COORD_UNIT,
     PROP_COORD_SYS,
@@ -187,7 +190,41 @@ typedef enum {
 #define DEFAULT_PROP_DENOISING 50
 #define DEFAULT_PROP_OUTPUT_RECTIFIED_IMAGE TRUE
 #define DEFAULT_PROP_STREAM_TYPE GST_ZEDXONESRC_STREAM_AUTO
+
+// SVO RECORDING
+#define DEFAULT_PROP_SVO_REC_ENABLE FALSE
+#define DEFAULT_PROP_SVO_REC_FILENAME ""
+#define DEFAULT_PROP_SVO_REC_COMPRESSION GST_ZEDXONESRC_SVO_COMPRESSION_H265
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+typedef enum {
+    GST_ZEDXONESRC_SVO_COMPRESSION_LOSSLESS = 0,
+    GST_ZEDXONESRC_SVO_COMPRESSION_H264 = 1,
+    GST_ZEDXONESRC_SVO_COMPRESSION_H265 = 2,
+    GST_ZEDXONESRC_SVO_COMPRESSION_H264_LOSSLESS = 3,
+    GST_ZEDXONESRC_SVO_COMPRESSION_H265_LOSSLESS = 4,
+} GstZedXOneSrcSvoCompression;
+
+#define GST_TYPE_ZEDXONE_SVO_COMPRESSION (gst_zedxonesrc_svo_compression_get_type())
+static GType gst_zedxonesrc_svo_compression_get_type(void) {
+    static GType zedxonesrc_svo_compression_type = 0;
+
+    if (!zedxonesrc_svo_compression_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDXONESRC_SVO_COMPRESSION_LOSSLESS, "Lossless (PNG/ZSTD, CPU)", "LOSSLESS"},
+            {GST_ZEDXONESRC_SVO_COMPRESSION_H264, "H264 (GPU)", "H264"},
+            {GST_ZEDXONESRC_SVO_COMPRESSION_H265, "H265/HEVC (GPU)", "H265"},
+            {GST_ZEDXONESRC_SVO_COMPRESSION_H264_LOSSLESS, "H264 Lossless (GPU)", "H264_LOSSLESS"},
+            {GST_ZEDXONESRC_SVO_COMPRESSION_H265_LOSSLESS, "H265 Lossless (GPU)", "H265_LOSSLESS"},
+            {0, NULL, NULL},
+        };
+
+        zedxonesrc_svo_compression_type =
+            g_enum_register_static("GstZedXOneSrcSvoCompression", pattern_types);
+    }
+
+    return zedxonesrc_svo_compression_type;
+}
 
 #define GST_TYPE_ZEDXONE_STREAM_TYPE (gst_zedxonesrc_stream_type_get_type())
 static GType gst_zedxonesrc_stream_type_get_type(void) {
@@ -517,6 +554,29 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
             "enable-hdr", "HDR status", "Enable HDR if supported by resolution and frame rate.",
             DEFAULT_PROP_ENABLE_HDR, (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+    // SVO Recording properties
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_REC_ENABLE,
+        g_param_spec_boolean(
+            "svo-recording-enable", "SVO Recording: Enable",
+            "Start/stop SVO recording at runtime (requires svo-recording-filename to be set)",
+            DEFAULT_PROP_SVO_REC_ENABLE,
+            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_REC_FILENAME,
+        g_param_spec_string("svo-recording-filename", "SVO Recording: Filename",
+                            "Output filename for SVO recording (.svo2 extension recommended)",
+                            DEFAULT_PROP_SVO_REC_FILENAME,
+                            (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_SVO_REC_COMPRESSION,
+        g_param_spec_enum("svo-recording-compression", "SVO Recording: Compression Mode",
+                          "Compression mode for SVO recording", GST_TYPE_ZEDXONE_SVO_COMPRESSION,
+                          DEFAULT_PROP_SVO_REC_COMPRESSION,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
     g_object_class_install_property(
         gobject_class, PROP_SVO_REAL_TIME,
         g_param_spec_boolean("svo-real-time-mode", "SVO Real Time Mode", "SVO Real Time Mode",
@@ -733,6 +793,11 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_opencvCalibrationFile = g_string_new(DEFAULT_PROP_OPENCV_CALIB_FILE);
     src->_cameraImageFlip = DEFAULT_PROP_CAM_FLIP;
     src->_enableHDR = DEFAULT_PROP_ENABLE_HDR;
+    // SVO Recording
+    src->_svo_rec_enable = DEFAULT_PROP_SVO_REC_ENABLE;
+    src->_svo_rec_filename = g_string_new(DEFAULT_PROP_SVO_REC_FILENAME);
+    src->_svo_rec_compression = DEFAULT_PROP_SVO_REC_COMPRESSION;
+    src->_svo_rec_active = FALSE;
     src->_svoRealTime = DEFAULT_PROP_SVO_REAL_TIME;
     src->_coordUnit = DEFAULT_PROP_COORD_UNIT;
     src->_coordSys = DEFAULT_PROP_COORD_SYS;
@@ -826,6 +891,46 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_ENABLE_HDR:
         src->_enableHDR = g_value_get_boolean(value);
+        break;
+    case PROP_SVO_REC_ENABLE:
+        src->_svo_rec_enable = g_value_get_boolean(value);
+        // Handle runtime recording toggle
+        if (src->_isStarted) {
+            if (src->_svo_rec_enable && !src->_svo_rec_active) {
+                // Start recording
+                if (src->_svo_rec_filename && src->_svo_rec_filename->len > 0) {
+                    sl::RecordingParameters rec_params;
+                    rec_params.video_filename.set(src->_svo_rec_filename->str);
+                    rec_params.compression_mode =
+                        static_cast<sl::SVO_COMPRESSION_MODE>(src->_svo_rec_compression);
+                    sl::ERROR_CODE err = src->_zed->enableRecording(rec_params);
+                    if (err == sl::ERROR_CODE::SUCCESS) {
+                        src->_svo_rec_active = TRUE;
+                        GST_INFO_OBJECT(src, "SVO recording started: %s",
+                                        src->_svo_rec_filename->str);
+                    } else {
+                        GST_WARNING_OBJECT(src, "Failed to start SVO recording: %s",
+                                           sl::toString(err).c_str());
+                        src->_svo_rec_enable = FALSE;
+                    }
+                } else {
+                    GST_WARNING_OBJECT(src, "Cannot start SVO recording: filename not set");
+                    src->_svo_rec_enable = FALSE;
+                }
+            } else if (!src->_svo_rec_enable && src->_svo_rec_active) {
+                // Stop recording
+                src->_zed->disableRecording();
+                src->_svo_rec_active = FALSE;
+                GST_INFO_OBJECT(src, "SVO recording stopped");
+            }
+        }
+        break;
+    case PROP_SVO_REC_FILENAME:
+        str = g_value_get_string(value);
+        g_string_assign(src->_svo_rec_filename, str);
+        break;
+    case PROP_SVO_REC_COMPRESSION:
+        src->_svo_rec_compression = g_value_get_enum(value);
         break;
     case PROP_SVO_REAL_TIME:
         src->_svoRealTime = g_value_get_boolean(value);
@@ -962,6 +1067,15 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
     case PROP_ENABLE_HDR:
         g_value_set_boolean(value, src->_enableHDR);
         break;
+    case PROP_SVO_REC_ENABLE:
+        g_value_set_boolean(value, src->_svo_rec_active);   // Return actual state
+        break;
+    case PROP_SVO_REC_FILENAME:
+        g_value_set_string(value, src->_svo_rec_filename ? src->_svo_rec_filename->str : "");
+        break;
+    case PROP_SVO_REC_COMPRESSION:
+        g_value_set_enum(value, src->_svo_rec_compression);
+        break;
     case PROP_SVO_REAL_TIME:
         g_value_set_boolean(value, src->_svoRealTime);
         break;
@@ -1076,6 +1190,9 @@ void gst_zedxonesrc_finalize(GObject *object) {
         src->_caps = NULL;
     }
 
+    if (src->_svo_rec_filename) {
+        g_string_free(src->_svo_rec_filename, TRUE);
+    }
     if (src->_svoFile) {
         g_string_free(src->_svoFile, TRUE);
     }
@@ -1492,6 +1609,33 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * Denoising: %d", src->_denoising);
     // <---- Camera Controls
 
+    // ----> Deferred SVO recording start
+    // When svo-recording-enable=true is set before pipeline start,
+    // _isStarted is FALSE so set_property only stores the flag.
+    // Now that the camera is open, actually start recording.
+    if (src->_svo_rec_enable && !src->_svo_rec_active) {
+        if (src->_svo_rec_filename && src->_svo_rec_filename->len > 0) {
+            sl::RecordingParameters rec_params;
+            rec_params.video_filename.set(src->_svo_rec_filename->str);
+            rec_params.compression_mode =
+                static_cast<sl::SVO_COMPRESSION_MODE>(src->_svo_rec_compression);
+            sl::ERROR_CODE rec_err = src->_zed->enableRecording(rec_params);
+            if (rec_err == sl::ERROR_CODE::SUCCESS) {
+                src->_svo_rec_active = TRUE;
+                GST_INFO_OBJECT(src, "SVO recording started (deferred): %s",
+                                src->_svo_rec_filename->str);
+            } else {
+                GST_WARNING_OBJECT(src, "Failed to start SVO recording: %s",
+                                   sl::toString(rec_err).c_str());
+                src->_svo_rec_enable = FALSE;
+            }
+        } else {
+            GST_WARNING_OBJECT(src, "SVO recording enabled but no filename set");
+            src->_svo_rec_enable = FALSE;
+        }
+    }
+    // <---- Deferred SVO recording start
+
     // Resolve stream type (AUTO -> actual type based on downstream caps)
     gst_zedxonesrc_resolve_stream_type(src);
 
@@ -1506,6 +1650,13 @@ static gboolean gst_zedxonesrc_stop(GstBaseSrc *bsrc) {
     GstZedXOneSrc *src = GST_ZED_X_ONE_SRC(bsrc);
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_stop");
+
+    // Stop SVO recording if active
+    if (src->_svo_rec_active) {
+        src->_zed->disableRecording();
+        src->_svo_rec_active = FALSE;
+        GST_INFO_OBJECT(src, "SVO recording stopped on pipeline stop");
+    }
 
     gst_zedxonesrc_reset(src);
 
