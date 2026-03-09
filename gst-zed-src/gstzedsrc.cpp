@@ -60,6 +60,7 @@ static gboolean gst_zedsrc_start(GstBaseSrc *src);
 static gboolean gst_zedsrc_stop(GstBaseSrc *src);
 static GstCaps *gst_zedsrc_get_caps(GstBaseSrc *src, GstCaps *filter);
 static gboolean gst_zedsrc_set_caps(GstBaseSrc *src, GstCaps *caps);
+static gboolean gst_zedsrc_negotiate(GstBaseSrc *src);
 static gboolean gst_zedsrc_unlock(GstBaseSrc *src);
 static gboolean gst_zedsrc_unlock_stop(GstBaseSrc *src);
 
@@ -1092,6 +1093,7 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     gstbasesrc_class->stop = GST_DEBUG_FUNCPTR(gst_zedsrc_stop);
     gstbasesrc_class->get_caps = GST_DEBUG_FUNCPTR(gst_zedsrc_get_caps);
     gstbasesrc_class->set_caps = GST_DEBUG_FUNCPTR(gst_zedsrc_set_caps);
+    gstbasesrc_class->negotiate = GST_DEBUG_FUNCPTR(gst_zedsrc_negotiate);
     gstbasesrc_class->unlock = GST_DEBUG_FUNCPTR(gst_zedsrc_unlock);
     gstbasesrc_class->unlock_stop = GST_DEBUG_FUNCPTR(gst_zedsrc_unlock_stop);
     gstbasesrc_class->query = GST_DEBUG_FUNCPTR(gst_zedsrc_query);
@@ -2949,11 +2951,17 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
         gst_video_info_set_format(&vinfo, format, width, height);
         if (src->caps) {
             gst_caps_unref(src->caps);
+            src->caps = NULL;
         }
         src->out_framesize = (guint) GST_VIDEO_INFO_SIZE(&vinfo);
         vinfo.fps_n = fps;
         vinfo.fps_d = 1;
         src->caps = gst_video_info_to_caps(&vinfo);
+
+        if (G_UNLIKELY(!src->caps)) {
+            GST_ERROR_OBJECT(src, "Failed to create caps from video info");
+            return FALSE;
+        }
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
         // Add memory:NVMM feature for zero-copy NV12 modes
@@ -2967,7 +2975,6 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
     }
 
     gst_base_src_set_blocksize(GST_BASE_SRC(src), src->out_framesize);
-    gst_base_src_set_caps(GST_BASE_SRC(src), src->caps);
     GST_DEBUG_OBJECT(src, "Created caps %" GST_PTR_FORMAT, src->caps);
 
     return TRUE;
@@ -3475,13 +3482,18 @@ static gboolean gst_zedsrc_set_caps(GstBaseSrc *bsrc, GstCaps *caps) {
     GstZedSrc *src = GST_ZED_SRC(bsrc);
     GST_TRACE_OBJECT(src, "gst_zedsrc_set_caps");
 
-    GstVideoInfo vinfo;
+    if (G_UNLIKELY(!caps || gst_caps_is_empty(caps))) {
+        GST_ERROR_OBJECT(src, "set_caps called with NULL or empty caps");
+        return FALSE;
+    }
 
-    gst_caps_get_structure(caps, 0);
+    GstVideoInfo vinfo;
 
     GST_DEBUG_OBJECT(src, "The caps being set are %" GST_PTR_FORMAT, caps);
 
-    gst_video_info_from_caps(&vinfo, caps);
+    if (!gst_video_info_from_caps(&vinfo, caps)) {
+        goto unsupported_caps;
+    }
 
     if (GST_VIDEO_INFO_FORMAT(&vinfo) == GST_VIDEO_FORMAT_UNKNOWN) {
         goto unsupported_caps;
@@ -3492,6 +3504,22 @@ static gboolean gst_zedsrc_set_caps(GstBaseSrc *bsrc, GstCaps *caps) {
 unsupported_caps:
     GST_ERROR_OBJECT(src, "Unsupported caps: %" GST_PTR_FORMAT, caps);
     return FALSE;
+}
+
+static gboolean gst_zedsrc_negotiate(GstBaseSrc *bsrc) {
+    GstZedSrc *src = GST_ZED_SRC(bsrc);
+
+    /* Caps are pre-computed in start() via calculate_caps().
+     * Skip the default negotiate which does gst_pad_peer_query_caps()
+     * that triggers spurious GStreamer-CRITICAL warnings from
+     * downstream elements (autovideoconvert/nvvidconv) during their
+     * internal candidate probing. */
+    if (src->caps && gst_caps_is_fixed(src->caps)) {
+        GST_DEBUG_OBJECT(src, "Using pre-computed caps: %" GST_PTR_FORMAT, src->caps);
+        return gst_base_src_set_caps(bsrc, src->caps);
+    }
+
+    return GST_BASE_SRC_CLASS(gst_zedsrc_parent_class)->negotiate(bsrc);
 }
 
 static gboolean gst_zedsrc_unlock(GstBaseSrc *bsrc) {
