@@ -3997,21 +3997,31 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // <---- Set runtime parameters
 
     /// Push zed cuda context as current
-    int cu_err = (int) cudaGetLastError();
-    if (cu_err > 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Cuda ERROR trigger before ZED SDK : %d", cu_err),
-                          (NULL));
-        return GST_FLOW_ERROR;
+    // Clear stale CUDA errors — during camera recovery the previous frame's
+    // CUDA state may be corrupted.  We log it but do NOT fail the pipeline;
+    // grab() below will return CAMERA_REBOOTING and we'll retry.
+    {
+        int cu_err = (int) cudaGetLastError();
+        if (cu_err > 0) {
+            GST_WARNING_OBJECT(src, "CUDA error %d detected before grab — clearing (camera may be recovering)", cu_err);
+            cudaGetLastError();  // clear the error flag
+        }
     }
 
     zctx = src->zed.getCUDAContext();
     cuCtxPushCurrent_v2(zctx);
 
-    /// Utils for check ret value and send to out
+    /// Utils for check ret value and send to out — skip during recovery
 #define CHECK_RET_OR_GOTO(_ret_expr)                                                               \
     do {                                                                                           \
         ret = (_ret_expr);                                                                         \
         if (ret != sl::ERROR_CODE::SUCCESS) {                                                      \
+            if (ret == sl::ERROR_CODE::CAMERA_REBOOTING || ret == sl::ERROR_CODE::CUDA_ERROR) {    \
+                GST_WARNING_OBJECT(src, "Retrieve failed during recovery: %s — will retry grab",   \
+                                   sl::toString(ret).c_str());                                     \
+                flow_ret = GST_FLOW_OK;                                                            \
+                goto out;                                                                          \
+            }                                                                                      \
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED,                                               \
                               ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(), \
                                sl::toVerbose(ret).c_str()),                                        \
@@ -4021,15 +4031,53 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         }                                                                                          \
     } while (0)
 
-    // ----> ZED grab
-    ret = src->zed.grab(zedRtParams);
-    if (ret > sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
-                           sl::toVerbose(ret).c_str()),
-                          (NULL));
-        flow_ret = GST_FLOW_ERROR;
-        goto out;
+    // ----> ZED grab with recovery retry loop
+    // During multi-camera Argus recovery, grab() returns CAMERA_REBOOTING (-1)
+    // for 10-30s while the ProviderGuardian coordinates provider destruction
+    // and recreation.  We retry instead of killing the pipeline.
+    {
+        static constexpr int kMaxRecoveryWaitSec = 60;
+        int recovery_wait = 0;
+
+        while (true) {
+            ret = src->zed.grab(zedRtParams);
+
+            if (ret == sl::ERROR_CODE::CAMERA_REBOOTING ||
+                ret == sl::ERROR_CODE::CUDA_ERROR) {
+                if (recovery_wait == 0)
+                    GST_WARNING_OBJECT(src, "Camera recovering (error: %s), waiting...",
+                                       sl::toString(ret).c_str());
+                if (++recovery_wait > kMaxRecoveryWaitSec) {
+                    GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                                      ("Camera recovery timeout after %ds (last error: %s)",
+                                       kMaxRecoveryWaitSec, sl::toString(ret).c_str()),
+                                      (NULL));
+                    flow_ret = GST_FLOW_ERROR;
+                    goto out;
+                }
+                g_usleep(1000000);  // 1 second
+                cudaGetLastError(); // clear any CUDA error state
+                continue;
+            }
+
+            if (recovery_wait > 0)
+                GST_INFO_OBJECT(src, "Camera recovered after %ds", recovery_wait);
+            break;
+        }
+
+        if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
+            flow_ret = GST_FLOW_EOS;
+            goto out;
+        }
+
+        if (ret != sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                               sl::toVerbose(ret).c_str()),
+                              (NULL));
+            flow_ret = GST_FLOW_ERROR;
+            goto out;
+        }
     }
     // <---- ZED grab
 
@@ -4207,12 +4255,43 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         return GST_FLOW_ERROR;
     }
 
-    ret = src->zed.grab(zedRtParams);
+    // Grab with recovery retry (same pattern as fill() path)
+    {
+        static constexpr int kMaxRecoveryWaitSec = 60;
+        int recovery_wait = 0;
+
+        while (true) {
+            ret = src->zed.grab(zedRtParams);
+
+            if (ret == sl::ERROR_CODE::CAMERA_REBOOTING ||
+                ret == sl::ERROR_CODE::CUDA_ERROR) {
+                if (recovery_wait == 0)
+                    GST_WARNING_OBJECT(src, "Camera recovering in NVMM path (error: %s), waiting...",
+                                       sl::toString(ret).c_str());
+                if (++recovery_wait > kMaxRecoveryWaitSec) {
+                    GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                                      ("Camera recovery timeout after %ds (last error: %s)",
+                                       kMaxRecoveryWaitSec, sl::toString(ret).c_str()),
+                                      (NULL));
+                    cuCtxPopCurrent_v2(NULL);
+                    return GST_FLOW_ERROR;
+                }
+                g_usleep(1000000);
+                cudaGetLastError();
+                continue;
+            }
+
+            if (recovery_wait > 0)
+                GST_INFO_OBJECT(src, "Camera recovered after %ds (NVMM path)", recovery_wait);
+            break;
+        }
+    }
+
     if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
         GST_INFO_OBJECT(src, "End of SVO file");
         cuCtxPopCurrent_v2(NULL);
         return GST_FLOW_EOS;
-    } else if (ret > sl::ERROR_CODE::SUCCESS) {
+    } else if (ret != sl::ERROR_CODE::SUCCESS) {
         GST_ERROR_OBJECT(src, "grab() failed: %s", sl::toString(ret).c_str());
         cuCtxPopCurrent_v2(NULL);
         return GST_FLOW_ERROR;
@@ -4229,6 +4308,13 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     sl::RawBuffer *raw_buffer = new sl::RawBuffer();
     ret = src->zed.retrieveImage(*raw_buffer);
     if (ret != sl::ERROR_CODE::SUCCESS) {
+        if (ret == sl::ERROR_CODE::CAMERA_REBOOTING || ret == sl::ERROR_CODE::CUDA_ERROR) {
+            GST_WARNING_OBJECT(src, "RawBuffer retrieve failed during recovery: %s — returning empty frame",
+                               sl::toString(ret).c_str());
+            delete raw_buffer;
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_OK;  // don't kill pipeline
+        }
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
                           ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()),
                           (NULL));
