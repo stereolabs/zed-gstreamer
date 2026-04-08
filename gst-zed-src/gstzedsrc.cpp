@@ -4004,7 +4004,6 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         int cu_err = (int) cudaGetLastError();
         if (cu_err > 0) {
             GST_WARNING_OBJECT(src, "CUDA error %d detected before grab — clearing (camera may be recovering)", cu_err);
-            cudaGetLastError();  // clear the error flag
         }
     }
 
@@ -4017,7 +4016,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         ret = (_ret_expr);                                                                         \
         if (ret != sl::ERROR_CODE::SUCCESS) {                                                      \
             if (ret == sl::ERROR_CODE::CAMERA_REBOOTING || ret == sl::ERROR_CODE::CUDA_ERROR) {    \
-                GST_WARNING_OBJECT(src, "Retrieve failed during recovery: %s — will retry grab",   \
+                GST_WARNING_OBJECT(src, "Retrieve failed during recovery: %s — returning empty frame",   \
                                    sl::toString(ret).c_str());                                     \
                 flow_ret = GST_FLOW_OK;                                                            \
                 goto out;                                                                          \

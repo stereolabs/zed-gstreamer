@@ -2058,6 +2058,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
                     return GST_FLOW_ERROR;
                 }
                 g_usleep(1000000);
+                cudaGetLastError(); // clear CUDA error state
                 continue;
             }
 
@@ -2099,28 +2100,20 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // ----> Retrieve images
     GST_TRACE("Retrieve images");
-    auto check_ret = [src](sl::ERROR_CODE err) {
-        if (err != sl::ERROR_CODE::SUCCESS) {
-            // Don't kill pipeline during camera recovery
-            if (err == sl::ERROR_CODE::CAMERA_REBOOTING || err == sl::ERROR_CODE::CUDA_ERROR) {
-                GST_WARNING_OBJECT(src, "Retrieve failed during recovery: %s — returning empty frame",
-                                   sl::toString(err).c_str());
-                return false;  // caller handles gracefully
-            }
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                              ("Grabbing failed with error: '%s' - %s", sl::toString(err).c_str(),
-                               sl::toVerbose(err).c_str()),
-                              (NULL));
-            return false;
-        }
-        return true;
-    };
-
     const sl::VIEW view_type =
         src->_outputRectifiedImage ? sl::VIEW::LEFT : sl::VIEW::LEFT_UNRECTIFIED;
     ret = src->_zed->retrieveImage(img, view_type, sl::MEM::CPU);
-    if (!check_ret(ret)) {
+    if (ret != sl::ERROR_CODE::SUCCESS) {
         gst_buffer_unmap(buf, &minfo);
+        if (ret == sl::ERROR_CODE::CAMERA_REBOOTING || ret == sl::ERROR_CODE::CUDA_ERROR) {
+            GST_WARNING_OBJECT(src, "Retrieve failed during recovery: %s — returning empty frame",
+                               sl::toString(ret).c_str());
+            return GST_FLOW_OK;
+        }
+        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                           sl::toVerbose(ret).c_str()),
+                          (NULL));
         return GST_FLOW_ERROR;
     }
     // <---- Retrieve images
