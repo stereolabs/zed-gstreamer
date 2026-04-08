@@ -4003,7 +4003,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     {
         int cu_err = (int) cudaGetLastError();
         if (cu_err > 0) {
-            GST_WARNING_OBJECT(src, "CUDA error %d detected before grab — clearing (camera may be recovering)", cu_err);
+            // cudaGetLastError() already cleared the error above; log it for diagnostics
+            GST_WARNING_OBJECT(src, "CUDA error %d detected before grab — cleared (camera may be recovering)", cu_err);
         }
     }
 
