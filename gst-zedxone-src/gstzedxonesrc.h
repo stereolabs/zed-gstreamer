@@ -102,6 +102,8 @@ struct _GstZedXOneSrc {
 
     gint _streamType;           // Stream type [enum]
     gint _resolvedStreamType;   // Actual stream type after auto-negotiation (-1 = not resolved)
+
+    gint _recoveryTimeout;     // Max seconds to wait during camera recovery (0 = no retry)
     // <---- Properties
 
     int _realFps;   // Real FPS
