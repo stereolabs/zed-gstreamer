@@ -16,8 +16,5 @@ my-plugin-*.tar.*
 *.autosave
 *.user
 *.user.*
-<<<<<<< HEAD
+__pycache__/
 *build*
-=======
->>>>>>> master
-
