@@ -189,6 +189,7 @@ struct _GstZedSrc {
 
 #if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
     // Reusable destination-surface pool for NV12 stereo side-by-side composition.
+    // Pointer accesses across threads must hold GST_OBJECT_LOCK.
     GstBufferPool *sbs_pool;
     guint32 sbs_pool_width;
     guint32 sbs_pool_height;

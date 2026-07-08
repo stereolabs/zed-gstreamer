@@ -149,9 +149,12 @@ static gboolean gst_zedsrc_sbs_pool_ensure(GstZedSrc *src, const NvBufSurfaceCre
     }
 
     if (src->sbs_pool) {
-        gst_buffer_pool_set_active(src->sbs_pool, FALSE);
-        gst_object_unref(src->sbs_pool);
+        GST_OBJECT_LOCK(src);
+        GstBufferPool *old_pool = src->sbs_pool;
         src->sbs_pool = NULL;
+        GST_OBJECT_UNLOCK(src);
+        gst_buffer_pool_set_active(old_pool, FALSE);
+        gst_object_unref(old_pool);
     }
 
     GstBufferPool *pool = static_cast<GstBufferPool *>(g_object_new(GST_TYPE_ZED_SBS_POOL, NULL));
@@ -166,7 +169,9 @@ static gboolean gst_zedsrc_sbs_pool_ensure(GstZedSrc *src, const NvBufSurfaceCre
         return FALSE;
     }
 
+    GST_OBJECT_LOCK(src);
     src->sbs_pool = pool;
+    GST_OBJECT_UNLOCK(src);
     src->sbs_pool_width = cp->width;
     src->sbs_pool_height = cp->height;
     src->sbs_pool_gpu_id = cp->gpuId;
@@ -177,10 +182,13 @@ static gboolean gst_zedsrc_sbs_pool_ensure(GstZedSrc *src, const NvBufSurfaceCre
 }
 
 static void gst_zedsrc_sbs_pool_release(GstZedSrc *src) {
-    if (src->sbs_pool) {
-        gst_buffer_pool_set_active(src->sbs_pool, FALSE);
-        gst_object_unref(src->sbs_pool);
-        src->sbs_pool = NULL;
+    GST_OBJECT_LOCK(src);
+    GstBufferPool *pool = src->sbs_pool;
+    src->sbs_pool = NULL;
+    GST_OBJECT_UNLOCK(src);
+    if (pool) {
+        gst_buffer_pool_set_active(pool, FALSE);
+        gst_object_unref(pool);
     }
     src->sbs_pool_width = 0;
     src->sbs_pool_height = 0;
@@ -3524,8 +3532,13 @@ static gboolean gst_zedsrc_unlock(GstBaseSrc *bsrc) {
     src->stop_requested = TRUE;
 
 #if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
-    if (src->sbs_pool) {
-        gst_buffer_pool_set_flushing(src->sbs_pool, TRUE);
+    GST_OBJECT_LOCK(src);
+    GstBufferPool *pool =
+        src->sbs_pool ? GST_BUFFER_POOL(gst_object_ref(src->sbs_pool)) : NULL;
+    GST_OBJECT_UNLOCK(src);
+    if (pool) {
+        gst_buffer_pool_set_flushing(pool, TRUE);
+        gst_object_unref(pool);
     }
 #endif
 
@@ -3540,8 +3553,13 @@ static gboolean gst_zedsrc_unlock_stop(GstBaseSrc *bsrc) {
     src->stop_requested = FALSE;
 
 #if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
-    if (src->sbs_pool) {
-        gst_buffer_pool_set_flushing(src->sbs_pool, FALSE);
+    GST_OBJECT_LOCK(src);
+    GstBufferPool *pool =
+        src->sbs_pool ? GST_BUFFER_POOL(gst_object_ref(src->sbs_pool)) : NULL;
+    GST_OBJECT_UNLOCK(src);
+    if (pool) {
+        gst_buffer_pool_set_flushing(pool, FALSE);
+        gst_object_unref(pool);
     }
 #endif
 
