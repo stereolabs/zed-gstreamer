@@ -175,6 +175,8 @@ struct _GstZedSrc {
     GString *svo_rec_filename;
     gint svo_rec_compression;
     gboolean svo_rec_active;   // Internal state: is recording currently active
+
+    gint recovery_timeout;     // Max seconds to wait during camera recovery (0 = no retry)
     // <---- Properties
 
     GstClockTime acq_start_time;
