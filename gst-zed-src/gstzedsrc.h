@@ -188,16 +188,15 @@ struct _GstZedSrc {
     gboolean stop_requested;
 
 #if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
-    // Reusable destination surfaces for NV12 stereo side-by-side composition
-#define GST_ZEDSRC_STEREO_SBS_POOL_SIZE 4
-    gpointer stereo_sbs_pool[GST_ZEDSRC_STEREO_SBS_POOL_SIZE];
-    gint stereo_sbs_pool_in_use[GST_ZEDSRC_STEREO_SBS_POOL_SIZE];
-    guint32 stereo_sbs_pool_width;
-    guint32 stereo_sbs_pool_height;
-    gint stereo_sbs_pool_gpu_id;
-    gint stereo_sbs_pool_mem_type;
-    gint stereo_sbs_pool_layout;
-    gint stereo_sbs_pool_color_format;
+    // Reusable destination-surface pool for NV12 stereo side-by-side composition.
+    // Pointer accesses across threads must hold GST_OBJECT_LOCK.
+    GstBufferPool *sbs_pool;
+    guint32 sbs_pool_width;
+    guint32 sbs_pool_height;
+    gint sbs_pool_gpu_id;
+    gint sbs_pool_mem_type;
+    gint sbs_pool_layout;
+    gint sbs_pool_color_format;
 #endif
 };
 
