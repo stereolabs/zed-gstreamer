@@ -1856,6 +1856,7 @@ static void gst_zedsrc_reset(GstZedSrc *src) {
 
     src->out_framesize = 0;
     src->is_started = FALSE;
+    src->effective_fps = 0;
 
     src->last_frame_count = 0;
     src->total_dropped_frames = 0;
@@ -2946,6 +2947,19 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
 
     fps = static_cast<gint>(cam_info.camera_configuration.fps);
 
+    // When grab_compute_capping_fps is active and lower than camera FPS,
+    // use it as the effective output framerate so downstream elements
+    // (queues, muxers, sinks) schedule correctly and don't add latency.
+    if (src->grab_compute_capping_fps > 0.0f &&
+        src->grab_compute_capping_fps < static_cast<float>(fps)) {
+        GST_INFO_OBJECT(src,
+                         "grab_compute_capping_fps (%.1f) < camera FPS (%d), "
+                         "using capped rate as effective output FPS",
+                         src->grab_compute_capping_fps, fps);
+        fps = static_cast<gint>(src->grab_compute_capping_fps);
+    }
+    src->effective_fps = fps;
+
     if (format != GST_VIDEO_FORMAT_UNKNOWN) {
         gst_video_info_init(&vinfo);
         gst_video_info_set_format(&vinfo, format, width, height);
@@ -3555,10 +3569,10 @@ static gboolean gst_zedsrc_query(GstBaseSrc *bsrc, GstQuery *query) {
             return FALSE;
         }
 
-        // Calculate latency based on configured FPS
-        // Latency is approximately one frame duration
-        if (src->camera_fps > 0) {
-            min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, src->camera_fps);
+        // Calculate latency based on effective output FPS
+        // (accounts for grab_compute_capping_fps when active)
+        if (src->effective_fps > 0) {
+            min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, src->effective_fps);
             max_latency = min_latency * 2;   // Allow some buffer for processing
         } else {
             // Fallback to 30 FPS assumption
@@ -3930,6 +3944,9 @@ static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockT
     GST_BUFFER_TIMESTAMP(buf) =
         GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
     GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    if (src->effective_fps > 0) {
+        GST_BUFFER_DURATION(buf) = gst_util_uint64_scale_int(GST_SECOND, 1, src->effective_fps);
+    }
     GST_BUFFER_OFFSET(buf) = src->buffer_index++;
     // <---- Timestamp meta-data
 
