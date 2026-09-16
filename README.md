@@ -302,7 +302,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   depth-stabilization : Enable depth stabilization
                         flags: readable, writable
                         Integer. Range: 0 - 100 Default: 1 
-  do-timestamp        : Apply current stream time to buffers
+  do-timestamp        : Apply ZED IMAGE timestamp (sl::TIME_REFERENCE::IMAGE) to buffers
                         flags: readable, writable
                         Boolean. Default: false
   enable-area-memory  : This mode enables the camera to remember its surroundings. This helps correct positional tracking drift, and can be helpful for positioning different cameras relative to one other in space.
@@ -585,7 +585,7 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   ctrl-whitebalance-temperature: Image white balance temperature
                         flags: readable, writable
                         Integer. Range: 2800 - 6500 Default: 4200 
-  do-timestamp        : Apply current stream time to buffers
+  do-timestamp        : Apply ZED IMAGE timestamp (sl::TIME_REFERENCE::IMAGE) to buffers
                         flags: readable, writable
                         Boolean. Default: false
   enable-hdr          : Enable HDR if supported by resolution and frame rate.

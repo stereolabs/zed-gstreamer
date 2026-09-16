@@ -178,6 +178,8 @@ struct _GstZedSrc {
     // <---- Properties
 
     GstClockTime acq_start_time;
+    guint64 image_ts_base_ns;
+    gboolean image_ts_base_valid;
     guint32 last_frame_count;
     guint32 total_dropped_frames;
     guint64 buffer_index;   // Frame counter for buffer offset

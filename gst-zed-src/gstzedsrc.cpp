@@ -1856,6 +1856,8 @@ static void gst_zedsrc_reset(GstZedSrc *src) {
 
     src->out_framesize = 0;
     src->is_started = FALSE;
+    src->image_ts_base_ns = 0;
+    src->image_ts_base_valid = FALSE;
 
     src->last_frame_count = 0;
     src->total_dropped_frames = 0;
@@ -3927,8 +3929,22 @@ static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockT
     // <---- Body Tracking metadata
 
     // ----> Timestamp meta-data
-    GST_BUFFER_TIMESTAMP(buf) =
-        GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+    if (gst_base_src_get_do_timestamp(GST_BASE_SRC(src))) {
+        guint64 image_ts_ns = src->zed.getTimestamp(sl::TIME_REFERENCE::IMAGE).getNanoseconds();
+        if (image_ts_ns > 0) {
+            if (!src->image_ts_base_valid || image_ts_ns < src->image_ts_base_ns) {
+                src->image_ts_base_ns = image_ts_ns;
+                src->image_ts_base_valid = TRUE;
+            }
+            GST_BUFFER_TIMESTAMP(buf) = image_ts_ns - src->image_ts_base_ns;
+        } else {
+            GST_BUFFER_TIMESTAMP(buf) =
+                GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+        }
+    } else {
+        GST_BUFFER_TIMESTAMP(buf) =
+            GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+    }
     GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
     GST_BUFFER_OFFSET(buf) = src->buffer_index++;
     // <---- Timestamp meta-data

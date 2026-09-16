@@ -107,6 +107,8 @@ struct _GstZedXOneSrc {
     int _realFps;   // Real FPS
 
     GstClockTime _acqStartTime;   // Acquisition start time
+    guint64 _imageTsBaseNs;       // First IMAGE timestamp used as stream origin
+    gboolean _imageTsBaseValid;   // True when _imageTsBaseNs is initialized
 
     guint64 _bufferIndex;   // Buffer index counter
 

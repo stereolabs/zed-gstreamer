@@ -771,11 +771,42 @@ static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
     src->_outFramesize = 0;
     src->_isStarted = FALSE;
     src->_bufferIndex = 0;
+    src->_imageTsBaseNs = 0;
+    src->_imageTsBaseValid = FALSE;
 
     if (src->_caps) {
         gst_caps_unref(src->_caps);
         src->_caps = NULL;
     }
+}
+
+static gboolean gst_zedxonesrc_set_timestamp(GstZedXOneSrc *src, GstBuffer *buf,
+                                             GstClockTime clock_time) {
+    if (gst_base_src_get_do_timestamp(GST_BASE_SRC(src))) {
+        guint64 image_ts_ns = src->_zed->getTimestamp(sl::TIME_REFERENCE::IMAGE).getNanoseconds();
+        if (image_ts_ns > 0) {
+            if (!src->_imageTsBaseValid || image_ts_ns < src->_imageTsBaseNs) {
+                src->_imageTsBaseNs = image_ts_ns;
+                src->_imageTsBaseValid = TRUE;
+            }
+
+            GST_BUFFER_TIMESTAMP(buf) = image_ts_ns - src->_imageTsBaseNs;
+            GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+            return TRUE;
+        }
+    }
+
+    if (GST_CLOCK_TIME_IS_VALID(clock_time)) {
+        GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)),
+                                                   clock_time);
+        GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+        return TRUE;
+    }
+
+    GST_WARNING_OBJECT(src, "No pipeline clock available, buffer will have no timestamp");
+    GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_TIME_NONE;
+    GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
+    return FALSE;
 }
 
 /* Try to enable SVO recording on an open camera.
@@ -2060,15 +2091,7 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
     pose.orient[2] = 0.0;
 
     // ----> Timestamp meta-data
-    if (GST_CLOCK_TIME_IS_VALID(clock_time)) {
-        GST_BUFFER_TIMESTAMP(buf) =
-            GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
-        GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
-    } else {
-        GST_WARNING_OBJECT(src, "No pipeline clock available, buffer will have no timestamp");
-        GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_TIME_NONE;
-        GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
-    }
+    gst_zedxonesrc_set_timestamp(src, buf, clock_time);
     GST_BUFFER_OFFSET(buf) = src->_bufferIndex++;
 
     guint64 offset = GST_BUFFER_OFFSET(buf);
@@ -2227,15 +2250,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // ----> Timestamp meta-data
     GST_TRACE("Timestamp meta-data");
-    if (GST_CLOCK_TIME_IS_VALID(clock_time)) {
-        GST_BUFFER_TIMESTAMP(buf) =
-            GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
-        GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
-    } else {
-        GST_WARNING_OBJECT(src, "No pipeline clock available, buffer will have no timestamp");
-        GST_BUFFER_TIMESTAMP(buf) = GST_CLOCK_TIME_NONE;
-        GST_BUFFER_DTS(buf) = GST_CLOCK_TIME_NONE;
-    }
+    gst_zedxonesrc_set_timestamp(src, buf, clock_time);
     GST_BUFFER_OFFSET(buf) = src->_bufferIndex++;
     // <---- Timestamp meta-data
 
