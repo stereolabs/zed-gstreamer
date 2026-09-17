@@ -1856,8 +1856,6 @@ static void gst_zedsrc_reset(GstZedSrc *src) {
 
     src->out_framesize = 0;
     src->is_started = FALSE;
-    src->image_ts_base_ns = 0;
-    src->image_ts_base_valid = FALSE;
 
     src->last_frame_count = 0;
     src->total_dropped_frames = 0;
@@ -3628,7 +3626,8 @@ static void gst_zedsrc_setup_runtime_parameters(GstZedSrc *src,
     }
 }
 
-static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockTime clock_time) {
+static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockTime clock_time,
+                                       guint64 image_ts_ns, guint64 realtime_ns) {
     ZedInfo info;
     ZedPose pose;
     ZedSensors sens;
@@ -3929,23 +3928,25 @@ static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockT
     // <---- Body Tracking metadata
 
     // ----> Timestamp meta-data
+    GstClockTime timestamp =
+        GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
+
     if (gst_base_src_get_do_timestamp(GST_BASE_SRC(src))) {
-        guint64 image_ts_ns = src->zed.getTimestamp(sl::TIME_REFERENCE::IMAGE).getNanoseconds();
-        if (image_ts_ns > 0) {
-            if (!src->image_ts_base_valid || image_ts_ns < src->image_ts_base_ns) {
-                src->image_ts_base_ns = image_ts_ns;
-                src->image_ts_base_valid = TRUE;
+        if (image_ts_ns > 0 && realtime_ns > 0) {
+            const GstClockTime running_time = timestamp;
+
+            if (image_ts_ns >= realtime_ns) {
+                timestamp = running_time + (image_ts_ns - realtime_ns);
+            } else {
+                const guint64 image_age_ns = realtime_ns - image_ts_ns;
+                if (running_time >= image_age_ns) {
+                    timestamp = running_time - image_age_ns;
+                }
             }
-            GST_BUFFER_TIMESTAMP(buf) = image_ts_ns - src->image_ts_base_ns;
-        } else {
-            GST_BUFFER_TIMESTAMP(buf) =
-                GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
         }
-    } else {
-        GST_BUFFER_TIMESTAMP(buf) =
-            GST_CLOCK_DIFF(gst_element_get_base_time(GST_ELEMENT(src)), clock_time);
     }
-    GST_BUFFER_DTS(buf) = GST_BUFFER_TIMESTAMP(buf);
+    GST_BUFFER_TIMESTAMP(buf) = timestamp;
+    GST_BUFFER_DTS(buf) = timestamp;
     GST_BUFFER_OFFSET(buf) = src->buffer_index++;
     // <---- Timestamp meta-data
 
@@ -3965,6 +3966,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstMapInfo minfo;
     GstClock *clock = nullptr;
     GstClockTime clock_time = GST_CLOCK_TIME_NONE;
+    guint64 image_ts_ns = 0;
+    guint64 realtime_ns = 0;
 
     gboolean mapped = FALSE;
     GstFlowReturn flow_ret = GST_FLOW_OK;
@@ -4047,6 +4050,10 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         flow_ret = GST_FLOW_ERROR;
         goto out;
     }
+    if (gst_base_src_get_do_timestamp(GST_BASE_SRC(src))) {
+        image_ts_ns = src->zed.getTimestamp(sl::TIME_REFERENCE::IMAGE).getNanoseconds();
+        realtime_ns = g_get_real_time() * GST_USECOND;
+    }
     // <---- ZED grab
 
     // ----> Clock update
@@ -4113,7 +4120,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
     // <---- Memory copy
 
-    gst_zedsrc_attach_metadata(src, buf, clock_time);
+    gst_zedsrc_attach_metadata(src, buf, clock_time, image_ts_ns, realtime_ns);
 
 out:
     if (mapped)
@@ -4201,6 +4208,8 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     GstFlowReturn flow_ret = GST_FLOW_OK;
     GstClock *clock = nullptr;
     GstClockTime clock_time = GST_CLOCK_TIME_NONE;
+    guint64 image_ts_ns = 0;
+    guint64 realtime_ns = 0;
     CUcontext zctx;
 
     // Acquisition start time
@@ -4232,6 +4241,10 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         GST_ERROR_OBJECT(src, "grab() failed: %s", sl::toString(ret).c_str());
         cuCtxPopCurrent_v2(NULL);
         return GST_FLOW_ERROR;
+    }
+    if (gst_base_src_get_do_timestamp(GST_BASE_SRC(src))) {
+        image_ts_ns = src->zed.getTimestamp(sl::TIME_REFERENCE::IMAGE).getNanoseconds();
+        realtime_ns = g_get_real_time() * GST_USECOND;
     }
 
     // Get clock for timestamp
@@ -4487,7 +4500,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     }
 
     // Attach Unified Metadata
-    gst_zedsrc_attach_metadata(src, buf, clock_time);
+    gst_zedsrc_attach_metadata(src, buf, clock_time, image_ts_ns, realtime_ns);
 
     cuCtxPopCurrent_v2(NULL);
 
