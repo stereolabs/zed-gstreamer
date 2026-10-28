@@ -1973,9 +1973,16 @@ static gboolean gst_zedxonesrc_query(GstBaseSrc *bsrc, GstQuery *query) {
             return FALSE;
         }
 
-        // Latency is one frame duration
+        // Buffers are timestamped when grab() returns, then the image is retrieved and copied
         min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, src->_cameraFps);
         max_latency = min_latency;
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+        // The raw NV12 image is only wrapped, which the sink processing deadline covers: reporting
+        // a frame for it made every sink with sync=true hold it a frame longer
+        if (src->_resolvedStreamType == GST_ZEDXONESRC_RAW_NV12) {
+            min_latency = 0;
+        }
+#endif
 
         GST_DEBUG_OBJECT(src, "Reporting latency: min %" GST_TIME_FORMAT ", max %" GST_TIME_FORMAT,
                          GST_TIME_ARGS(min_latency), GST_TIME_ARGS(max_latency));

@@ -3901,16 +3901,21 @@ static gboolean gst_zedsrc_query(GstBaseSrc *bsrc, GstQuery *query) {
             return FALSE;
         }
 
-        // Calculate latency based on configured FPS
-        // Latency is approximately one frame duration
-        if (src->camera_fps > 0) {
-            min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, src->camera_fps);
-            max_latency = min_latency * 2;   // Allow some buffer for processing
-        } else {
-            // Fallback to 30 FPS assumption
-            min_latency = gst_util_uint64_scale_int(GST_SECOND, 1, 30);
-            max_latency = min_latency * 2;
+        // Buffers are timestamped when grab() returns, then the images are retrieved and copied,
+        // which takes up to a frame (left image and depth at HD1200). 30 FPS assumed if not known.
+        const GstClockTime frame_duration =
+            gst_util_uint64_scale_int(GST_SECOND, 1, src->camera_fps > 0 ? src->camera_fps : 30);
+        min_latency = frame_duration;
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+        // The raw NV12 images are only wrapped, and pushed within a ms: reporting a frame for them
+        // made every sink with sync=true hold them a frame longer
+        if ((src->resolved_stream_type == GST_ZEDSRC_RAW_NV12 ||
+             src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) &&
+            !src->nv12_rectified) {
+            min_latency = 0;
         }
+#endif
+        max_latency = 2 * frame_duration;   // Allow some buffer for processing
 
         GST_DEBUG_OBJECT(src, "Latency query: min=%.3f ms, max=%.3f ms",
                          (gdouble) min_latency / GST_MSECOND, (gdouble) max_latency / GST_MSECOND);
