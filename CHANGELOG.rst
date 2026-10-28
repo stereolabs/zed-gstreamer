@@ -22,6 +22,8 @@ ZED SDK v5.5
   which do not provide it. The `Auto` stream type of `zedxonesrc` uses BGRA with the ZED X One HDR
 - Fix a crash when a raw NV12 zero-copy image is used after the pipeline is stopped: the camera is now closed once the
   last image still used downstream is released
+- Fix the raw NV12 zero-copy stream types of `zedsrc` and `zedxonesrc` delaying every frame by one more frame (16.7 ms
+  at 60 FPS) in pipelines whose sink is synchronized on the clock (`sync=true`, the default)
 - Fix `zeddatamux` attaching invalid metadata when the data buffer is received after the video buffer
 - Fix the end of an SVO file being reported as an error instead of the end of the stream with the BGRA and depth stream
   types of `zedsrc` and with `zedxonesrc`
