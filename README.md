@@ -20,8 +20,8 @@
 
 GStreamer package for ZED Cameras. The package is composed of several elements:
 
-* [`zedsrc`](./gst-zed-src): acquires camera color image and depth map and pushes them in a GStreamer pipeline. Supports zero-copy NV12 output on Jetson for GMSL cameras (ZED X, ZED X Mini) with SDK 5.2+.
-* [`zedxonesrc`](./gst-zedxone-src): acquires camera color image from a ZED X One GS or ZED X One 4K camera and pushes them in a GStreamer pipeline. Note: this element does not use the ZED SDK, but a porting of the [zedx-one-capture](https://github.com/stereolabs/zedx-one-capture) library.
+* [`zedsrc`](./gst-zed-src): acquires camera color image and depth map and pushes them in a GStreamer pipeline. Supports zero-copy NV12 output on Jetson for live GMSL cameras (ZED X, ZED X Mini) with SDK 5.2+, raw or rectified (SDK 5.5+, also for the ZED X HDR cameras).
+* [`zedxonesrc`](./gst-zedxone-src): acquires camera color image from a ZED X One GS, ZED X One 4K, ZED X One HDR or ZED X One Core camera with the ZED SDK `sl::CameraOne` API and pushes them in a GStreamer pipeline.
 * [`zedmeta`](./gst-zed-meta): GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data).
 * [`zeddemux`](./gst-zed-demux): receives a composite `zedsrc` stream (`color left + color right` data or `color left + depth map` + metadata),
   processes the eventual depth data and pushes them in two separated new streams named `src_left` and `src_aux`. A third source pad is created for metadata to be externally processed.
@@ -34,13 +34,13 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 ### Prerequisites
 
-* [ZED SDK v5.1](https://www.stereolabs.com/developers/release/5.1)
+* [ZED SDK v5.5](https://www.stereolabs.com/developers/release/5.5). Older ZED SDK v5 versions are supported, without the features marked `SDK 5.5+`
 * CMake (v3.6+)
 * GStreamer 1.0
 
 ### Windows installation
 
-* Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/5.1) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
+* Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/5.5) [Optional to compile the `zedsrc` element to acquire data from a ZED camera device]
 * Install [Git](https://git-scm.com/) or download a ZIP archive
 * Install [CMake](https://cmake.org/)
 * Install a [GStreamer distribution (**both `runtime` and `development` installers**)](https://gstreamer.freedesktop.org/download/).
@@ -61,7 +61,7 @@ GStreamer package for ZED Cameras. The package is composed of several elements:
 
 #### Install prerequisites
 
-* Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/5.1)
+* Install the latest ZED SDK from the [official download page](https://www.stereolabs.com/developers/release/5.5)
 
 * Update the list of `apt` available packages
 
@@ -133,6 +133,9 @@ sudo make install
 Most of the properties follow the same name as the C++ API. Except that `_` is replaced by `-` to follow gstreamer common formatting.
 
 ```bash
+  allow-depth-cuda-graph: Lower the CPU cost and the runtime of the NEURAL depth by recording its computation once, at the cost of a larger share of the GPU (SDK 5.5+)
+                        flags: readable, writable
+                        Boolean. Default: false
   area-file-path      : Area localization file that describes the surroundings, saved from a previous tracking session.
                         flags: readable, writable
                         String. Default: ""
@@ -172,6 +175,11 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   bt-min-keypoints    : Specify the Minimum keypoints threshold.
                         flags: readable, writable
                         Integer. Range: 0 - 70 Default: 5 
+  bt-model-gen        : Generation of the body tracking network (SDK 5.5+)
+                        flags: readable, writable
+                        Enum "GstZedSrcBtModelGen" Default: 1, "GEN_2"
+                           (0): GEN_1            - Previous body tracking network
+                           (1): GEN_2            - More robust in crowded scenes and to unusual body orientations, detects people further away. Used with the MEDIUM and ACCURATE models in BODY_18 and BODY_34 formats, the other configurations fall back to GEN_1
   bt-prediction-timeout-s: Body Tracking prediction timeout (sec)
                         flags: readable, writable
                         Float. Range:               0 -               1 Default:             0.2 
@@ -299,6 +307,11 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (2): QUALITY          - Computation mode designed for challenging areas with untextured surfaces.
                            (1): PERFORMANCE      - Computation mode optimized for speed.
                            (0): NONE             - This mode does not compute any depth map. Only rectified stereo images will be available.
+  depth-precision     : Precision of the NEURAL depth inference (SDK 5.5+)
+                        flags: readable, writable
+                        Enum "GstZedSrcDepthPrecision" Default: 0, "FP16"
+                           (0): FP16             - Default precision
+                           (1): INT8             - Faster and lighter at a small accuracy cost. NEURAL depth mode only, falls back to FP16 when not supported
   depth-stabilization : Enable depth stabilization
                         flags: readable, writable
                         Integer. Range: 0 - 100 Default: 1 
@@ -355,6 +368,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   num-buffers         : Number of buffers to output before sending EOS (-1 = unlimited)
                         flags: readable, writable
                         Integer. Range: -1 - 2147483647 Default: -1 
+  nv12-rectified      : Output rectified images instead of the raw sensor images with the NV12 zero-copy stream types (Jetson, SDK 5.5+). With stream-type=-1 (Auto), also allows NV12 for the ZED X HDR cameras
+                        flags: readable, writable
+                        Boolean. Default: false
   od-allow-reduced-precision-inference: Set to TRUE to allow inference to run at a lower precision to improve runtime
                         flags: readable, writable
                         Boolean. Default: false
@@ -397,7 +413,9 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (3): Person Head FAST - Bounding Box detector specialized in person heads, particularly well suited for crowded environments, the person localization is also improved
                            (4): Person Head ACCURATE - Bounding Box detector specialized in person heads, particularly well suited for crowded environments, the person localization is also improved, more accurate but slower than the base model
                            (6): Custom YOLO-like Box Objects - For internal inference using your own custom YOLO-like model. Requires od-custom-onnx-file property to be set.
-  od-custom-onnx-file : Path to custom ONNX file for Custom YOLO-like detection model
+                           (7): Custom RF-DETR-like Box Objects - For internal inference using your own custom RF-DETR / DETR-like model (two outputs, NMS-free). Requires od-custom-onnx-file property to be set. (SDK 5.5+)
+                           (8): Custom Box Objects (auto-detect) - For internal inference using your own custom ONNX model, auto-detecting YOLO-like vs RF-DETR/DETR-like. Requires od-custom-onnx-file property to be set. (SDK 5.5+)
+  od-custom-onnx-file : Path to custom ONNX file for the custom detection models
                         flags: readable, writable
                         String. Default: ""
   od-custom-onnx-dynamic-input-shape-w: Dynamic input shape width for custom ONNX model
@@ -427,6 +445,12 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
   pos-depth-min-range : This setting allows you to change the minmum depth used by the SDK for Positional Tracking.
                         flags: readable, writable
                         Float. Range:              -1 -           65535 Default:              -1 
+  positional-tracking-compute-preference: How much GPU the GEN_3 positional tracking may use. PREFER_GPU makes the tracking faster at the cost of GPU usage (SDK 5.5+)
+                        flags: readable, writable
+                        Enum "GstZedSrcComputePref" Default: 0, "AUTO"
+                           (0): AUTO             - Let the ZED SDK choose
+                           (1): PREFER_CPU       - Keep the processing on the CPU
+                           (2): PREFER_GPU       - Use the GPU when it is faster
   positional-tracking-mode: Positional tracking mode
                         flags: readable, writable
                         Enum "GstZedsrcPtMode" Default: 0, "GEN_1"
@@ -521,7 +545,10 @@ Most of the properties follow the same name as the C++ API. Except that `_` is r
                            (3): QHDPLUS          - 3200x1800 (only ZED X One 4K)
                            (2): HD1200           - 1920x1200
                            (1): HD1080           - 1920x1080
-                           (0): SVGA             - 960x600 (only ZED X One GS)
+                           (0): SVGA             - 960x600 (only ZED X One GS and Core)
+                           (5): HD1536           - 1920x1536 (only ZED X One HDR)
+                           (6): XVGA             - 960x768 (only ZED X One HDR, SDK 5.3+)
+                           (7): TXGA             - 640x512 (only ZED X One HDR, SDK 5.3+)
   camera-sn           : Select camera from the serial number
                         flags: readable, writable
                         Integer64. Range: 0 - 999999999 Default: 0 
@@ -702,6 +729,13 @@ The GstZedSrcMeta is subdivided in four sub-structures:
 * `ZedPose`: position and orientation of the camera if positional tracking is enabled
 * `ZedSensors`: sensors data (all camera models with IMU support, i.e. all except the original ZED)
 * `ZedObjectData`: detected object information (requires AI module, i.e. ZED 2 or newer)
+
+It also carries the camera timestamps of the image, in nanoseconds:
+
+* `image_timestamp_ns`: timestamp of the image (`sl::TIME_REFERENCE::IMAGE`)
+* `center_of_exposure_timestamp_ns`: middle of the exposure of the image (`sl::TIME_REFERENCE::IMAGE_CENTER_OF_EXPOSURE`, SDK 5.5+), to align the frames with sensors that timestamp their measures, such as a LiDAR. Available with the ZED X, ZED X Mini, ZED X One GS and ZED X One 4K cameras, `0` otherwise
+
+To copy the metadata to another buffer, use `gst_buffer_copy_zed_src_meta()`.
 
 More details about the sub-structures are available in the [`gstzedmeta.h` file](./gst-zed-meta/gstzedmeta.h)
 
@@ -904,10 +938,15 @@ Ready to use scripts are available in the `scripts` folder for Windows, Desktop 
 The [`scripts/jetson`](./scripts/jetson) folder contains optimized pipelines for hardware-accelerated streaming on NVIDIA Jetson:
 
 * **Zero-copy NV12** (stream-type=6): For ZED X/X Mini with SDK 5.2+, enables direct memory path to hardware encoder with minimal latency
+* **Rectified NV12** (`nv12-rectified=true`): With SDK 5.5+, the NV12 stream types output rectified images, also for the ZED X HDR cameras, e.g. `zedsrc stream-type=6 nv12-rectified=true ! nvv4l2h265enc ! ...`
 * **SRT/RTSP/UDP streaming**: Low-latency streaming scripts with automatic camera detection
 * **DeepStream integration**: Object detection pipelines using NVIDIA DeepStream
 
 Scripts auto-detect camera type (GMSL vs USB) and SDK version to select the optimal pipeline.
+
+The NV12 zero-copy images come from a live GMSL camera: with an SVO file or a stream as input, `stream-type=-1` (Auto) selects BGRA, and the NV12 stream types report an error at start.
+
+The raw NV12 zero-copy images point into the camera capture buffers. When the pipeline is stopped while some of them are still used downstream, the camera is closed once they are released.
 
 ## Related
 

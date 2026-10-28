@@ -505,12 +505,10 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
                     GST_TRACE("Copying video buffer %lu B", out_buf_size);
                     memcpy(map_out.data, map_store.data, out_buf_size);
 
-                    GstZedSrcMeta *meta = (GstZedSrcMeta *) buf;
+                    GstZedSrcMeta *meta = (GstZedSrcMeta *) map_in.data;
 
                     GST_TRACE("Adding metadata");
-                    gst_buffer_add_zed_src_meta(out_buf, meta->info, meta->pose, meta->sens,
-                                                meta->od_enabled, meta->obj_count, meta->objects,
-                                                meta->frame_id);
+                    gst_buffer_copy_zed_src_meta(out_buf, meta);
 
                     // ----> Timestamp meta-data
                     GST_TRACE("Out buffer set timestamp");
@@ -646,9 +644,7 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
                     GstZedSrcMeta *meta = (GstZedSrcMeta *) map_store.data;
 
                     GST_TRACE("Adding metadata");
-                    gst_buffer_add_zed_src_meta(out_buf, meta->info, meta->pose, meta->sens,
-                                                meta->od_enabled, meta->obj_count, meta->objects,
-                                                meta->frame_id);
+                    gst_buffer_copy_zed_src_meta(out_buf, meta);
 
                     // ----> Timestamp meta-data
                     GST_TRACE("Out buffer set timestamp");

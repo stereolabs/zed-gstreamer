@@ -35,6 +35,11 @@
 
 #include <chrono>
 
+// Features added after the oldest supported ZED SDK version are only built when available
+#define GST_ZEDXONESRC_SDK_AT_LEAST(major, minor)                                                  \
+    (ZED_SDK_MAJOR_VERSION > (major) ||                                                            \
+     (ZED_SDK_MAJOR_VERSION == (major) && ZED_SDK_MINOR_VERSION >= (minor)))
+
 GST_DEBUG_CATEGORY_STATIC(gst_zedxonesrc_debug);
 #define GST_CAT_DEFAULT gst_zedxonesrc_debug
 
@@ -122,7 +127,10 @@ typedef enum {
     GST_ZEDXONESRC_1080P,     // 1920 x 1080
     GST_ZEDXONESRC_1200P,     // 1920 x 1200
     GST_ZEDXONESRC_QHDPLUS,   // 3200x1800
-    GST_ZEDXONESRC_4K         // 3840 x 2160
+    GST_ZEDXONESRC_4K,        // 3840 x 2160
+    GST_ZEDXONESRC_HD1536,    // 1920 x 1536
+    GST_ZEDXONESRC_XVGA,      // 960 x 768
+    GST_ZEDXONESRC_TXGA       // 640 x 512
 } GstZedXOneSrcRes;
 
 typedef enum {
@@ -263,7 +271,12 @@ static GType gst_zedxonesrc_resol_get_type(void) {
             {static_cast<gint>(GST_ZEDXONESRC_QHDPLUS), "3200x1800 (only ZED X One 4K)", "QHDPLUS"},
             {static_cast<gint>(GST_ZEDXONESRC_1200P), "1920x1200", "HD1200"},
             {static_cast<gint>(GST_ZEDXONESRC_1080P), "1920x1080", "HD1080"},
-            {static_cast<gint>(GST_ZEDXONESRC_SVGA), "960x600 (only ZED X One GS)", "SVGA"},
+            {static_cast<gint>(GST_ZEDXONESRC_SVGA), "960x600 (only ZED X One GS and Core)", "SVGA"},
+            {static_cast<gint>(GST_ZEDXONESRC_HD1536), "1920x1536 (only ZED X One HDR)", "HD1536"},
+#if GST_ZEDXONESRC_SDK_AT_LEAST(5, 3)
+            {static_cast<gint>(GST_ZEDXONESRC_XVGA), "960x768 (only ZED X One HDR)", "XVGA"},
+            {static_cast<gint>(GST_ZEDXONESRC_TXGA), "640x512 (only ZED X One HDR)", "TXGA"},
+#endif
             {0, NULL, NULL},
         };
 
@@ -280,7 +293,7 @@ static GType gst_zedxonesrc_fps_get_type(void) {
     if (!zedxonesrc_fps_type) {
         static GEnumValue pattern_types[] = {
             {GST_ZEDXONESRC_120FPS, "Only with SVGA. Not with ZED X One 4K", "120 FPS"},
-            {GST_ZEDXONESRC_60FPS, "Not available with 4K mode", "60  FPS"},
+            {GST_ZEDXONESRC_60FPS, "Not available with 4K mode and with ZED X One HDR", "60  FPS"},
             {GST_ZEDXONESRC_30FPS, "Available with all the resolutions", "30  FPS"},
             {GST_ZEDXONESRC_15FPS, "Available with all the resolutions", "15  FPS"},
             {0, NULL, NULL},
@@ -371,6 +384,24 @@ static GstStaticPadTemplate gst_zedxonesrc_src_template = GST_STATIC_PAD_TEMPLAT
                      "width = (int)960, "
                      "height = (int)600, "
                      "framerate = (fraction) { 15, 30, 60, 120 }"
+                     ";"
+                     "video/x-raw, "   // Color HD1536 (ZED X One HDR)
+                     "format = (string)BGRA, "
+                     "width = (int)1920, "
+                     "height = (int)1536, "
+                     "framerate = (fraction) { 15, 30 }"
+                     ";"
+                     "video/x-raw, "   // Color XVGA (ZED X One HDR)
+                     "format = (string)BGRA, "
+                     "width = (int)960, "
+                     "height = (int)768, "
+                     "framerate = (fraction) { 15, 30 }"
+                     ";"
+                     "video/x-raw, "   // Color TXGA (ZED X One HDR)
+                     "format = (string)BGRA, "
+                     "width = (int)640, "
+                     "height = (int)512, "
+                     "framerate = (fraction) { 15, 30 }"
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
                      ";"
                      "video/x-raw(memory:NVMM), "   // NV12 4K (zero-copy)
@@ -431,6 +462,21 @@ bool resol_to_w_h(const GstZedXOneSrcRes &resol, guint32 &out_w, guint32 &out_h)
     case GST_ZEDXONESRC_4K:
         out_w = 3840;
         out_h = 2160;
+        break;
+
+    case GST_ZEDXONESRC_HD1536:
+        out_w = 1920;
+        out_h = 1536;
+        break;
+
+    case GST_ZEDXONESRC_XVGA:
+        out_w = 960;
+        out_h = 768;
+        break;
+
+    case GST_ZEDXONESRC_TXGA:
+        out_w = 640;
+        out_h = 512;
         break;
 
     default:
@@ -764,9 +810,25 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
 }
 
 static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    g_mutex_lock(&src->_closeLock);
+    gint in_use = g_atomic_int_get(&src->_rawBuffersInUse);
+    if (in_use > 0 && src->_zed->isOpened()) {
+        // Closing now would free the images still used downstream
+        GST_INFO_OBJECT(src,
+                        "%d images are still used downstream, the camera is closed once they "
+                        "are released",
+                        in_use);
+        src->_closePending = TRUE;
+    } else if (src->_zed->isOpened()) {
+        src->_zed->close();
+    }
+    g_mutex_unlock(&src->_closeLock);
+#else
     if (src->_zed->isOpened()) {
         src->_zed->close();
     }
+#endif
 
     src->_outFramesize = 0;
     src->_isStarted = FALSE;
@@ -885,6 +947,12 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     if (!src->_zed) {
         src->_zed = std::make_unique<sl::CameraOne>();
     }
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    src->_rawBuffersInUse = 0;
+    src->_closePending = FALSE;
+    g_mutex_init(&src->_closeLock);
+#endif
 
     gst_zedxonesrc_reset(src);
 }
@@ -1305,6 +1373,14 @@ void gst_zedxonesrc_finalize(GObject *object) {
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_finalize");
 
     /* clean up object here */
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    // The wrapped raw buffers hold a reference on the element: none can be left here
+    if (src->_zed && src->_zed->isOpened()) {
+        src->_zed->close();
+    }
+    g_mutex_clear(&src->_closeLock);
+#endif
+
     if (src->_caps) {
         gst_caps_unref(src->_caps);
         src->_caps = NULL;
@@ -1384,8 +1460,16 @@ static void gst_zedxonesrc_resolve_stream_type(GstZedXOneSrc *src) {
     GST_INFO_OBJECT(src, "stream-type=AUTO, checking downstream capabilities...");
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    // Check if downstream accepts NV12 NVMM
-    if (gst_zedxonesrc_downstream_accepts_nv12_nvmm(src)) {
+    // Check if downstream accepts NV12 NVMM. The NV12 zero-copy buffers come from a live camera
+    // (an SVO file or a stream has none), and the ZED X One HDR has none.
+    sl::CameraOneInformation cam_info = src->_zed->getCameraInformation();
+    if (cam_info.camera_model == sl::MODEL::ZED_XONE_HDR) {
+        GST_INFO_OBJECT(src, "The ZED X One HDR has no NV12 zero-copy output, using BGRA");
+    } else if (cam_info.input_type == sl::INPUT_TYPE::SVO ||
+               cam_info.input_type == sl::INPUT_TYPE::STREAM) {
+        GST_INFO_OBJECT(src, "No NV12 zero-copy output with the %s input, using BGRA",
+                        sl::toString(cam_info.input_type).c_str());
+    } else if (gst_zedxonesrc_downstream_accepts_nv12_nvmm(src)) {
         src->_resolvedStreamType = GST_ZEDXONESRC_RAW_NV12;
         GST_INFO_OBJECT(src, "Auto-negotiated to NV12 zero-copy (stream-type=%d)",
                         src->_resolvedStreamType);
@@ -1471,6 +1555,18 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_calculate_caps");
 
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    g_mutex_lock(&src->_closeLock);
+    if (src->_closePending) {
+        GST_WARNING_OBJECT(src,
+                           "Restarting while images of the previous run are still used "
+                           "downstream: they are no longer valid");
+        src->_zed->close();
+        src->_closePending = FALSE;
+    }
+    g_mutex_unlock(&src->_closeLock);
+#endif
+
     // ----> Set init parameters
     sl::InitParametersOne init_params;
 
@@ -1508,6 +1604,17 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     case GST_ZEDXONESRC_4K:
         init_params.camera_resolution = sl::RESOLUTION::HD4K;
         break;
+    case GST_ZEDXONESRC_HD1536:
+        init_params.camera_resolution = sl::RESOLUTION::HD1536;
+        break;
+#if GST_ZEDXONESRC_SDK_AT_LEAST(5, 3)
+    case GST_ZEDXONESRC_XVGA:
+        init_params.camera_resolution = sl::RESOLUTION::XVGA;
+        break;
+    case GST_ZEDXONESRC_TXGA:
+        init_params.camera_resolution = sl::RESOLUTION::TXGA;
+        break;
+#endif
     default:
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND, ("Failed to set camera resolution"), (NULL));
         return FALSE;
@@ -1551,7 +1658,14 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     // ----> Open camera
     ret = src->_zed->open(init_params);
 
-    if (ret > sl::ERROR_CODE::SUCCESS) {
+    if (ret == sl::ERROR_CODE::INVALID_RESOLUTION) {
+        GST_ELEMENT_ERROR(src, RESOURCE, SETTINGS,
+                          ("Failed to open camera, '%s': the camera does not support this "
+                           "camera-resolution (the ZED X One HDR uses HD1536, XVGA or TXGA)",
+                           sl::toString(ret).c_str()),
+                          (NULL));
+        return FALSE;
+    } else if (ret > sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, NOT_FOUND,
                           ("Failed to open camera, '%s'", sl::toString(ret).c_str()), (NULL));
         return FALSE;
@@ -1564,119 +1678,90 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         GST_WARNING("Camera FPS set to %d, but real FPS is %d", src->_cameraFps, src->_realFps);
     }
 
-    // Lambda to check return values
-    auto check_ret = [src](sl::ERROR_CODE err) {
-        if (err != sl::ERROR_CODE::SUCCESS) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed, '%s'", sl::toString(err).c_str()),
-                              (NULL));
-            return false;
-        }
-        return true;
-    };
-
     // ----> Get default camera control values for debug
     GST_INFO("CAMERA CONTROLS");
-    int value;
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::SATURATION, value);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Saturation: %d", value);
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::SHARPNESS, value);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Sharpness: %d", value);
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::GAMMA, value);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Gamma: %d", value);
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, value);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default White balance auto: %s", (value ? "TRUE" : "FALSE"));
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE, value);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default White balance temperature: %d", value);
-
-    int val_min, val_max;
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE_TIME, value);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Exposure time: %d", value);
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::AUTO_EXPOSURE_TIME_RANGE, val_min,
-                                       val_max);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Auto Exposure range: [%d,%d]", val_min, val_max);
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE_COMPENSATION, value);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Exposure compensation: %d", value);
-
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::ANALOG_GAIN, value);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Analog Gain: %d", value);
-    ret =
-        src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::AUTO_ANALOG_GAIN_RANGE, val_min, val_max);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Auto Analog Gain range: [%d,%d]", val_min, val_max);
-
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::DIGITAL_GAIN, value);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Digital Gain: %d", value);
-    ret =
-        src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::AUTO_DIGITAL_GAIN_RANGE, val_min, val_max);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Auto Digital Gain range: [%d,%d]", val_min, val_max);
-
-    ret = src->_zed->getCameraSettings(sl::VIDEO_SETTINGS::DENOISING, value);
-    if (!check_ret(ret))
-        return FALSE;
-    GST_DEBUG(" * Default Denoising: %d", value);
+    const sl::VIDEO_SETTINGS debug_settings[] = {
+        sl::VIDEO_SETTINGS::SATURATION,     sl::VIDEO_SETTINGS::SHARPNESS,
+        sl::VIDEO_SETTINGS::GAMMA,          sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO,
+        sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE, sl::VIDEO_SETTINGS::EXPOSURE_TIME,
+        sl::VIDEO_SETTINGS::EXPOSURE_COMPENSATION, sl::VIDEO_SETTINGS::ANALOG_GAIN,
+        sl::VIDEO_SETTINGS::DIGITAL_GAIN,   sl::VIDEO_SETTINGS::DENOISING};
+    for (sl::VIDEO_SETTINGS setting : debug_settings) {
+        int value;
+        if (src->_zed->isCameraSettingSupported(setting) &&
+            src->_zed->getCameraSettings(setting, value) == sl::ERROR_CODE::SUCCESS) {
+            GST_DEBUG(" * Default %s: %d", sl::toString(setting).c_str(), value);
+        }
+    }
+    const sl::VIDEO_SETTINGS debug_ranges[] = {sl::VIDEO_SETTINGS::AUTO_EXPOSURE_TIME_RANGE,
+                                               sl::VIDEO_SETTINGS::AUTO_ANALOG_GAIN_RANGE,
+                                               sl::VIDEO_SETTINGS::AUTO_DIGITAL_GAIN_RANGE};
+    for (sl::VIDEO_SETTINGS setting : debug_ranges) {
+        int val_min, val_max;
+        if (src->_zed->isCameraSettingSupported(setting) &&
+            src->_zed->getCameraSettings(setting, val_min, val_max) == sl::ERROR_CODE::SUCCESS) {
+            GST_DEBUG(" * Default %s: [%d,%d]", sl::toString(setting).c_str(), val_min, val_max);
+        }
+    }
     // <---- Get default camera control values for debug
 
     // ----> Camera Controls
     GST_INFO("CAMERA CONTROLS");
 
-    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::SATURATION, src->_saturation);
-    if (!check_ret(ret))
+    // The settings that the camera does not provide (the auto ranges of the ZED X One HDR, all
+    // of them with an SVO) are skipped instead of failing the start
+    auto supported = [src](sl::VIDEO_SETTINGS setting) {
+        if (src->_zed->isCameraSettingSupported(setting)) {
+            return true;
+        }
+        GST_INFO(" * %s: not supported by this camera, skipped", sl::toString(setting).c_str());
+        return false;
+    };
+    auto check_ret = [src](sl::VIDEO_SETTINGS setting, sl::ERROR_CODE err) {
+        if (err != sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to set %s, '%s'", sl::toString(setting).c_str(),
+                               sl::toString(err).c_str()),
+                              (NULL));
+            return false;
+        }
+        return true;
+    };
+    auto apply = [&](sl::VIDEO_SETTINGS setting, int value) {
+        return !supported(setting) ||
+               check_ret(setting, src->_zed->setCameraSettings(setting, value));
+    };
+    auto apply_range = [&](sl::VIDEO_SETTINGS setting, int min, int max) {
+        return !supported(setting) ||
+               check_ret(setting, src->_zed->setCameraSettings(setting, min, max));
+    };
+
+    if (!apply(sl::VIDEO_SETTINGS::SATURATION, src->_saturation))
         return FALSE;
     GST_INFO(" * Saturation: %d", src->_saturation);
-    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::SHARPNESS, src->_sharpness);
-    if (!check_ret(ret))
+    if (!apply(sl::VIDEO_SETTINGS::SHARPNESS, src->_sharpness))
         return FALSE;
     GST_INFO(" * Sharpness: %d", src->_sharpness);
-    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::GAMMA, src->_gamma);
-    if (!check_ret(ret))
+    if (!apply(sl::VIDEO_SETTINGS::GAMMA, src->_gamma))
         return FALSE;
     GST_INFO(" * Gamma: %d", src->_gamma);
-    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->_autoWb);
-    if (!check_ret(ret))
+    if (!apply(sl::VIDEO_SETTINGS::WHITEBALANCE_AUTO, src->_autoWb))
         return FALSE;
     GST_INFO(" * White balance auto: %s", (src->_autoWb ? "TRUE" : "FALSE"));
     if (!src->_autoWb) {
-        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE,
-                                           src->_manualWb);
-        if (!check_ret(ret))
+        if (!apply(sl::VIDEO_SETTINGS::WHITEBALANCE_TEMPERATURE, src->_manualWb))
             return FALSE;
         GST_INFO(" * White balance temperature: %d", src->_manualWb);
     }
 
     // Set the AE/AGC master switch at open time so the camera starts in the
     // mode the properties describe.
-    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC,
-                                       src->_autoExposure ? 1 : 0);
-    if (!check_ret(ret))
+    if (!apply(sl::VIDEO_SETTINGS::AEC_AGC, src->_autoExposure ? 1 : 0))
         return FALSE;
     GST_INFO(" * Auto Exposure (AEC_AGC): %s", src->_autoExposure ? "TRUE" : "FALSE");
 
     if (!src->_autoExposure) {
-        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE_TIME, src->_exposure_usec);
-        if (!check_ret(ret))
+        if (!apply(sl::VIDEO_SETTINGS::EXPOSURE_TIME, src->_exposure_usec))
             return FALSE;
         GST_INFO(" * Exposure time: %d", src->_exposure_usec);
         // The cached range is deliberately not collapsed onto this value; that
@@ -1688,16 +1773,13 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
         src->_exposureRange_max = src->_exposureRange_min + 1;
     // Only meaningful while AE is running.
     if (src->_autoExposure) {
-        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::AUTO_EXPOSURE_TIME_RANGE,
-                                           src->_exposureRange_min, src->_exposureRange_max);
-        if (!check_ret(ret))
+        if (!apply_range(sl::VIDEO_SETTINGS::AUTO_EXPOSURE_TIME_RANGE, src->_exposureRange_min,
+                         src->_exposureRange_max))
             return FALSE;
         GST_INFO(" * Auto Exposure range: [%d,%d]", src->_exposureRange_min,
                  src->_exposureRange_max);
     }
-    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::EXPOSURE_COMPENSATION,
-                                       src->_exposureCompensation);
-    if (!check_ret(ret))
+    if (!apply(sl::VIDEO_SETTINGS::EXPOSURE_COMPENSATION, src->_exposureCompensation))
         return FALSE;
     GST_INFO(" * Exposure compensation: %d", src->_exposureCompensation);
 
@@ -1705,15 +1787,13 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     if (src->_autoAnalogGain) {
         if (src->_analogGainRange_max <= src->_analogGainRange_min)
             src->_analogGainRange_max = src->_analogGainRange_min + 1;
-        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::AUTO_ANALOG_GAIN_RANGE,
-                                           src->_analogGainRange_min, src->_analogGainRange_max);
-        if (!check_ret(ret))
+        if (!apply_range(sl::VIDEO_SETTINGS::AUTO_ANALOG_GAIN_RANGE, src->_analogGainRange_min,
+                         src->_analogGainRange_max))
             return FALSE;
         GST_INFO(" * Auto Analog Gain range: [%d,%d]", src->_analogGainRange_min,
                  src->_analogGainRange_max);
     } else {
-        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::ANALOG_GAIN, src->_analogGain);
-        if (!check_ret(ret))
+        if (!apply(sl::VIDEO_SETTINGS::ANALOG_GAIN, src->_analogGain))
             return FALSE;
         GST_INFO(" * Analog Gain: %d (auto OFF)", src->_analogGain);
     }
@@ -1722,21 +1802,18 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     if (src->_autoDigitalGain) {
         if (src->_digitalGainRange_max <= src->_digitalGainRange_min)
             src->_digitalGainRange_max = src->_digitalGainRange_min + 1;
-        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::AUTO_DIGITAL_GAIN_RANGE,
-                                           src->_digitalGainRange_min, src->_digitalGainRange_max);
-        if (!check_ret(ret))
+        if (!apply_range(sl::VIDEO_SETTINGS::AUTO_DIGITAL_GAIN_RANGE, src->_digitalGainRange_min,
+                         src->_digitalGainRange_max))
             return FALSE;
         GST_INFO(" * Auto Digital Gain range: [%d,%d]", src->_digitalGainRange_min,
                  src->_digitalGainRange_max);
     } else {
-        ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::DIGITAL_GAIN, src->_digitalGain);
-        if (!check_ret(ret))
+        if (!apply(sl::VIDEO_SETTINGS::DIGITAL_GAIN, src->_digitalGain))
             return FALSE;
         GST_INFO(" * Digital Gain: %d (auto OFF)", src->_digitalGain);
     }
 
-    ret = src->_zed->setCameraSettings(sl::VIDEO_SETTINGS::DENOISING, src->_denoising);
-    if (!check_ret(ret))
+    if (!apply(sl::VIDEO_SETTINGS::DENOISING, src->_denoising))
         return FALSE;
     GST_INFO(" * Denoising: %d", src->_denoising);
     // <---- Camera Controls
@@ -1756,6 +1833,25 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
 
     // Resolve stream type (AUTO -> actual type based on downstream caps)
     gst_zedxonesrc_resolve_stream_type(src);
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    if (src->_resolvedStreamType == GST_ZEDXONESRC_RAW_NV12) {
+        sl::CameraOneInformation cam_info = src->_zed->getCameraInformation();
+        const char *no_nv12 = NULL;
+        if (cam_info.camera_model == sl::MODEL::ZED_XONE_HDR) {
+            no_nv12 = "The ZED X One HDR does not provide NV12 zero-copy images";
+        } else if (cam_info.input_type == sl::INPUT_TYPE::SVO ||
+                   cam_info.input_type == sl::INPUT_TYPE::STREAM) {
+            no_nv12 = "NV12 zero-copy images are only available from a live camera, not from an "
+                      "SVO file or a stream";
+        }
+        if (no_nv12) {
+            GST_ELEMENT_ERROR(src, RESOURCE, SETTINGS,
+                              ("%s, use stream-type=0 (BGRA) or -1 (Auto)", no_nv12), (NULL));
+            return FALSE;
+        }
+    }
+#endif
 
     if (!gst_zedxonesrc_calculate_caps(src)) {
         return FALSE;
@@ -1896,13 +1992,50 @@ static gboolean gst_zedxonesrc_query(GstBaseSrc *bsrc, GstQuery *query) {
     return res;
 }
 
-#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-/* Callback to release the RawBuffer when GstBuffer is unreffed */
-static void raw_buffer_destroy_notify(gpointer data) {
-    sl::RawBuffer *raw_buffer = static_cast<sl::RawBuffer *>(data);
-    if (raw_buffer) {
-        delete raw_buffer;
+/* Camera timestamps of the grabbed image */
+static void gst_zedxonesrc_set_meta_timestamps(GstZedXOneSrc *src, GstZedSrcMeta *meta,
+                                               sl::MODEL camera_model) {
+    if (!meta) {
+        return;
     }
+
+    meta->image_timestamp_ns = src->_zed->getTimestamp(sl::TIME_REFERENCE::IMAGE).getNanoseconds();
+#if GST_ZEDXONESRC_SDK_AT_LEAST(5, 5)
+    // The ZED X One HDR reports no per-frame exposure: the SDK would only return 0 and log a warning
+    if (camera_model != sl::MODEL::ZED_XONE_HDR) {
+        meta->center_of_exposure_timestamp_ns =
+            src->_zed->getTimestamp(sl::TIME_REFERENCE::IMAGE_CENTER_OF_EXPOSURE).getNanoseconds();
+    }
+#else
+    (void) camera_model;
+#endif
+}
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+typedef struct {
+    GstZedXOneSrc *src;
+    sl::RawBuffer *raw;
+} RawBufferWrappedCtx;
+
+/* Callback to release the RawBuffer when GstBuffer is unreffed. Closes the camera if it was
+ * stopped while this buffer was still in use */
+static void raw_buffer_destroy_notify(gpointer data) {
+    RawBufferWrappedCtx *ctx = static_cast<RawBufferWrappedCtx *>(data);
+    GstZedXOneSrc *src = ctx->src;
+
+    delete ctx->raw;
+
+    if (g_atomic_int_dec_and_test(&src->_rawBuffersInUse)) {
+        g_mutex_lock(&src->_closeLock);
+        if (src->_closePending && g_atomic_int_get(&src->_rawBuffersInUse) == 0) {
+            src->_zed->close();
+            src->_closePending = FALSE;
+        }
+        g_mutex_unlock(&src->_closeLock);
+    }
+
+    gst_object_unref(src);
+    g_free(ctx);
 }
 
 /* Create function for zero-copy NV12 mode */
@@ -2013,9 +2146,13 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
                      params->bufferDesc, params->dataSize, nvbuf->memType, params->colorFormat);
 
     // Create GstBuffer wrapping the NvBufSurface pointer directly
+    RawBufferWrappedCtx *ctx = g_new0(RawBufferWrappedCtx, 1);
+    ctx->src = GST_ZED_X_ONE_SRC(gst_object_ref(src));
+    ctx->raw = raw_buffer;
+    g_atomic_int_inc(&src->_rawBuffersInUse);
     GstBuffer *buf =
         gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY, nvbuf, sizeof(NvBufSurface), 0,
-                                    sizeof(NvBufSurface), raw_buffer, raw_buffer_destroy_notify);
+                                    sizeof(NvBufSurface), ctx, raw_buffer_destroy_notify);
 
     // ----> Info metadata
     sl::CameraOneInformation cam_info = src->_zed->getCameraInformation();
@@ -2072,7 +2209,9 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
     GST_BUFFER_OFFSET(buf) = src->_bufferIndex++;
 
     guint64 offset = GST_BUFFER_OFFSET(buf);
-    gst_buffer_add_zed_src_meta(buf, info, pose, sens, false, 0, NULL, offset);
+    GstZedSrcMeta *meta =
+        gst_buffer_add_zed_src_meta(buf, info, pose, sens, false, 0, NULL, offset);
+    gst_zedxonesrc_set_meta_timestamps(src, meta, cam_info.camera_model);
 
     if (src->_stopRequested) {
         gst_buffer_unref(buf);
@@ -2109,7 +2248,10 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GST_TRACE(" Data Grabbing");
     ret = src->_zed->grab();
 
-    if (ret > sl::ERROR_CODE::SUCCESS) {
+    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
+        GST_INFO_OBJECT(src, "End of SVO file");
+        return GST_FLOW_EOS;
+    } else if (ret > sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
                           ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
                            sl::toVerbose(ret).c_str()),
@@ -2243,6 +2385,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     guint64 offset = GST_BUFFER_OFFSET(buf);
     GstZedSrcMeta *meta =
         gst_buffer_add_zed_src_meta(buf, info, pose, sens, false, 0, NULL, offset);
+    gst_zedxonesrc_set_meta_timestamps(src, meta, cam_info.camera_model);
 
     // Buffer release
     GST_TRACE("Buffer release");
