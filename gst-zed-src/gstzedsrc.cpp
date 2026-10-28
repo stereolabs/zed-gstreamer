@@ -34,6 +34,17 @@
 #include "gst-zed-meta/gstzedmeta.h"
 #include "gstzedsrc.h"
 
+// Features added after the oldest supported ZED SDK version are only built when available
+#define GST_ZEDSRC_SDK_AT_LEAST(major, minor)                                                      \
+    (ZED_SDK_MAJOR_VERSION > (major) ||                                                            \
+     (ZED_SDK_MAJOR_VERSION == (major) && ZED_SDK_MINOR_VERSION >= (minor)))
+
+// Rectified NV12 zero-copy frames, copied into our own surfaces (see nv12_rectified)
+#if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM) &&                \
+    GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+#define GST_ZEDSRC_HAVE_RECTIFIED_NV12
+#endif
+
 // AI Module
 #define OD_INSTANCE_MODULE_ID 0
 #define BT_INSTANCE_MODULE_ID 1
@@ -312,6 +323,11 @@ enum {
     PROP_SVO_REC_ENABLE,
     PROP_SVO_REC_FILENAME,
     PROP_SVO_REC_COMPRESSION,
+    PROP_DEPTH_PRECISION,
+    PROP_ALLOW_DEPTH_CUDA_GRAPH,
+    PROP_POS_COMPUTE_PREF,
+    PROP_BT_MODEL_GEN,
+    PROP_NV12_RECTIFIED,
     N_PROPERTIES
 };
 
@@ -369,7 +385,9 @@ typedef enum {
     GST_ZEDSRC_OD_MULTI_CLASS_BOX_ACCURATE = 2,
     GST_ZEDSRC_OD_PERSON_HEAD_BOX_FAST = 3,
     GST_ZEDSRC_OD_PERSON_HEAD_BOX_ACCURATE = 4,
-    GST_ZEDSRC_OD_CUSTOM_YOLOLIKE_BOX_OBJECTS = 6
+    GST_ZEDSRC_OD_CUSTOM_YOLOLIKE_BOX_OBJECTS = 6,
+    GST_ZEDSRC_OD_CUSTOM_RFDETRLIKE_BOX_OBJECTS = 7,
+    GST_ZEDSRC_OD_CUSTOM_BOX_OBJECTS_AUTODETECT = 8
 } GstZedSrcOdModel;
 
 typedef enum {
@@ -404,6 +422,41 @@ typedef enum {
     GST_ZEDSRC_PT_GEN_3 = 2
 } GstZedSrcPtMode;
 
+// The values of the enums below match the ZED SDK ones (checked by the static_asserts)
+typedef enum {
+    GST_ZEDSRC_DEPTH_PRECISION_FP16 = 0,
+    GST_ZEDSRC_DEPTH_PRECISION_INT8 = 1
+} GstZedSrcDepthPrecision;
+
+typedef enum {
+    GST_ZEDSRC_COMPUTE_PREF_AUTO = 0,
+    GST_ZEDSRC_COMPUTE_PREF_PREFER_CPU = 1,
+    GST_ZEDSRC_COMPUTE_PREF_PREFER_GPU = 2
+} GstZedSrcComputePref;
+
+typedef enum { GST_ZEDSRC_BT_MODEL_GEN_1 = 0, GST_ZEDSRC_BT_MODEL_GEN_2 = 1 } GstZedSrcBtModelGen;
+
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+static_assert(static_cast<int>(sl::OBJECT_DETECTION_MODEL::CUSTOM_RFDETRLIKE_BOX_OBJECTS) ==
+                      GST_ZEDSRC_OD_CUSTOM_RFDETRLIKE_BOX_OBJECTS &&
+                  static_cast<int>(sl::OBJECT_DETECTION_MODEL::CUSTOM_BOX_OBJECTS_AUTODETECT) ==
+                      GST_ZEDSRC_OD_CUSTOM_BOX_OBJECTS_AUTODETECT,
+              "GstZedSrcOdModel does not match sl::OBJECT_DETECTION_MODEL");
+static_assert(static_cast<int>(sl::DEPTH_PRECISION::FP16) == GST_ZEDSRC_DEPTH_PRECISION_FP16 &&
+                  static_cast<int>(sl::DEPTH_PRECISION::INT8) == GST_ZEDSRC_DEPTH_PRECISION_INT8,
+              "GstZedSrcDepthPrecision does not match sl::DEPTH_PRECISION");
+static_assert(static_cast<int>(sl::COMPUTE_PREFERENCE::AUTO) == GST_ZEDSRC_COMPUTE_PREF_AUTO &&
+                  static_cast<int>(sl::COMPUTE_PREFERENCE::PREFER_CPU) ==
+                      GST_ZEDSRC_COMPUTE_PREF_PREFER_CPU &&
+                  static_cast<int>(sl::COMPUTE_PREFERENCE::PREFER_GPU) ==
+                      GST_ZEDSRC_COMPUTE_PREF_PREFER_GPU,
+              "GstZedSrcComputePref does not match sl::COMPUTE_PREFERENCE");
+static_assert(static_cast<int>(sl::BODY_TRACKING_MODEL_GEN::GEN_1) == GST_ZEDSRC_BT_MODEL_GEN_1 &&
+                  static_cast<int>(sl::BODY_TRACKING_MODEL_GEN::GEN_2) ==
+                      GST_ZEDSRC_BT_MODEL_GEN_2,
+              "GstZedSrcBtModelGen does not match sl::BODY_TRACKING_MODEL_GEN");
+#endif
+
 //////////////// DEFAULT PARAMETERS
 /////////////////////////////////////////////////////////////////////////////
 
@@ -419,9 +472,12 @@ typedef enum {
 #define DEFAULT_PROP_STREAM_IP ""
 #define DEFAULT_PROP_STREAM_PORT 30000
 #define DEFAULT_PROP_STREAM_TYPE -1  /* GST_ZEDSRC_STREAM_AUTO */
+#define DEFAULT_PROP_NV12_RECTIFIED FALSE
 #define DEFAULT_PROP_DEPTH_MIN 300.f
 #define DEFAULT_PROP_DEPTH_MAX 20000.f
 #define DEFAULT_PROP_DEPTH_MODE static_cast<gint>(sl::DEPTH_MODE::NONE)
+#define DEFAULT_PROP_DEPTH_PRECISION GST_ZEDSRC_DEPTH_PRECISION_FP16
+#define DEFAULT_PROP_ALLOW_DEPTH_CUDA_GRAPH FALSE
 #define DEFAULT_PROP_COORD_SYS static_cast<gint>(sl::COORDINATE_SYSTEM::IMAGE)
 #define DEFAULT_PROP_DIS_SELF_CALIB FALSE
 #define DEFAULT_PROP_DEPTH_STAB 1
@@ -455,6 +511,7 @@ typedef enum {
 // POSITIONAL TRACKING
 #define DEFAULT_PROP_POS_TRACKING FALSE
 #define DEFAULT_PROP_PT_MODE GST_ZEDSRC_PT_GEN_1
+#define DEFAULT_PROP_PT_COMPUTE_PREF GST_ZEDSRC_COMPUTE_PREF_AUTO
 #define DEFAULT_PROP_CAMERA_STATIC FALSE
 #define DEFAULT_PROP_POS_AREA_FILE_PATH ""
 #define DEFAULT_PROP_POS_ENABLE_AREA_MEMORY TRUE
@@ -498,6 +555,7 @@ typedef enum {
 #define DEFAULT_PROP_BT_SEGM FALSE   // NOTE(Walter) for the future
 #define DEFAULT_PROP_BT_SYNC TRUE
 #define DEFAULT_PROP_BT_MODEL GST_ZEDSRC_BT_HUMAN_BODY_MEDIUM
+#define DEFAULT_PROP_BT_MODEL_GEN GST_ZEDSRC_BT_MODEL_GEN_2
 #define DEFAULT_PROP_BT_FORMAT GST_ZEDSRC_BT_BODY_34
 #define DEFAULT_PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE FALSE
 #define DEFAULT_PROP_BT_MAX_RANGE DEFAULT_PROP_DEPTH_MAX
@@ -757,6 +815,16 @@ static GType gst_zedsrc_od_model_get_type(void) {
              "For internal inference using your own custom YOLO-like model. "
              "Requires od-custom-onnx-file property to be set.",
              "Custom YOLO-like Box Objects"},
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+            {GST_ZEDSRC_OD_CUSTOM_RFDETRLIKE_BOX_OBJECTS,
+             "For internal inference using your own custom RF-DETR / DETR-like model "
+             "(two outputs, NMS-free). Requires od-custom-onnx-file property to be set.",
+             "Custom RF-DETR-like Box Objects"},
+            {GST_ZEDSRC_OD_CUSTOM_BOX_OBJECTS_AUTODETECT,
+             "For internal inference using your own custom ONNX model, auto-detecting "
+             "YOLO-like vs RF-DETR/DETR-like. Requires od-custom-onnx-file property to be set.",
+             "Custom Box Objects (auto-detect)"},
+#endif
             {0, NULL, NULL},
         };
 
@@ -857,6 +925,68 @@ static GType gst_zedsrc_bt_kp_select_get_type(void) {
 
     return zedsrc_bt_kp_select_type;
 }
+
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+#define GST_TYPE_ZED_BT_MODEL_GEN_TYPE (gst_zedsrc_bt_model_gen_get_type())
+static GType gst_zedsrc_bt_model_gen_get_type(void) {
+    static GType zedsrc_bt_model_gen_type = 0;
+
+    if (!zedsrc_bt_model_gen_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDSRC_BT_MODEL_GEN_1, "Previous body tracking network", "GEN_1"},
+            {GST_ZEDSRC_BT_MODEL_GEN_2,
+             "More robust in crowded scenes and to unusual body orientations, detects people "
+             "further away. Used with the MEDIUM and ACCURATE models in BODY_18 and BODY_34 "
+             "formats, the other configurations fall back to GEN_1",
+             "GEN_2"},
+            {0, NULL, NULL},
+        };
+
+        zedsrc_bt_model_gen_type = g_enum_register_static("GstZedSrcBtModelGen", pattern_types);
+    }
+
+    return zedsrc_bt_model_gen_type;
+}
+
+#define GST_TYPE_ZED_DEPTH_PRECISION (gst_zedsrc_depth_precision_get_type())
+static GType gst_zedsrc_depth_precision_get_type(void) {
+    static GType zedsrc_depth_precision_type = 0;
+
+    if (!zedsrc_depth_precision_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDSRC_DEPTH_PRECISION_FP16, "Default precision", "FP16"},
+            {GST_ZEDSRC_DEPTH_PRECISION_INT8,
+             "Faster and lighter at a small accuracy cost. NEURAL depth mode only, falls back to "
+             "FP16 when not supported",
+             "INT8"},
+            {0, NULL, NULL},
+        };
+
+        zedsrc_depth_precision_type =
+            g_enum_register_static("GstZedSrcDepthPrecision", pattern_types);
+    }
+
+    return zedsrc_depth_precision_type;
+}
+
+#define GST_TYPE_ZED_COMPUTE_PREF (gst_zedsrc_compute_pref_get_type())
+static GType gst_zedsrc_compute_pref_get_type(void) {
+    static GType zedsrc_compute_pref_type = 0;
+
+    if (!zedsrc_compute_pref_type) {
+        static GEnumValue pattern_types[] = {
+            {GST_ZEDSRC_COMPUTE_PREF_AUTO, "Let the ZED SDK choose", "AUTO"},
+            {GST_ZEDSRC_COMPUTE_PREF_PREFER_CPU, "Keep the processing on the CPU", "PREFER_CPU"},
+            {GST_ZEDSRC_COMPUTE_PREF_PREFER_GPU, "Use the GPU when it is faster", "PREFER_GPU"},
+            {0, NULL, NULL},
+        };
+
+        zedsrc_compute_pref_type = g_enum_register_static("GstZedSrcComputePref", pattern_types);
+    }
+
+    return zedsrc_compute_pref_type;
+}
+#endif
 
 #define GST_TYPE_ZED_DEPTH_MODE (gst_zedsrc_depth_mode_get_type())
 static GType gst_zedsrc_depth_mode_get_type(void) {
@@ -1122,6 +1252,16 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                           GST_TYPE_ZED_STREAM_TYPE, DEFAULT_PROP_STREAM_TYPE,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
+#ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
+    g_object_class_install_property(
+        gobject_class, PROP_NV12_RECTIFIED,
+        g_param_spec_boolean("nv12-rectified", "Rectified NV12 zero-copy images",
+                             "Output rectified images instead of the raw sensor images with the "
+                             "NV12 zero-copy stream types",
+                             DEFAULT_PROP_NV12_RECTIFIED,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+#endif
+
     g_object_class_install_property(
         gobject_class, PROP_SDK_VERBOSE,
         g_param_spec_int("sdk-verbose", "ZED SDK Verbose", "ZED SDK Verbose level", 0, 1000,
@@ -1190,6 +1330,23 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
         g_param_spec_enum("depth-mode", "Depth Mode", "Depth Mode", GST_TYPE_ZED_DEPTH_MODE,
                           DEFAULT_PROP_DEPTH_MODE,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+    g_object_class_install_property(
+        gobject_class, PROP_DEPTH_PRECISION,
+        g_param_spec_enum("depth-precision", "Depth Precision",
+                          "Precision of the NEURAL depth inference", GST_TYPE_ZED_DEPTH_PRECISION,
+                          DEFAULT_PROP_DEPTH_PRECISION,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_ALLOW_DEPTH_CUDA_GRAPH,
+        g_param_spec_boolean("allow-depth-cuda-graph", "Allow depth CUDA graph",
+                             "Lower the CPU cost and the runtime of the NEURAL depth by recording "
+                             "its computation once, at the cost of a larger share of the GPU",
+                             DEFAULT_PROP_ALLOW_DEPTH_CUDA_GRAPH,
+                             (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+#endif
 
     g_object_class_install_property(
         gobject_class, PROP_DIS_SELF_CALIB,
@@ -1287,6 +1444,17 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
         g_param_spec_enum("positional-tracking-mode", "Positional tracking mode",
                           "Positional tracking mode", GST_TYPE_ZED_PT_MODE, DEFAULT_PROP_PT_MODE,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+    g_object_class_install_property(
+        gobject_class, PROP_POS_COMPUTE_PREF,
+        g_param_spec_enum("positional-tracking-compute-preference",
+                          "Positional tracking compute preference",
+                          "How much GPU the GEN_3 positional tracking may use. PREFER_GPU makes "
+                          "the tracking faster at the cost of GPU usage",
+                          GST_TYPE_ZED_COMPUTE_PREF, DEFAULT_PROP_PT_COMPUTE_PREF,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+#endif
 
     g_object_class_install_property(
         gobject_class, PROP_CAMERA_STATIC,
@@ -1542,6 +1710,15 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
         g_param_spec_enum("bt-detection-model", "Body Tracking model", "Body Tracking Model",
                           GST_TYPE_ZED_BT_MODEL_TYPE, DEFAULT_PROP_BT_MODEL,
                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+    g_object_class_install_property(
+        gobject_class, PROP_BT_MODEL_GEN,
+        g_param_spec_enum("bt-model-gen", "Body Tracking model generation",
+                          "Generation of the body tracking network", GST_TYPE_ZED_BT_MODEL_GEN_TYPE,
+                          DEFAULT_PROP_BT_MODEL_GEN,
+                          (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+#endif
 
     g_object_class_install_property(
         gobject_class, PROP_BT_FORMAT,
@@ -1850,9 +2027,25 @@ static void gst_zedsrc_reset(GstZedSrc *src) {
     gst_zedsrc_stereo_sbs_pool_cleanup(src, FALSE);
 #endif
 
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    g_mutex_lock(&src->close_lock);
+    gint in_use = g_atomic_int_get(&src->raw_buffers_in_use);
+    if (in_use > 0 && src->zed.isOpened()) {
+        // Closing now would free the images still used downstream
+        GST_INFO_OBJECT(src,
+                        "%d images are still used downstream, the camera is closed once they "
+                        "are released",
+                        in_use);
+        src->close_pending = TRUE;
+    } else if (src->zed.isOpened()) {
+        src->zed.close();
+    }
+    g_mutex_unlock(&src->close_lock);
+#else
     if (src->zed.isOpened()) {
         src->zed.close();
     }
+#endif
 
     src->out_framesize = 0;
     src->is_started = FALSE;
@@ -1888,9 +2081,12 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->stream_port = DEFAULT_PROP_STREAM_PORT;
     src->stream_type = DEFAULT_PROP_STREAM_TYPE;
     src->resolved_stream_type = -1;   // Not resolved yet
+    src->nv12_rectified = DEFAULT_PROP_NV12_RECTIFIED;
     src->depth_min_dist = DEFAULT_PROP_DEPTH_MIN;
     src->depth_max_dist = DEFAULT_PROP_DEPTH_MAX;
     src->depth_mode = DEFAULT_PROP_DEPTH_MODE;
+    src->depth_precision = DEFAULT_PROP_DEPTH_PRECISION;
+    src->allow_depth_cuda_graph = DEFAULT_PROP_ALLOW_DEPTH_CUDA_GRAPH;
     src->camera_disable_self_calib = DEFAULT_PROP_DIS_SELF_CALIB;
     src->depth_stabilization = DEFAULT_PROP_DEPTH_STAB;
     src->coord_sys = DEFAULT_PROP_COORD_SYS;
@@ -1935,6 +2131,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->init_orient_pitch = DEFAULT_PROP_POS_INIT_PITCH;
     src->init_orient_yaw = DEFAULT_PROP_POS_INIT_YAW;
     src->pos_trk_mode = DEFAULT_PROP_PT_MODE;
+    src->pos_trk_compute_pref = DEFAULT_PROP_PT_COMPUTE_PREF;
 
     src->object_detection = DEFAULT_PROP_OD_ENABLE;
     src->od_instance_id = DEFAULT_PROP_OD_INSTANCE_ID;
@@ -1960,6 +2157,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->body_tracking = DEFAULT_PROP_BT_ENABLE;
     src->bt_enable_segm_output = DEFAULT_PROP_BT_SEGM;
     src->bt_model = DEFAULT_PROP_BT_MODEL;
+    src->bt_model_gen = DEFAULT_PROP_BT_MODEL_GEN;
     src->bt_format = DEFAULT_PROP_BT_FORMAT;
     src->bt_reduce_precision = DEFAULT_PROP_BT_ALLOW_REDUCED_PRECISION_INFERENCE;
     src->bt_max_range = DEFAULT_PROP_BT_MAX_RANGE;
@@ -2012,6 +2210,12 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->stereo_sbs_pool_mem_type = -1;
     src->stereo_sbs_pool_layout = -1;
     src->stereo_sbs_pool_color_format = -1;
+#endif
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    src->raw_buffers_in_use = 0;
+    src->close_pending = FALSE;
+    g_mutex_init(&src->close_lock);
 #endif
 
     gst_zedsrc_reset(src);
@@ -2409,6 +2613,21 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
     case PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H:
         src->od_custom_onnx_dynamic_input_shape_h = g_value_get_int(value);
         break;
+    case PROP_DEPTH_PRECISION:
+        src->depth_precision = g_value_get_enum(value);
+        break;
+    case PROP_ALLOW_DEPTH_CUDA_GRAPH:
+        src->allow_depth_cuda_graph = g_value_get_boolean(value);
+        break;
+    case PROP_POS_COMPUTE_PREF:
+        src->pos_trk_compute_pref = g_value_get_enum(value);
+        break;
+    case PROP_BT_MODEL_GEN:
+        src->bt_model_gen = g_value_get_enum(value);
+        break;
+    case PROP_NV12_RECTIFIED:
+        src->nv12_rectified = g_value_get_boolean(value);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
@@ -2760,6 +2979,21 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
     case PROP_OD_CUSTOM_ONNX_DYNAMIC_INPUT_SHAPE_H:
         g_value_set_int(value, src->od_custom_onnx_dynamic_input_shape_h);
         break;
+    case PROP_DEPTH_PRECISION:
+        g_value_set_enum(value, src->depth_precision);
+        break;
+    case PROP_ALLOW_DEPTH_CUDA_GRAPH:
+        g_value_set_boolean(value, src->allow_depth_cuda_graph);
+        break;
+    case PROP_POS_COMPUTE_PREF:
+        g_value_set_enum(value, src->pos_trk_compute_pref);
+        break;
+    case PROP_BT_MODEL_GEN:
+        g_value_set_enum(value, src->bt_model_gen);
+        break;
+    case PROP_NV12_RECTIFIED:
+        g_value_set_boolean(value, src->nv12_rectified);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
         break;
@@ -2790,6 +3024,13 @@ void gst_zedsrc_finalize(GObject *object) {
     /* clean up object here */
 #if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
     gst_zedsrc_stereo_sbs_pool_cleanup(src, TRUE);
+#endif
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    // The wrapped raw buffers hold a reference on the element: none can be left here
+    if (src->zed.isOpened()) {
+        src->zed.close();
+    }
+    g_mutex_clear(&src->close_lock);
 #endif
 
     if (src->caps) {
@@ -2883,7 +3124,16 @@ static void gst_zedsrc_resolve_stream_type(GstZedSrc *src) {
         // Check if camera is GMSL - NV12 zero-copy only works with GMSL cameras
         // Note: ZED X One (mono) cameras use zedxonesrc plugin, not zedsrc
         sl::MODEL model = src->zed.getCameraInformation().camera_model;
-        if (model == sl::MODEL::ZED_X || model == sl::MODEL::ZED_XM) {
+        gboolean nv12_supported = (model == sl::MODEL::ZED_X || model == sl::MODEL::ZED_XM);
+#ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
+        // The HDR cameras have no raw NV12 buffer, but provide rectified ones
+        if (src->nv12_rectified &&
+            (model == sl::MODEL::ZED_X_HDR || model == sl::MODEL::ZED_X_HDR_MINI ||
+             model == sl::MODEL::ZED_X_HDR_MAX)) {
+            nv12_supported = TRUE;
+        }
+#endif
+        if (nv12_supported) {
             src->resolved_stream_type = GST_ZEDSRC_RAW_NV12;
             GST_INFO_OBJECT(src, "Auto-negotiated to NV12 zero-copy (stream-type=%d)",
                             src->resolved_stream_type);
@@ -2992,6 +3242,18 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
     GST_TRACE_OBJECT(src, "gst_zedsrc_calculate_caps");
 
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    g_mutex_lock(&src->close_lock);
+    if (src->close_pending) {
+        GST_WARNING_OBJECT(src,
+                           "Restarting while images of the previous run are still used "
+                           "downstream: they are no longer valid");
+        src->zed.close();
+        src->close_pending = FALSE;
+    }
+    g_mutex_unlock(&src->close_lock);
+#endif
+
     // ----> Set init parameters
     sl::InitParameters init_params;
 
@@ -3076,6 +3338,13 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     GST_INFO(" * MAX depth: %g", init_params.depth_maximum_distance);
     init_params.depth_stabilization = src->depth_stabilization;
     GST_INFO(" * Depth Stabilization: %d", init_params.depth_stabilization);
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+    init_params.depth_precision = static_cast<sl::DEPTH_PRECISION>(src->depth_precision);
+    GST_INFO(" * Depth Precision: %s", sl::toString(init_params.depth_precision).c_str());
+    init_params.allow_depth_cuda_graph = src->allow_depth_cuda_graph == TRUE;
+    GST_INFO(" * Allow Depth CUDA Graph: %s",
+             (init_params.allow_depth_cuda_graph ? "TRUE" : "FALSE"));
+#endif
     init_params.camera_disable_self_calib = src->camera_disable_self_calib == TRUE;
     GST_INFO(" * Disable self calibration: %s",
              (init_params.camera_disable_self_calib ? "TRUE" : "FALSE"));
@@ -3271,6 +3540,12 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         sl::PositionalTrackingParameters pos_trk_params;
         pos_trk_params.mode = static_cast<sl::POSITIONAL_TRACKING_MODE>(src->pos_trk_mode);
         GST_INFO(" * Pos. Tracking mode: %s", sl::toString(pos_trk_params.mode).c_str());
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+        pos_trk_params.compute_preference =
+            static_cast<sl::COMPUTE_PREFERENCE>(src->pos_trk_compute_pref);
+        GST_INFO(" * Compute preference: %s",
+                 sl::toString(pos_trk_params.compute_preference).c_str());
+#endif
         pos_trk_params.set_as_static = (src->camera_static == TRUE);
         GST_INFO(" * Camera static: %s", (pos_trk_params.set_as_static ? "TRUE" : "FALSE"));
         sl::String area_file_path(static_cast<char *>(src->area_file_path->str));
@@ -3393,6 +3668,11 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
         bt_params.instance_module_id = BT_INSTANCE_MODULE_ID;
         bt_params.detection_model = static_cast<sl::BODY_TRACKING_MODEL>(src->bt_model);
         GST_INFO(" * Body Tracking model: %s", sl::toString(bt_params.detection_model).c_str());
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+        bt_params.model_gen = static_cast<sl::BODY_TRACKING_MODEL_GEN>(src->bt_model_gen);
+        GST_INFO(" * Body Tracking model generation: %s",
+                 sl::toString(bt_params.model_gen).c_str());
+#endif
         bt_params.body_format = static_cast<sl::BODY_FORMAT>(src->bt_format);
         GST_INFO(" * Body Format: %s", sl::toString(bt_params.body_format).c_str());
         bt_params.allow_reduced_precision_inference = src->bt_reduce_precision;
@@ -3430,6 +3710,44 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
 
     // Resolve stream type (handles AUTO negotiation based on downstream caps)
     gst_zedsrc_resolve_stream_type(src);
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    // The HDR cameras have no raw NV12 buffer, only rectified ones
+    if ((src->resolved_stream_type == GST_ZEDSRC_RAW_NV12 ||
+         src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_STEREO ||
+         src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) &&
+        !src->nv12_rectified) {
+        sl::MODEL model = src->zed.getCameraInformation().camera_model;
+        if (model == sl::MODEL::ZED_X_HDR || model == sl::MODEL::ZED_X_HDR_MINI ||
+            model == sl::MODEL::ZED_X_HDR_MAX) {
+#ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
+            GST_ELEMENT_ERROR(src, RESOURCE, SETTINGS,
+                              ("The ZED X HDR cameras do not provide raw NV12 zero-copy images, "
+                               "set nv12-rectified=true to get rectified ones"),
+                              (NULL));
+#else
+            GST_ELEMENT_ERROR(src, RESOURCE, SETTINGS,
+                              ("The ZED X HDR cameras do not provide raw NV12 zero-copy images, "
+                               "use a BGRA stream type"),
+                              (NULL));
+#endif
+            return FALSE;
+        }
+    }
+#endif
+
+#ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
+    if (src->nv12_rectified) {
+        if (src->resolved_stream_type == GST_ZEDSRC_RAW_NV12 ||
+            src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_STEREO ||
+            src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
+            GST_INFO(" * NV12 zero-copy images: rectified");
+        } else {
+            GST_WARNING_OBJECT(src, "'nv12-rectified' only applies to the NV12 zero-copy stream "
+                                    "types, the setting is ignored");
+        }
+    }
+#endif
 
     if (!gst_zedsrc_calculate_caps(src)) {
         return FALSE;
@@ -3934,8 +4252,32 @@ static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockT
     // <---- Timestamp meta-data
 
     offset = GST_BUFFER_OFFSET(buf);
-    gst_buffer_add_zed_src_meta(buf, info, pose, sens, src->object_detection | src->body_tracking,
-                                obj_count, obj_data, offset);
+    GstZedSrcMeta *meta =
+        gst_buffer_add_zed_src_meta(buf, info, pose, sens, src->object_detection | src->body_tracking,
+                                    obj_count, obj_data, offset);
+    if (meta) {
+        meta->image_timestamp_ns =
+            src->zed.getTimestamp(sl::TIME_REFERENCE::IMAGE).getNanoseconds();
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 5)
+        // USB cameras and the HDR family report no per-frame exposure: the SDK would only return 0
+        // and log a warning
+        switch (cam_info.camera_model) {
+        case sl::MODEL::ZED:
+        case sl::MODEL::ZED_M:
+        case sl::MODEL::ZED2:
+        case sl::MODEL::ZED2i:
+        case sl::MODEL::ZED_X_HDR:
+        case sl::MODEL::ZED_X_HDR_MINI:
+        case sl::MODEL::ZED_X_HDR_MAX:
+            break;
+        default:
+            meta->center_of_exposure_timestamp_ns =
+                src->zed.getTimestamp(sl::TIME_REFERENCE::IMAGE_CENTER_OF_EXPOSURE)
+                    .getNanoseconds();
+            break;
+        }
+#endif
+    }
 
     delete[] obj_data;
 }
@@ -4114,18 +4456,143 @@ out:
 }
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+typedef struct {
+    GstZedSrc *src;
+    sl::RawBuffer *raw;
+} RawBufferWrappedCtx;
+
 /**
  * @brief Destroy callback for RawBuffer attached to GstBuffer
  *
  * This is called when the GstBuffer is unreffed, releasing the RawBuffer
- * back to the ZED SDK capture pipeline.
+ * back to the ZED SDK capture pipeline. Closes the camera if it was stopped
+ * while this buffer was still in use.
  */
 static void raw_buffer_destroy_notify(gpointer data) {
-    sl::RawBuffer *raw = static_cast<sl::RawBuffer *>(data);
-    if (raw) {
-        GST_DEBUG("Releasing RawBuffer back to SDK");
-        delete raw;
+    RawBufferWrappedCtx *ctx = static_cast<RawBufferWrappedCtx *>(data);
+    GstZedSrc *src = ctx->src;
+
+    GST_DEBUG("Releasing RawBuffer back to SDK");
+    delete ctx->raw;
+
+    if (g_atomic_int_dec_and_test(&src->raw_buffers_in_use)) {
+        g_mutex_lock(&src->close_lock);
+        if (src->close_pending && g_atomic_int_get(&src->raw_buffers_in_use) == 0) {
+            src->zed.close();
+            src->close_pending = FALSE;
+        }
+        g_mutex_unlock(&src->close_lock);
     }
+
+    gst_object_unref(src);
+    g_free(ctx);
+}
+
+#ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
+/**
+ * @brief Copy a rectified NV12 surface into one of our own surfaces and wrap it into a GstBuffer
+ *
+ * The ZED SDK reuses its rectified surfaces after two frames, sooner than downstream elements
+ * (queues, encoders) may release a buffer, so they cannot be handed downstream directly.
+ * Returns NULL on failure.
+ */
+static GstBuffer *gst_zedsrc_wrap_surface_copy(GstZedSrc *src, NvBufSurface *in_surf) {
+    NvBufSurfaceParams *params = &in_surf->surfaceList[0];
+
+    gint pool_index = -1;
+    NvBufSurface *dst_surf = gst_zedsrc_stereo_sbs_pool_acquire(
+        src, params->width, params->height, in_surf->gpuId, in_surf->memType, params->layout,
+        params->colorFormat, &pool_index);
+    gboolean from_pool = (pool_index >= 0 && dst_surf != NULL);
+
+    if (!dst_surf) {
+        NvBufSurfaceCreateParams create_params = {0};
+        create_params.gpuId = in_surf->gpuId;
+        create_params.width = params->width;
+        create_params.height = params->height;
+        create_params.size = 0;
+        create_params.isContiguous = true;
+        create_params.colorFormat = params->colorFormat;
+        create_params.layout = params->layout;
+        create_params.memType = in_surf->memType;
+
+        if (NvBufSurfaceCreate(&dst_surf, 1, &create_params) != 0 || !dst_surf) {
+            GST_ERROR_OBJECT(src, "Failed to allocate NvBufSurface %ux%u", params->width,
+                             params->height);
+            return NULL;
+        }
+    }
+
+    NvBufSurfTransformParams transform_params;
+    memset(&transform_params, 0, sizeof(transform_params));
+    NvBufSurfTransform_Error transform_ret =
+        NvBufSurfTransform(in_surf, dst_surf, &transform_params);
+    if (transform_ret != NvBufSurfTransformError_Success) {
+        GST_ERROR_OBJECT(src, "NvBufSurfTransform failed: %d", transform_ret);
+        if (from_pool) {
+            gst_zedsrc_stereo_sbs_release_slot(src, pool_index);
+        } else {
+            NvBufSurfaceDestroy(dst_surf);
+        }
+        return NULL;
+    }
+    // Consumers walking the batch by numFilled (V4L2 encoders) need it set
+    dst_surf->numFilled = 1;
+
+    StereoSbsWrappedCtx *ctx = g_new0(StereoSbsWrappedCtx, 1);
+    ctx->src = GST_ZED_SRC(gst_object_ref(src));
+    ctx->surf = dst_surf;
+    ctx->pool_index = from_pool ? pool_index : -1;
+
+    GstBuffer *buf = gst_buffer_new_wrapped_full((GstMemoryFlags) 0, dst_surf,
+                                                 sizeof(NvBufSurface), 0, sizeof(NvBufSurface),
+                                                 ctx, stereo_sbs_wrapped_buffer_destroy_notify);
+    if (!buf) {
+        stereo_sbs_wrapped_buffer_destroy_notify(ctx);
+    }
+    return buf;
+}
+#endif
+
+/**
+ * @brief Wrap one NV12 NvBufSurface of a RawBuffer into a new GstBuffer
+ *
+ * Takes ownership of raw_buffer. A raw sensor surface is wrapped directly and the RawBuffer is
+ * released with the GstBuffer (the camera stays open until then), a rectified one is copied.
+ * Returns NULL on failure.
+ */
+static GstBuffer *gst_zedsrc_wrap_nv12_surface(GstZedSrc *src, NvBufSurface *surf,
+                                               sl::RawBuffer *raw_buffer, gboolean rectified) {
+#ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
+    if (rectified) {
+        GstBuffer *copy_buf = gst_zedsrc_wrap_surface_copy(src, surf);
+        delete raw_buffer;
+        return copy_buf;
+    }
+#else
+    (void) rectified;
+#endif
+
+    RawBufferWrappedCtx *ctx = g_new0(RawBufferWrappedCtx, 1);
+    ctx->src = GST_ZED_SRC(gst_object_ref(src));
+    ctx->raw = raw_buffer;
+    g_atomic_int_inc(&src->raw_buffers_in_use);
+
+    // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
+    // DeepStream and other NVIDIA elements expect this format
+    GstBuffer *buf = gst_buffer_new_wrapped_full(
+        (GstMemoryFlags) 0,
+        surf,                       // Data pointer is the NvBufSurface*
+        sizeof(NvBufSurface),       // Max size
+        0,                          // Offset
+        sizeof(NvBufSurface),       // Size
+        ctx,                        // User data for destroy callback
+        raw_buffer_destroy_notify   // Called when buffer is unreffed
+    );
+    if (!buf) {
+        raw_buffer_destroy_notify(ctx);
+    }
+    return buf;
 }
 
 /**
@@ -4227,7 +4694,13 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
 
     // Retrieve RawBuffer - allocate on heap for GstBuffer lifecycle
     sl::RawBuffer *raw_buffer = new sl::RawBuffer();
+#ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
+    const gboolean rectified = src->nv12_rectified;   // Read once: the property may change
+    ret = src->zed.retrieveImage(*raw_buffer, rectified == TRUE);
+#else
+    const gboolean rectified = FALSE;
     ret = src->zed.retrieveImage(*raw_buffer);
+#endif
     if (ret != sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
                           ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()),
@@ -4419,7 +4892,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         // <---- Stereo side-by-side
 #endif  // HAVE_NVBUFSURFTRANSFORM
     } else if (stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
-        // ----> Right-eye NV12 zero-copy: wrap the right NvBufSurface directly
+        // ----> Right-eye NV12 zero-copy: wrap the right NvBufSurface
         NvBufSurface *nvbuf_r = static_cast<NvBufSurface *>(raw_buffer->getRawBufferRight());
         if (!nvbuf_r || nvbuf_r->numFilled == 0) {
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
@@ -4430,40 +4903,20 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         }
         GST_DEBUG_OBJECT(src, "NvBufSurface R: %p, FD: %ld, size: %d", nvbuf_r,
                          nvbuf_r->surfaceList[0].bufferDesc, nvbuf_r->surfaceList[0].dataSize);
-        buf = gst_buffer_new_wrapped_full(
-            (GstMemoryFlags) 0,
-            nvbuf_r,                    // Data pointer is the NvBufSurface*
-            sizeof(NvBufSurface),       // Max size
-            0,                          // Offset
-            sizeof(NvBufSurface),       // Size
-            raw_buffer,                 // User data for destroy callback
-            raw_buffer_destroy_notify   // Called when buffer is unreffed
-        );
+        buf = gst_zedsrc_wrap_nv12_surface(src, nvbuf_r, raw_buffer, rectified);   // Owns raw_buffer
         if (!buf) {
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
                               ("Failed to wrap right-eye NvBufSurface into GstBuffer"), (NULL));
-            delete raw_buffer;
             cuCtxPopCurrent_v2(NULL);
             return GST_FLOW_ERROR;
         }
         // <---- Right-eye NV12 zero-copy
     } else {
-        // ----> Left-eye NV12 zero-copy: wrap the left NvBufSurface directly
-        // This is the NVIDIA convention: the buffer's memory data IS the NvBufSurface*
-        // DeepStream and other NVIDIA elements expect this format
-        buf = gst_buffer_new_wrapped_full(
-            (GstMemoryFlags) 0,
-            nvbuf,                      // Data pointer is the NvBufSurface*
-            sizeof(NvBufSurface),       // Max size
-            0,                          // Offset
-            sizeof(NvBufSurface),       // Size
-            raw_buffer,                 // User data for destroy callback
-            raw_buffer_destroy_notify   // Called when buffer is unreffed
-        );
+        // ----> Left-eye NV12 zero-copy: wrap the left NvBufSurface
+        buf = gst_zedsrc_wrap_nv12_surface(src, nvbuf, raw_buffer, rectified);   // Owns raw_buffer
         if (!buf) {
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
                               ("Failed to wrap left-eye NvBufSurface into GstBuffer"), (NULL));
-            delete raw_buffer;
             cuCtxPopCurrent_v2(NULL);
             return GST_FLOW_ERROR;
         }

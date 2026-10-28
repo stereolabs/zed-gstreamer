@@ -1,6 +1,29 @@
 LATEST CHANGES
 ==============
 
+ZED SDK v5.5
+--------------
+- Add support for the ZED SDK v5.5 features. They are available when building with ZED SDK v5.5 or newer;
+  older ZED SDK v5 versions are still supported, without them.
+- Add new property `nv12-rectified` to `zedsrc` to output rectified images with the NV12 zero-copy stream types
+  (`stream-type` 6, 7 and 8) on Jetson. The ZED X HDR cameras are supported in this mode
+- Add new property `depth-precision` to `zedsrc` to run the NEURAL depth in INT8
+- Add new property `allow-depth-cuda-graph` to `zedsrc`
+- Add new property `positional-tracking-compute-preference` to `zedsrc`
+- Add new property `bt-model-gen` to `zedsrc` to select the body tracking network generation
+- Add the `Custom RF-DETR-like Box Objects` and `Custom Box Objects (auto-detect)` models to the `od-detection-model`
+  property of `zedsrc`
+- Add the image timestamp and the center of exposure timestamp of each frame to the ZED metadata (`zedsrc` and `zedxonesrc`)
+- Add `gst_buffer_copy_zed_src_meta()` to the `zedmeta` library
+- Add the `HD1536`, `XVGA` and `TXGA` resolutions to `zedxonesrc` for the ZED X One HDR, which could not be opened
+- `zedxonesrc` now skips the camera settings that the camera does not provide instead of failing to start
+- Build `zedxonesrc` on JetPack 7 (L4T 38 and newer)
+- Report a clear error when the raw NV12 zero-copy stream type is requested with a ZED X HDR or ZED X One HDR camera,
+  which do not provide it. The `Auto` stream type of `zedxonesrc` uses BGRA with the ZED X One HDR
+- Fix a crash when a raw NV12 zero-copy image is used after the pipeline is stopped: the camera is now closed once the
+  last image still used downstream is released
+- Fix `zeddatamux` attaching invalid metadata when the data buffer is received after the video buffer
+
 ZED SDK v5.1
 --------------
 - Fix memleak on demux chain

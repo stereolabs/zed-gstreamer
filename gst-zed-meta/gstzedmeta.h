@@ -189,6 +189,14 @@ struct _GstZedSrcMeta {
     guint8 obj_count;
     guint64 frame_id;
     ZedObjectData objects[256];
+
+    // Appended after `objects` so that the offsets of the fields above do not change.
+    // Not set by gst_buffer_add_zed_src_meta(): use gst_buffer_copy_zed_src_meta() to duplicate
+    // a meta.
+    guint64 image_timestamp_ns;   // Camera timestamp of the image [ns] (TIME_REFERENCE::IMAGE)
+    guint64 center_of_exposure_timestamp_ns;   // Middle of the exposure of the image [ns]
+                                               // (TIME_REFERENCE::IMAGE_CENTER_OF_EXPOSURE,
+                                               // ZED SDK v5.5+). 0 if not available
 };
 
 namespace skeleton {
@@ -570,6 +578,10 @@ const GstMetaInfo *gst_zed_src_meta_get_info(void);
 GST_EXPORT
 GstZedSrcMeta *gst_buffer_add_zed_src_meta(GstBuffer *buffer, ZedInfo &info, ZedPose &pose, ZedSensors &sens, gboolean od_enabled, guint8 obj_count,
                                            ZedObjectData *objects, guint64 frame_id);
+
+/* Adds to `buffer` a copy of `meta`, all fields included */
+GST_EXPORT
+GstZedSrcMeta *gst_buffer_copy_zed_src_meta(GstBuffer *buffer, GstZedSrcMeta *meta);
 
 G_END_DECLS
 

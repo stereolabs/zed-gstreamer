@@ -112,6 +112,14 @@ struct _GstZedXOneSrc {
 
     GstCaps *_caps;        // Stream caps
     guint _outFramesize;   // Output frame size in byte
+
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    // Raw NV12 buffers point into the camera capture buffers: the camera is only closed once the
+    // ones still used downstream are released
+    gint _rawBuffersInUse;
+    gboolean _closePending;
+    GMutex _closeLock;
+#endif
 };
 
 struct _GstZedXOneSrcClass {
