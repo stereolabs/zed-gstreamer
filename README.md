@@ -20,7 +20,7 @@
 
 GStreamer package for ZED Cameras. The package is composed of several elements:
 
-* [`zedsrc`](./gst-zed-src): acquires camera color image and depth map and pushes them in a GStreamer pipeline. Supports zero-copy NV12 output on Jetson for GMSL cameras (ZED X, ZED X Mini) with SDK 5.2+, raw or rectified (SDK 5.5+, also for the ZED X HDR cameras).
+* [`zedsrc`](./gst-zed-src): acquires camera color image and depth map and pushes them in a GStreamer pipeline. Supports zero-copy NV12 output on Jetson for live GMSL cameras (ZED X, ZED X Mini) with SDK 5.2+, raw or rectified (SDK 5.5+, also for the ZED X HDR cameras).
 * [`zedxonesrc`](./gst-zedxone-src): acquires camera color image from a ZED X One GS, ZED X One 4K, ZED X One HDR or ZED X One Core camera with the ZED SDK `sl::CameraOne` API and pushes them in a GStreamer pipeline.
 * [`zedmeta`](./gst-zed-meta): GStreamer library to define and handle the ZED metadata (Positional Tracking data, Sensors data, Detected Object data, Detected Skeletons data).
 * [`zeddemux`](./gst-zed-demux): receives a composite `zedsrc` stream (`color left + color right` data or `color left + depth map` + metadata),
@@ -939,12 +939,14 @@ The [`scripts/jetson`](./scripts/jetson) folder contains optimized pipelines for
 
 * **Zero-copy NV12** (stream-type=6): For ZED X/X Mini with SDK 5.2+, enables direct memory path to hardware encoder with minimal latency
 * **Rectified NV12** (`nv12-rectified=true`): With SDK 5.5+, the NV12 stream types output rectified images, also for the ZED X HDR cameras, e.g. `zedsrc stream-type=6 nv12-rectified=true ! nvv4l2h265enc ! ...`
-
-The raw NV12 zero-copy images point into the camera capture buffers. When the pipeline is stopped while some of them are still used downstream, the camera is closed once they are released.
 * **SRT/RTSP/UDP streaming**: Low-latency streaming scripts with automatic camera detection
 * **DeepStream integration**: Object detection pipelines using NVIDIA DeepStream
 
 Scripts auto-detect camera type (GMSL vs USB) and SDK version to select the optimal pipeline.
+
+The NV12 zero-copy images come from a live GMSL camera: with an SVO file or a stream as input, `stream-type=-1` (Auto) selects BGRA, and the NV12 stream types report an error at start.
+
+The raw NV12 zero-copy images point into the camera capture buffers. When the pipeline is stopped while some of them are still used downstream, the camera is closed once they are released.
 
 ## Related
 

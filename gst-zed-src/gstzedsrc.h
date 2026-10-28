@@ -189,6 +189,7 @@ struct _GstZedSrc {
 
     GstCaps *caps;
     guint out_framesize;
+    sl::Resolution retrieve_res;   // Size of the BGRA and depth images: the working resolution
 
     gboolean stop_requested;
 

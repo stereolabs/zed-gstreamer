@@ -3121,13 +3121,16 @@ static void gst_zedsrc_resolve_stream_type(GstZedSrc *src) {
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
     // Check if downstream accepts NV12 NVMM (or is inconclusive, e.g. RTSP bins)
     if (!gst_zedsrc_downstream_rejects_nvmm(src)) {
-        // Check if camera is GMSL - NV12 zero-copy only works with GMSL cameras
-        // Note: ZED X One (mono) cameras use zedxonesrc plugin, not zedsrc
-        sl::MODEL model = src->zed.getCameraInformation().camera_model;
-        gboolean nv12_supported = (model == sl::MODEL::ZED_X || model == sl::MODEL::ZED_XM);
+        // The NV12 zero-copy buffers, raw or rectified, come from a live GMSL camera: an SVO file
+        // or a stream has none. Note: ZED X One (mono) cameras use zedxonesrc plugin, not zedsrc
+        sl::CameraInformation cam_info = src->zed.getCameraInformation();
+        sl::MODEL model = cam_info.camera_model;
+        const gboolean live = cam_info.input_type != sl::INPUT_TYPE::SVO &&
+                              cam_info.input_type != sl::INPUT_TYPE::STREAM;
+        gboolean nv12_supported = live && (model == sl::MODEL::ZED_X || model == sl::MODEL::ZED_XM);
 #ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
         // The HDR cameras have no raw NV12 buffer, but provide rectified ones
-        if (src->nv12_rectified &&
+        if (live && src->nv12_rectified &&
             (model == sl::MODEL::ZED_X_HDR || model == sl::MODEL::ZED_X_HDR_MINI ||
              model == sl::MODEL::ZED_X_HDR_MAX)) {
             nv12_supported = TRUE;
@@ -3140,9 +3143,9 @@ static void gst_zedsrc_resolve_stream_type(GstZedSrc *src) {
             return;
         } else {
             GST_INFO_OBJECT(src,
-                            "Camera model %s does not support NV12 zero-copy, "
+                            "No NV12 zero-copy images from a %s with the %s input, "
                             "falling back to BGRA",
-                            sl::toString(model).c_str());
+                            sl::toString(model).c_str(), sl::toString(cam_info.input_type).c_str());
         }
     } else {
         GST_INFO_OBJECT(src, "Downstream rejects NVMM, falling back to BGRA");
@@ -3180,8 +3183,16 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc *src) {
 
     sl::CameraInformation cam_info = src->zed.getCameraInformation();
 
-    width = cam_info.camera_configuration.resolution.width;
-    height = cam_info.camera_configuration.resolution.height;
+    // The NV12 zero-copy buffers keep the capture resolution; the other images are retrieved at
+    // the working resolution, smaller with max-working-res
+    src->retrieve_res = src->zed.getRetrieveImageResolution();
+    if (format == GST_VIDEO_FORMAT_NV12) {
+        width = cam_info.camera_configuration.resolution.width;
+        height = cam_info.camera_configuration.resolution.height;
+    } else {
+        width = src->retrieve_res.width;
+        height = src->retrieve_res.height;
+    }
 
     if (stream_type == GST_ZEDSRC_LEFT_RIGHT || stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         height *= 2;
@@ -3311,7 +3322,14 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
                 "automatically activated");
         }
     }
-    if (src->pos_tracking && init_params.depth_mode == sl::DEPTH_MODE::NONE) {
+    // GEN_1 and GEN_2 need the depth, GEN_3 runs without it (ZED SDK 5.2 and newer)
+#if GST_ZEDSRC_SDK_AT_LEAST(5, 2)
+    const gboolean pos_trk_needs_depth = src->pos_trk_mode != GST_ZEDSRC_PT_GEN_3;
+#else
+    const gboolean pos_trk_needs_depth = TRUE;
+#endif
+    if (src->pos_tracking && pos_trk_needs_depth &&
+        init_params.depth_mode == sl::DEPTH_MODE::NONE) {
         init_params.depth_mode = sl::DEPTH_MODE::NEURAL;
         src->depth_mode = static_cast<gint>(init_params.depth_mode);
 
@@ -3712,14 +3730,24 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
     gst_zedsrc_resolve_stream_type(src);
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    // The HDR cameras have no raw NV12 buffer, only rectified ones
-    if ((src->resolved_stream_type == GST_ZEDSRC_RAW_NV12 ||
-         src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_STEREO ||
-         src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) &&
-        !src->nv12_rectified) {
-        sl::MODEL model = src->zed.getCameraInformation().camera_model;
-        if (model == sl::MODEL::ZED_X_HDR || model == sl::MODEL::ZED_X_HDR_MINI ||
-            model == sl::MODEL::ZED_X_HDR_MAX) {
+    // The NV12 zero-copy buffers come from a live GMSL capture, and the HDR cameras only provide
+    // rectified ones
+    if (src->resolved_stream_type == GST_ZEDSRC_RAW_NV12 ||
+        src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_STEREO ||
+        src->resolved_stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
+        sl::CameraInformation cam_info = src->zed.getCameraInformation();
+        sl::MODEL model = cam_info.camera_model;
+        if (cam_info.input_type == sl::INPUT_TYPE::SVO ||
+            cam_info.input_type == sl::INPUT_TYPE::STREAM) {
+            GST_ELEMENT_ERROR(src, RESOURCE, SETTINGS,
+                              ("NV12 zero-copy images are only available from a live GMSL camera, "
+                               "not from an SVO file or a stream, use a BGRA stream type"),
+                              (NULL));
+            return FALSE;
+        }
+        if (!src->nv12_rectified &&
+            (model == sl::MODEL::ZED_X_HDR || model == sl::MODEL::ZED_X_HDR_MINI ||
+             model == sl::MODEL::ZED_X_HDR_MAX)) {
 #ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
             GST_ELEMENT_ERROR(src, RESOURCE, SETTINGS,
                               ("The ZED X HDR cameras do not provide raw NV12 zero-copy images, "
@@ -4282,6 +4310,42 @@ static void gst_zedsrc_attach_metadata(GstZedSrc *src, GstBuffer *buf, GstClockT
     delete[] obj_data;
 }
 
+// A retrieved image must have the negotiated size: a different one would overflow the buffer
+static gboolean gst_zedsrc_mat_size_ok(GstZedSrc *src, sl::Mat &mat, size_t row_bytes,
+                                       size_t rows) {
+    if (mat.getWidth() * mat.getPixelBytes() != row_bytes || mat.getHeight() != rows) {
+        GST_ELEMENT_ERROR(src, STREAM, FAILED,
+                          ("Retrieved a %zux%zu image instead of the negotiated size",
+                           mat.getWidth(), mat.getHeight()),
+                          (NULL));
+        return FALSE;
+    }
+    return TRUE;
+}
+
+// Copy a retrieved image into the buffer, rows of row_bytes every dst_step bytes: the image rows
+// can be padded, and a side by side buffer interleaves the rows of two images
+static gboolean gst_zedsrc_copy_mat(GstZedSrc *src, sl::Mat &mat, guint8 *dst, size_t dst_step,
+                                    size_t row_bytes, size_t rows) {
+    if (!gst_zedsrc_mat_size_ok(src, mat, row_bytes, rows)) {
+        return FALSE;
+    }
+    const sl::uchar1 *data = mat.getPtr<sl::uchar1>(sl::MEM::CPU);
+    const size_t step = mat.getStepBytes(sl::MEM::CPU);
+    if (data == dst && step == dst_step) {
+        return TRUE;   // Retrieved in place
+    }
+    GST_LOG_OBJECT(src, "Copying a %zux%zu image into the buffer", mat.getWidth(), mat.getHeight());
+    if (step == row_bytes && dst_step == row_bytes) {
+        memcpy(dst, data, row_bytes * rows);
+    } else {
+        for (size_t y = 0; y < rows; y++) {
+            memcpy(dst + y * dst_step, data + y * step, row_bytes);
+        }
+    }
+    return TRUE;
+}
+
 static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstZedSrc *src = GST_ZED_SRC(psrc);
     GST_TRACE_OBJECT(src, "gst_zedsrc_fill");
@@ -4365,7 +4429,11 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 
     // ----> ZED grab
     ret = src->zed.grab(zedRtParams);
-    if (ret > sl::ERROR_CODE::SUCCESS) {
+    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
+        GST_INFO_OBJECT(src, "End of SVO file");
+        flow_ret = GST_FLOW_EOS;
+        goto out;
+    } else if (ret > sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
                           ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
                            sl::toVerbose(ret).c_str()),
@@ -4396,46 +4464,111 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_RIGHT,
     // GST_ZEDSRC_RAW_NV12_STEREO) are handled by gst_zedsrc_create() which wraps NvBufSurface
     // directly without memcpy. This fill() function only handles non-NVMM stream types.
+
+    // Retrieve the images straight into the output buffer, which saves a full image copy: the
+    // SDK writes them in place. The copy below only runs if the SDK had to allocate its own.
+    {
+        const size_t w = src->retrieve_res.width;
+        const size_t h = src->retrieve_res.height;
+        sl::uchar1 *data = minfo.data;
+        const gboolean two_images = stream_type == GST_ZEDSRC_LEFT_RIGHT ||
+                                    stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS ||
+                                    stream_type == GST_ZEDSRC_LEFT_DEPTH;
+        const size_t bpp = (stream_type == GST_ZEDSRC_DEPTH_16) ? 2 : 4;
+        if (minfo.size == w * h * bpp * (two_images ? 2 : 1)) {
+            if (stream_type == GST_ZEDSRC_ONLY_LEFT || stream_type == GST_ZEDSRC_ONLY_RIGHT ||
+                stream_type == GST_ZEDSRC_LEFT_DEPTH) {
+                left_img = sl::Mat(w, h, sl::MAT_TYPE::U8_C4, data, w * 4, sl::MEM::CPU);
+            } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT) {
+                left_img = sl::Mat(w, h, sl::MAT_TYPE::U8_C4, data, w * 4, sl::MEM::CPU);
+                right_img =
+                    sl::Mat(w, h, sl::MAT_TYPE::U8_C4, data + w * h * 4, w * 4, sl::MEM::CPU);
+            } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
+                // Each row holds a left row then a right row
+                left_img = sl::Mat(w, h, sl::MAT_TYPE::U8_C4, data, 2 * w * 4, sl::MEM::CPU);
+                right_img =
+                    sl::Mat(w, h, sl::MAT_TYPE::U8_C4, data + w * 4, 2 * w * 4, sl::MEM::CPU);
+            } else if (stream_type == GST_ZEDSRC_DEPTH_16) {
+                depth_data = sl::Mat(w, h, sl::MAT_TYPE::U16_C1, data, w * 2, sl::MEM::CPU);
+            }
+        }
+    }
+
+    // Retrieved at the caps resolution, the working resolution
     if (stream_type == GST_ZEDSRC_ONLY_LEFT) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-    } else if (stream_type == GST_ZEDSRC_ONLY_RIGHT) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU));
-    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU));
-    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::SIDE_BY_SIDE, sl::MEM::CPU));
-    } else if (stream_type == GST_ZEDSRC_DEPTH_16) {
         CHECK_RET_OR_GOTO(
-            src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM, sl::MEM::CPU));
+            src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU, src->retrieve_res));
+    } else if (stream_type == GST_ZEDSRC_ONLY_RIGHT) {
+        CHECK_RET_OR_GOTO(
+            src->zed.retrieveImage(left_img, sl::VIEW::RIGHT, sl::MEM::CPU, src->retrieve_res));
+    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT) {
+        CHECK_RET_OR_GOTO(
+            src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU, src->retrieve_res));
+        CHECK_RET_OR_GOTO(
+            src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU, src->retrieve_res));
+    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
+        // Composed below: below the camera resolution the SDK side by side view fits both
+        // images in the width of one
+        CHECK_RET_OR_GOTO(
+            src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU, src->retrieve_res));
+        CHECK_RET_OR_GOTO(
+            src->zed.retrieveImage(right_img, sl::VIEW::RIGHT, sl::MEM::CPU, src->retrieve_res));
+    } else if (stream_type == GST_ZEDSRC_DEPTH_16) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH_U16_MM,
+                                                   sl::MEM::CPU, src->retrieve_res));
     } else if (stream_type == GST_ZEDSRC_LEFT_DEPTH) {
-        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
-        CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU));
+        CHECK_RET_OR_GOTO(
+            src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU, src->retrieve_res));
+        CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU,
+                                                   src->retrieve_res));
     }
 
     /* --- Memory copy into GstBuffer ------------------------------------ */
-    if (stream_type == GST_ZEDSRC_DEPTH_16) {
-        memcpy(minfo.data, depth_data.getPtr<sl::ushort1>(), minfo.size);
-    } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT) {
-        /* Left RGB data on half top */
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
-        /* Right RGB data on half bottom */
-        memcpy(minfo.data + minfo.size / 2, right_img.getPtr<sl::uchar4>(), minfo.size / 2);
-    } else if (stream_type == GST_ZEDSRC_LEFT_DEPTH) {
-        /* RGB data on half top */
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size / 2);
-
-        /* Depth data on half bottom */
-        {
-            uint32_t *gst_data = (uint32_t *) (minfo.data + minfo.size / 2);
-            sl::float1 *depthDataPtr = depth_data.getPtr<sl::float1>();
-
-            for (unsigned long i = 0; i < minfo.size / 8; i++) {
-                *(gst_data++) = static_cast<uint32_t>(*(depthDataPtr++));
+    {
+        // Every image has the height of the working resolution; the stereo and the left + depth
+        // types stack two of them, each filling half of the buffer
+        const size_t rows = src->retrieve_res.height;
+        const size_t half = minfo.size / 2;
+        gboolean copied;
+        if (stream_type == GST_ZEDSRC_LEFT_RIGHT) {
+            /* Left RGB data on half top, right on half bottom */
+            copied =
+                gst_zedsrc_copy_mat(src, left_img, minfo.data, half / rows, half / rows, rows) &&
+                gst_zedsrc_copy_mat(src, right_img, minfo.data + half, half / rows, half / rows,
+                                    rows);
+        } else if (stream_type == GST_ZEDSRC_LEFT_RIGHT_SBS) {
+            /* Left RGB data on half left of each row, right on half right */
+            const size_t row_bytes = minfo.size / rows;
+            copied =
+                gst_zedsrc_copy_mat(src, left_img, minfo.data, row_bytes, row_bytes / 2, rows) &&
+                gst_zedsrc_copy_mat(src, right_img, minfo.data + row_bytes / 2, row_bytes,
+                                    row_bytes / 2, rows);
+        } else if (stream_type == GST_ZEDSRC_LEFT_DEPTH) {
+            /* RGB data on half top, depth in millimeters on half bottom (32 bits per pixel) */
+            copied =
+                gst_zedsrc_copy_mat(src, left_img, minfo.data, half / rows, half / rows, rows) &&
+                gst_zedsrc_mat_size_ok(src, depth_data, half / rows, rows);
+            if (copied) {
+                uint32_t *gst_data = (uint32_t *) (minfo.data + half);
+                const size_t cols = half / rows / 4;
+                for (size_t y = 0; y < rows; y++) {
+                    const sl::float1 *depth_row =
+                        (const sl::float1 *) (depth_data.getPtr<sl::uchar1>() +
+                                              y * depth_data.getStepBytes());
+                    for (size_t x = 0; x < cols; x++) {
+                        *(gst_data++) = static_cast<uint32_t>(depth_row[x]);
+                    }
+                }
             }
+        } else {
+            sl::Mat &img = (stream_type == GST_ZEDSRC_DEPTH_16) ? depth_data : left_img;
+            copied = gst_zedsrc_copy_mat(src, img, minfo.data, minfo.size / rows, minfo.size / rows,
+                                         rows);
         }
-    } else {
-        memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
+        if (!copied) {
+            flow_ret = GST_FLOW_ERROR;
+            goto out;
+        }
     }
     // <---- Memory copy
 
@@ -4498,6 +4631,7 @@ static void raw_buffer_destroy_notify(gpointer data) {
  */
 static GstBuffer *gst_zedsrc_wrap_surface_copy(GstZedSrc *src, NvBufSurface *in_surf) {
     NvBufSurfaceParams *params = &in_surf->surfaceList[0];
+    GST_LOG_OBJECT(src, "Copying a %ux%u NV12 surface", params->width, params->height);
 
     gint pool_index = -1;
     NvBufSurface *dst_surf = gst_zedsrc_stereo_sbs_pool_acquire(

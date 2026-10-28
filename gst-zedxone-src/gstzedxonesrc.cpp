@@ -1460,9 +1460,15 @@ static void gst_zedxonesrc_resolve_stream_type(GstZedXOneSrc *src) {
     GST_INFO_OBJECT(src, "stream-type=AUTO, checking downstream capabilities...");
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    // Check if downstream accepts NV12 NVMM. The ZED X One HDR has no zero-copy NV12 buffer.
-    if (src->_zed->getCameraInformation().camera_model == sl::MODEL::ZED_XONE_HDR) {
+    // Check if downstream accepts NV12 NVMM. The NV12 zero-copy buffers come from a live camera
+    // (an SVO file or a stream has none), and the ZED X One HDR has none.
+    sl::CameraOneInformation cam_info = src->_zed->getCameraInformation();
+    if (cam_info.camera_model == sl::MODEL::ZED_XONE_HDR) {
         GST_INFO_OBJECT(src, "The ZED X One HDR has no NV12 zero-copy output, using BGRA");
+    } else if (cam_info.input_type == sl::INPUT_TYPE::SVO ||
+               cam_info.input_type == sl::INPUT_TYPE::STREAM) {
+        GST_INFO_OBJECT(src, "No NV12 zero-copy output with the %s input, using BGRA",
+                        sl::toString(cam_info.input_type).c_str());
     } else if (gst_zedxonesrc_downstream_accepts_nv12_nvmm(src)) {
         src->_resolvedStreamType = GST_ZEDXONESRC_RAW_NV12;
         GST_INFO_OBJECT(src, "Auto-negotiated to NV12 zero-copy (stream-type=%d)",
@@ -1829,13 +1835,21 @@ static gboolean gst_zedxonesrc_start(GstBaseSrc *bsrc) {
     gst_zedxonesrc_resolve_stream_type(src);
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
-    if (src->_resolvedStreamType == GST_ZEDXONESRC_RAW_NV12 &&
-        src->_zed->getCameraInformation().camera_model == sl::MODEL::ZED_XONE_HDR) {
-        GST_ELEMENT_ERROR(src, RESOURCE, SETTINGS,
-                          ("The ZED X One HDR does not provide NV12 zero-copy images, use "
-                           "stream-type=0 (BGRA) or -1 (Auto)"),
-                          (NULL));
-        return FALSE;
+    if (src->_resolvedStreamType == GST_ZEDXONESRC_RAW_NV12) {
+        sl::CameraOneInformation cam_info = src->_zed->getCameraInformation();
+        const char *no_nv12 = NULL;
+        if (cam_info.camera_model == sl::MODEL::ZED_XONE_HDR) {
+            no_nv12 = "The ZED X One HDR does not provide NV12 zero-copy images";
+        } else if (cam_info.input_type == sl::INPUT_TYPE::SVO ||
+                   cam_info.input_type == sl::INPUT_TYPE::STREAM) {
+            no_nv12 = "NV12 zero-copy images are only available from a live camera, not from an "
+                      "SVO file or a stream";
+        }
+        if (no_nv12) {
+            GST_ELEMENT_ERROR(src, RESOURCE, SETTINGS,
+                              ("%s, use stream-type=0 (BGRA) or -1 (Auto)", no_nv12), (NULL));
+            return FALSE;
+        }
     }
 #endif
 
@@ -2234,7 +2248,10 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GST_TRACE(" Data Grabbing");
     ret = src->_zed->grab();
 
-    if (ret > sl::ERROR_CODE::SUCCESS) {
+    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
+        GST_INFO_OBJECT(src, "End of SVO file");
+        return GST_FLOW_EOS;
+    } else if (ret > sl::ERROR_CODE::SUCCESS) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
                           ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
                            sl::toVerbose(ret).c_str()),

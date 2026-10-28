@@ -23,6 +23,20 @@ ZED SDK v5.5
 - Fix a crash when a raw NV12 zero-copy image is used after the pipeline is stopped: the camera is now closed once the
   last image still used downstream is released
 - Fix `zeddatamux` attaching invalid metadata when the data buffer is received after the video buffer
+- Fix the end of an SVO file being reported as an error instead of the end of the stream with the BGRA and depth stream
+  types of `zedsrc` and with `zedxonesrc`
+- Fix `stream-type=-1` (Auto) selecting the NV12 zero-copy output with an SVO file or a stream as input, which failed at
+  the first frame: Auto now selects BGRA, and the NV12 stream types report an error at start with such an input
+- Fix `zedxonesrc` failing to start with an SVO file as input
+- Fix `zedsrc` crashing with `max-working-res-w` / `max-working-res-h`: the BGRA and depth outputs now have the working
+  resolution. The side by side stream type (`stream-type=5`) is now made of the same images as the left and right stream
+  types (the side by side view of the ZED SDK is slightly smoothed)
+- The GEN_3 positional tracking no longer forces the NEURAL depth mode when `depth-mode` is NONE (ZED SDK v5.2 or newer):
+  it runs without depth, which uses much less GPU. Object detection and body tracking still enable the depth
+- `zeddemux` outputs share the memory of the input buffer instead of copying the images (the depth is still converted).
+  Fix a `GStreamer-CRITICAL` when an output fails to push
+- `zedsrc` retrieves the BGRA and depth images straight into the output buffer instead of copying them: 24 to 35 % less
+  CPU per frame with the BGRA stream types at HD1200 60 FPS on Jetson Orin
 
 ZED SDK v5.1
 --------------
