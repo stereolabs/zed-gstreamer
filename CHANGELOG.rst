@@ -23,6 +23,10 @@ ZED SDK v5.5
 - Fix a crash when a raw NV12 zero-copy image is used after the pipeline is stopped: the camera is now closed once the
   last image still used downstream is released
 - Fix `zeddatamux` attaching invalid metadata when the data buffer is received after the video buffer
+- Fix `zeddatamux` input buffer leaks, output access after pushing downstream, and buffer overflows when frame sizes
+  increase. Keep the existing copied-buffer matching behavior
+- Accept reduced working resolutions and HDR frame sizes in the mux/demux pad templates
+- Handle padded rows in odd-width 16-bit depth output from `zedsrc` and `zeddemux`
 - Fix the end of an SVO file being reported as an error instead of the end of the stream with the BGRA and depth stream
   types of `zedsrc` and with `zedxonesrc`
 - Fix `stream-type=-1` (Auto) selecting the NV12 zero-copy output with an SVO file or a stream as input, which failed at
