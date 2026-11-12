@@ -50,216 +50,24 @@ enum { PROP_0, PROP_IS_DEPTH, PROP_IS_MONO, PROP_STREAM_DATA };
  */
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
     "sink", GST_PAD_SINK, GST_PAD_ALWAYS,
-    GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
-                     "format = (string)BGRA, "
-                     "width = (int)672, "
-                     "height = (int)752 , "
-                     "framerate = (fraction) { 15, 30, 60, 100 }"
-                     ";"
-                     "video/x-raw, "   // Double stream HD720
-                     "format = (string)BGRA, "
-                     "width = (int)1280, "
-                     "height = (int)1440, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Double stream HD1080
-                     "format = (string)BGRA, "
-                     "width = (int)1920, "
-                     "height = (int)2160, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Double stream HD2K
-                     "format = (string)BGRA, "
-                     "width = (int)2208, "
-                     "height = (int)2484, "
-                     "framerate = (fraction)15"
-                     ";"
-                     "video/x-raw, "   // Double stream HD1200 (GMSL2)
-                     "format = (string)BGRA, "
-                     "width = (int)1920, "
-                     "height = (int)2400, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Double stream SVGA (GMSL2)
-                     "format = (string)BGRA, "
-                     "width = (int)960, "
-                     "height = (int)1200, "
-                     "framerate = (fraction) { 15, 30, 60, 120 }"
-                     ";"
-                     "video/x-raw, "   // Mono Color 4K (GMSL2 ZED X One 4K)
-                     "format = (string)BGRA, "
-                     "width = (int)3840, "
-                     "height = (int)2160, "
-                     "framerate = (fraction) { 15, 30 }"
-                     ";"
-                     "video/x-raw, "   // Mono Color QHDPLUS (GMSL2 ZED X One 4K)
-                     "format = (string)BGRA, "
-                     "width = (int)3200, "
-                     "height = (int)1800, "
-                     "framerate = (fraction) { 15, 30 }"
-                     ";"
-                     "video/x-raw, "   // Mono Color HD1200 (GMSL2 ZED X One)
-                     "format = (string)BGRA, "
-                     "width = (int)1920, "
-                     "height = (int)1200, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Mono Color HD1080 (GMSL2 ZED X One)
-                     "format = (string)BGRA, "
-                     "width = (int)1920, "
-                     "height = (int)1080, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Mono Color SVGA (GMSL2 ZED X One gs)
-                     "format = (string)BGRA, "
-                     "width = (int)960, "
-                     "height = (int)600, "
-                     "framerate = (fraction) { 15, 30, 60, 120 }")));
-
-static GstStaticPadTemplate src_left_factory =
-    GST_STATIC_PAD_TEMPLATE("src_left", GST_PAD_SRC, GST_PAD_ALWAYS,
-                            GST_STATIC_CAPS(("video/x-raw, "   // Color VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }")));
-
-static GstStaticPadTemplate src_mono_factory =
-    GST_STATIC_PAD_TEMPLATE("src_mono", GST_PAD_SRC, GST_PAD_ALWAYS,
-                            GST_STATIC_CAPS(("video/x-raw, "   // Color 4K
-                                             "format = (string)BGRA, "
-                                             "width = (int)3840, "
-                                             "height = (int)2160, "
-                                             "framerate = (fraction) { 15, 30 }"
-                                             ";"
-                                             "video/x-raw, "   // Color QHDPLUS
-                                             "format = (string)BGRA, "
-                                             "width = (int)3200, "
-                                             "height = (int)1800, "
-                                             "framerate = (fraction) { 15, 30 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1200
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color SVGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }")));
-
-static GstStaticPadTemplate src_aux_factory =
-    GST_STATIC_PAD_TEMPLATE("src_aux", GST_PAD_SRC, GST_PAD_ALWAYS,
-                            GST_STATIC_CAPS(("video/x-raw, "   // Color VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw, "   // Color VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }")));
-
+    GST_STATIC_CAPS("video/x-raw, format=(string)BGRA, "
+                    "width=(int)[1,MAX], height=(int)[1,MAX], "
+                    "framerate=(fraction)[0/1,MAX]"));
+static GstStaticPadTemplate src_left_factory = GST_STATIC_PAD_TEMPLATE(
+    "src_left", GST_PAD_SRC, GST_PAD_ALWAYS,
+    GST_STATIC_CAPS("video/x-raw, format=(string)BGRA, "
+                    "width=(int)[1,MAX], height=(int)[1,MAX], "
+                    "framerate=(fraction)[0/1,MAX]"));
+static GstStaticPadTemplate src_mono_factory = GST_STATIC_PAD_TEMPLATE(
+    "src_mono", GST_PAD_SRC, GST_PAD_ALWAYS,
+    GST_STATIC_CAPS("video/x-raw, format=(string)BGRA, "
+                    "width=(int)[1,MAX], height=(int)[1,MAX], "
+                    "framerate=(fraction)[0/1,MAX]"));
+static GstStaticPadTemplate src_aux_factory = GST_STATIC_PAD_TEMPLATE(
+    "src_aux", GST_PAD_SRC, GST_PAD_ALWAYS,
+    GST_STATIC_CAPS("video/x-raw, format=(string){ BGRA, GRAY16_LE }, "
+                    "width=(int)[1,MAX], height=(int)[1,MAX], "
+                    "framerate=(fraction)[0/1,MAX]"));
 static GstStaticPadTemplate src_data_factory = GST_STATIC_PAD_TEMPLATE(
     "src_data", GST_PAD_SRC, GST_PAD_ALWAYS, GST_STATIC_CAPS("application/data"));
 
@@ -414,13 +222,18 @@ static gboolean set_out_caps(GstZedDemux *filter, GstCaps *sink_caps) {
 
     GST_DEBUG_OBJECT(filter, "Sink caps %" GST_PTR_FORMAT, sink_caps);
 
+    gst_video_info_init(&vinfo_in);
+    if (!gst_video_info_from_caps(&vinfo_in, sink_caps) ||
+        (!filter->is_mono && (vinfo_in.height % 2 != 0))) {
+        GST_ERROR_OBJECT(filter, "Expected BGRA frames with an even stacked height in stereo mode");
+        return FALSE;
+    }
+
     // ----> Caps left source
     if (!filter->is_mono) {
         if (filter->caps_left) {
             gst_caps_unref(filter->caps_left);
         }
-
-        gst_video_info_from_caps(&vinfo_in, sink_caps);
 
         gst_video_info_init(&vinfo_left);
         gst_video_info_set_format(&vinfo_left, GST_VIDEO_FORMAT_BGRA, vinfo_in.width,
@@ -442,8 +255,6 @@ static gboolean set_out_caps(GstZedDemux *filter, GstCaps *sink_caps) {
             gst_caps_unref(filter->caps_mono);
         }
 
-        gst_video_info_from_caps(&vinfo_in, sink_caps);
-
         gst_video_info_init(&vinfo_mono);
         gst_video_info_set_format(&vinfo_mono, GST_VIDEO_FORMAT_BGRA, vinfo_in.width,
                                   vinfo_in.height);
@@ -463,8 +274,6 @@ static gboolean set_out_caps(GstZedDemux *filter, GstCaps *sink_caps) {
         if (filter->caps_aux) {
             gst_caps_unref(filter->caps_aux);
         }
-
-        gst_video_info_from_caps(&vinfo_in, sink_caps);
 
         gst_video_info_init(&vinfo_aux);
         if (filter->is_depth) {
@@ -714,8 +523,15 @@ static GstFlowReturn gst_zeddemux_chain(GstPad *pad, GstObject *parent, GstBuffe
     // ----> Aux buffer
     if (!filter->is_mono) {
         gsize aux_framesize = map_in.size / 2;
-        if (filter->is_depth)
-            aux_framesize /= 2; /* 16-bit data */
+        GstVideoInfo depth_info;
+        if (filter->is_depth) {
+            gst_video_info_init(&depth_info);
+            if (!gst_video_info_from_caps(&depth_info, filter->caps_aux)) {
+                flow_ret = GST_FLOW_NOT_NEGOTIATED;
+                goto out;
+            }
+            aux_framesize = GST_VIDEO_INFO_SIZE(&depth_info);
+        }
 
         GstBuffer *aux_proc_buf = NULL;
         if (!filter->is_depth) {
@@ -748,12 +564,15 @@ static GstFlowReturn gst_zeddemux_chain(GstPad *pad, GstObject *parent, GstBuffe
 
             GST_TRACE("Converting aux buffer %lu B", map_out_aux.size);
 
-            guint32 *gst_in_data = (guint32 *) (map_in.data + map_in.size / 2);
-            guint16 *gst_out_data = (guint16 *) map_out_aux.data;
-
-            for (unsigned long i = 0; i < map_out_aux.size / sizeof(guint16); i++) {
-                float depth = (float) (*(gst_in_data++));
-                *(gst_out_data++) = (guint16) depth;
+            // GRAY16 rows are padded to four bytes, including at odd widths.
+            memset(map_out_aux.data, 0, map_out_aux.size);
+            const guint32 *gst_in_data =
+                (const guint32 *) (map_in.data + map_in.size / 2);
+            for (gint y = 0; y < depth_info.height; y++) {
+                guint16 *row = (guint16 *) (map_out_aux.data + y * depth_info.stride[0]);
+                for (gint x = 0; x < depth_info.width; x++) {
+                    row[x] = (guint16) *gst_in_data++;
+                }
             }
 
             GST_TRACE("Aux buffer unmap");

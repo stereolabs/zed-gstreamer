@@ -1049,113 +1049,10 @@ static GType gst_zedsrc_3d_meas_ref_frame_get_type(void) {
 /* pad templates */
 static GstStaticPadTemplate gst_zedsrc_src_template = GST_STATIC_PAD_TEMPLATE(
     "src", GST_PAD_SRC, GST_PAD_ALWAYS,
-    GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
-                     "format = (string)BGRA, "
-                     "width = (int)672, "
-                     "height = (int)752 , "
-                     "framerate = (fraction) { 15, 30, 60, 100 }"
-                     ";"
-                     "video/x-raw, "   // Double stream HD720
-                     "format = (string)BGRA, "
-                     "width = (int)1280, "
-                     "height = (int)1440, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Double stream HD1080
-                     "format = (string)BGRA, "
-                     "width = (int)1920, "
-                     "height = (int)2160, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Double stream HD2K
-                     "format = (string)BGRA, "
-                     "width = (int)2208, "
-                     "height = (int)2484, "
-                     "framerate = (fraction)15"
-                     ";"
-                     "video/x-raw, "   // Double stream HD1200 (GMSL2)
-                     "format = (string)BGRA, "
-                     "width = (int)1920, "
-                     "height = (int)2400, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Double stream SVGA (GMSL2)
-                     "format = (string)BGRA, "
-                     "width = (int)960, "
-                     "height = (int)1200, "
-                     "framerate = (fraction) { 15, 30, 60, 120 }"
-                     ";"
-                     "video/x-raw, "   // Color VGA
-                     "format = (string)BGRA, "
-                     "width = (int)672, "
-                     "height =  (int)376, "
-                     "framerate = (fraction) { 15, 30, 60, 100 }"
-                     ";"
-                     "video/x-raw, "   // Color HD720
-                     "format = (string)BGRA, "
-                     "width = (int)1280, "
-                     "height =  (int)720, "
-                     "framerate =  (fraction)  { 15, 30, 60}"
-                     ";"
-                     "video/x-raw, "   // Color HD1080
-                     "format = (string)BGRA, "
-                     "width = (int)1920, "
-                     "height = (int)1080, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Color HD2K
-                     "format = (string)BGRA, "
-                     "width = (int)2208, "
-                     "height = (int)1242, "
-                     "framerate = (fraction)15"
-                     ";"
-                     "video/x-raw, "   // Color HD1200 (GMSL2)
-                     "format = (string)BGRA, "
-                     "width = (int)1920, "
-                     "height = (int)1200, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Color SVGA (GMSL2)
-                     "format = (string)BGRA, "
-                     "width = (int)960, "
-                     "height = (int)600, "
-                     "framerate = (fraction) { 15, 30, 60, 120 }"
-                     ";"
-                     "video/x-raw, "   // Depth VGA
-                     "format = (string)GRAY16_LE, "
-                     "width = (int)672, "
-                     "height =  (int)376, "
-                     "framerate = (fraction) { 15, 30, 60, 100 }"
-                     ";"
-                     "video/x-raw, "   // Depth HD720
-                     "format = (string)GRAY16_LE, "
-                     "width = (int)1280, "
-                     "height =  (int)720, "
-                     "framerate =  (fraction)  { 15, 30, 60}"
-                     ";"
-                     "video/x-raw, "   // Depth HD1080
-                     "format = (string)GRAY16_LE, "
-                     "width = (int)1920, "
-                     "height = (int)1080, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Depth HD2K
-                     "format = (string)GRAY16_LE, "
-                     "width = (int)2208, "
-                     "height = (int)1242, "
-                     "framerate = (fraction)15"
-                     ";"
-                     "video/x-raw, "   // Depth HD1200 (GMSL2)
-                     "format = (string)GRAY16_LE, "
-                     "width = (int)1920, "
-                     "height = (int)1200, "
-                     "framerate = (fraction) { 15, 30, 60 }"
-                     ";"
-                     "video/x-raw, "   // Depth SVGA (GMSL2)
-                     "format = (string)GRAY16_LE, "
-                     "width = (int)960, "
-                     "height = (int)600, "
-                     "framerate = (fraction) { 15, 30, 60, 120 }"
+    // Working-resolution output is not limited to the camera capture modes.
+    GST_STATIC_CAPS(("video/x-raw, format=(string){ BGRA, GRAY16_LE }, "
+                     "width=(int)[1,MAX], height=(int)[1,MAX], "
+                     "framerate=(fraction)[0/1,MAX]"
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
                      ";"
                      "video/x-raw(memory:NVMM), "   // NV12 HD1200 (GMSL2 zero-copy)
@@ -4567,8 +4464,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
             }
         } else {
             sl::Mat &img = (stream_type == GST_ZEDSRC_DEPTH_16) ? depth_data : left_img;
-            copied = gst_zedsrc_copy_mat(src, img, minfo.data, minfo.size / rows, minfo.size / rows,
-                                         rows);
+            copied = gst_zedsrc_copy_mat(src, img, minfo.data, minfo.size / rows,
+                                         src->retrieve_res.width * img.getPixelBytes(), rows);
         }
         if (!copied) {
             flow_ret = GST_FLOW_ERROR;
