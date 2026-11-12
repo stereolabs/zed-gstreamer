@@ -59,9 +59,12 @@ struct _GstZedSrc {
     gint stream_port;
     gint stream_type;
     gint resolved_stream_type;   // Actual stream type after auto-negotiation (-1 = not resolved)
+    gboolean nv12_rectified;     // Rectified images in the NV12 zero-copy stream types
     gfloat depth_min_dist;
     gfloat depth_max_dist;
     gint depth_mode;   // Depth mode [enum]
+    gint depth_precision;   // sl::DEPTH_PRECISION depth_precision
+    gboolean allow_depth_cuda_graph;
     gboolean camera_disable_self_calib;
     gint depth_stabilization;
     gint coord_sys;
@@ -106,6 +109,7 @@ struct _GstZedSrc {
     gfloat init_orient_pitch;
     gfloat init_orient_yaw;
     gint pos_trk_mode;
+    gint pos_trk_compute_pref;   // sl::COMPUTE_PREFERENCE compute_preference
 
     gboolean object_detection;
     guint od_instance_id;
@@ -138,6 +142,7 @@ struct _GstZedSrc {
     gboolean body_tracking;
     gboolean bt_enable_segm_output;   // bool enable_segmentation
     gint bt_model;                    // sl::BODY_TRACKING_MODEL detection_model
+    gint bt_model_gen;                // sl::BODY_TRACKING_MODEL_GEN model_gen
     gint bt_format;                   // sl::BODY_FORMAT body_format
     gboolean bt_reduce_precision;     // bool allow_reduced_precision_inference
     gfloat bt_max_range;              // float max_range
@@ -184,11 +189,21 @@ struct _GstZedSrc {
 
     GstCaps *caps;
     guint out_framesize;
+    sl::Resolution retrieve_res;   // Size of the BGRA and depth images: the working resolution
 
     gboolean stop_requested;
 
+#ifdef SL_ENABLE_ADVANCED_CAPTURE_API
+    // Raw NV12 buffers point into the camera capture buffers: the camera is only closed once the
+    // ones still used downstream are released
+    gint raw_buffers_in_use;
+    gboolean close_pending;
+    GMutex close_lock;
+#endif
+
 #if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
-    // Reusable destination surfaces for NV12 stereo side-by-side composition
+    // Reusable destination surfaces for NV12 stereo side-by-side composition, also used to hold
+    // the copies of rectified NV12 frames (see nv12_rectified)
 #define GST_ZEDSRC_STEREO_SBS_POOL_SIZE 4
     gpointer stereo_sbs_pool[GST_ZEDSRC_STEREO_SBS_POOL_SIZE];
     gint stereo_sbs_pool_in_use[GST_ZEDSRC_STEREO_SBS_POOL_SIZE];
