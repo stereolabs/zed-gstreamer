@@ -192,8 +192,8 @@ static void stereo_sbs_wrapped_buffer_destroy_notify(gpointer data) {
     gst_object_unref(ctx->src);
     g_free(ctx);
 }
-#endif  // HAVE_NVBUFSURFTRANSFORM
-#endif  // SL_ENABLE_ADVANCED_CAPTURE_API
+#endif   // HAVE_NVBUFSURFTRANSFORM
+#endif   // SL_ENABLE_ADVANCED_CAPTURE_API
 
 static gboolean gst_zedsrc_query(GstBaseSrc *src, GstQuery *query);
 
@@ -350,8 +350,10 @@ typedef enum {
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
     GST_ZEDSRC_RAW_NV12 = 6,          // Zero-copy NV12 raw buffer (GMSL cameras only)
     GST_ZEDSRC_RAW_NV12_STEREO = 7,   // Zero-copy NV12 stereo (left + right)
-    GST_ZEDSRC_RAW_NV12_RIGHT = 8     // Zero-copy NV12 right eye only (GMSL cameras only)
+    GST_ZEDSRC_RAW_NV12_RIGHT = 8,    // Zero-copy NV12 right eye only (GMSL cameras only)
 #endif
+    GST_ZEDSRC_DEPTH_BGRA = 9        // Depth mode BGRA
+
 } GstZedSrcStreamType;
 
 typedef enum {
@@ -418,7 +420,7 @@ typedef enum {
 #define DEFAULT_PROP_OPENCV_CALIB_FILE ""
 #define DEFAULT_PROP_STREAM_IP ""
 #define DEFAULT_PROP_STREAM_PORT 30000
-#define DEFAULT_PROP_STREAM_TYPE -1  /* GST_ZEDSRC_STREAM_AUTO */
+#define DEFAULT_PROP_STREAM_TYPE -1 /* GST_ZEDSRC_STREAM_AUTO */
 #define DEFAULT_PROP_DEPTH_MIN 300.f
 #define DEFAULT_PROP_DEPTH_MAX 20000.f
 #define DEFAULT_PROP_DEPTH_MODE static_cast<gint>(sl::DEPTH_MODE::NONE)
@@ -689,6 +691,7 @@ static GType gst_zedsrc_stream_type_get_type(void) {
             {GST_ZEDSRC_RAW_NV12_RIGHT, "Zero-copy NV12 right eye only (GMSL cameras only)",
              "Raw NV12 right zero-copy [NV12]"},
 #endif
+            {GST_ZEDSRC_DEPTH_BGRA, "8 bits depth image", "Depth image [BGRA]"},
             {0, NULL, NULL},
         };
 
@@ -1064,8 +1067,8 @@ static GstStaticPadTemplate gst_zedsrc_src_template = GST_STATIC_PAD_TEMPLATE(
                      "width = (int)1920, "
                      "height = (int)600, "
                      "framerate = (fraction) { 15, 30, 60, 120 }"
-#endif  // HAVE_NVBUFSURFTRANSFORM
-#endif  // SL_ENABLE_ADVANCED_CAPTURE_API
+#endif   // HAVE_NVBUFSURFTRANSFORM
+#endif   // SL_ENABLE_ADVANCED_CAPTURE_API
                      )));
 
 /* class initialization */
@@ -3057,7 +3060,8 @@ static gboolean gst_zedsrc_start(GstBaseSrc *bsrc) {
             src,
             "Positional tracking requires DEPTH_MODE!=NONE. Depth mode value forced to NEURAL");
     }
-    if ((src->stream_type == GST_ZEDSRC_LEFT_DEPTH || src->stream_type == GST_ZEDSRC_DEPTH_16) &&
+    if ((src->stream_type == GST_ZEDSRC_LEFT_DEPTH || src->stream_type == GST_ZEDSRC_DEPTH_16 ||
+         src->stream_type == GST_ZEDSRC_DEPTH_BGRA) &&
         init_params.depth_mode == sl::DEPTH_MODE::NONE) {
         init_params.depth_mode = sl::DEPTH_MODE::NEURAL;
         src->depth_mode = static_cast<gint>(init_params.depth_mode);
@@ -4069,6 +4073,8 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     } else if (stream_type == GST_ZEDSRC_LEFT_DEPTH) {
         CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU));
         CHECK_RET_OR_GOTO(src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU));
+    } else if (stream_type == GST_ZEDSRC_DEPTH_BGRA) {
+        CHECK_RET_OR_GOTO(src->zed.retrieveImage(left_img, sl::VIEW::DEPTH_BGRA, sl::MEM::CPU));
     }
 
     /* --- Memory copy into GstBuffer ------------------------------------ */
@@ -4417,7 +4423,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
             return GST_FLOW_ERROR;
         }
         // <---- Stereo side-by-side
-#endif  // HAVE_NVBUFSURFTRANSFORM
+#endif   // HAVE_NVBUFSURFTRANSFORM
     } else if (stream_type == GST_ZEDSRC_RAW_NV12_RIGHT) {
         // ----> Right-eye NV12 zero-copy: wrap the right NvBufSurface directly
         NvBufSurface *nvbuf_r = static_cast<NvBufSurface *>(raw_buffer->getRawBufferRight());
