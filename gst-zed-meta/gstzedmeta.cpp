@@ -79,6 +79,9 @@ static gboolean gst_zed_src_meta_init(GstMeta *meta, gpointer params, GstBuffer 
     emeta->pose.orient[0] = 0.0;
     emeta->pose.orient[1] = 0.0;
     emeta->pose.orient[2] = 0.0;
+
+    emeta->image_timestamp_ns = 0;
+    emeta->center_of_exposure_timestamp_ns = 0;
     return true;
 }
 
@@ -109,7 +112,7 @@ static gboolean gst_zed_src_meta_transform(GstBuffer *transbuf, GstMeta *meta, G
         GST_DEBUG("Transform copy");
     }
 
-    gst_buffer_add_zed_src_meta(transbuf, emeta->info, emeta->pose, emeta->sens, emeta->od_enabled, emeta->obj_count, emeta->objects, emeta->frame_id);
+    gst_buffer_copy_zed_src_meta(transbuf, emeta);
 
     return TRUE;
 }
@@ -156,4 +159,19 @@ GstZedSrcMeta *gst_buffer_add_zed_src_meta(GstBuffer *buffer, ZedInfo &info, Zed
     meta->frame_id = frame_id;
 
     return meta;
+}
+
+GstZedSrcMeta *gst_buffer_copy_zed_src_meta(GstBuffer *buffer, GstZedSrcMeta *meta) {
+    GST_TRACE("gst_buffer_copy_zed_src_meta");
+
+    g_return_val_if_fail(meta != NULL, NULL);
+
+    GstZedSrcMeta *out_meta = gst_buffer_add_zed_src_meta(buffer, meta->info, meta->pose, meta->sens, meta->od_enabled, meta->obj_count,
+                                                          meta->objects, meta->frame_id);
+    if (out_meta) {
+        out_meta->image_timestamp_ns = meta->image_timestamp_ns;
+        out_meta->center_of_exposure_timestamp_ns = meta->center_of_exposure_timestamp_ns;
+    }
+
+    return out_meta;
 }

@@ -19,6 +19,8 @@
 //
 // /////////////////////////////////////////////////////////////////////////
 
+#include <memory>
+
 #include <gst/gst.h>
 #include <gst/gstbuffer.h>
 #include <gst/gstcaps.h>
@@ -44,226 +46,16 @@ enum {
  *
  * describe the real formats here.
  */
-static GstStaticPadTemplate src_factory =
-    GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS,
-                            GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height = (int)752 , "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height = (int)1440, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)2160, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)2484, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)2400, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw, "   // Color VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth VGA
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD720
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD1080
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD2K
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD1200 (GMSL2)
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth SVGA (GMSL2)
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }")));
-
-static GstStaticPadTemplate sink_video_factory =
-    GST_STATIC_PAD_TEMPLATE("sink_video", GST_PAD_SINK, GST_PAD_ALWAYS,
-                            GST_STATIC_CAPS(("video/x-raw, "   // Double stream VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height = (int)752 , "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height = (int)1440, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)2160, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)2484, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Double stream HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)2400, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Double stream SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw, "   // Color VGA
-                                             "format = (string)BGRA, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD720
-                                             "format = (string)BGRA, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1080
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color HD2K
-                                             "format = (string)BGRA, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Color HD1200 (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Color SVGA (GMSL2)
-                                             "format = (string)BGRA, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth VGA
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)672, "
-                                             "height =  (int)376, "
-                                             "framerate = (fraction) { 15, 30, 60, 100 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD720
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1280, "
-                                             "height =  (int)720, "
-                                             "framerate =  (fraction)  { 15, 30, 60}"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD1080
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1920, "
-                                             "height = (int)1080, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD2K
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)2208, "
-                                             "height = (int)1242, "
-                                             "framerate = (fraction)15"
-                                             ";"
-                                             "video/x-raw, "   // Depth HD1200 (GMSL2)
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)1920, "
-                                             "height = (int)1200, "
-                                             "framerate = (fraction) { 15, 30, 60 }"
-                                             ";"
-                                             "video/x-raw, "   // Depth SVGA (GMSL2)
-                                             "format = (string)GRAY16_LE, "
-                                             "width = (int)960, "
-                                             "height = (int)600, "
-                                             "framerate = (fraction) { 15, 30, 60, 120 }")));
-
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
+    "src", GST_PAD_SRC, GST_PAD_ALWAYS,
+    GST_STATIC_CAPS("video/x-raw, format=(string){ BGRA, GRAY16_LE }, "
+                    "width=(int)[1,MAX], height=(int)[1,MAX], "
+                    "framerate=(fraction)[0/1,MAX]"));
+static GstStaticPadTemplate sink_video_factory = GST_STATIC_PAD_TEMPLATE(
+    "sink_video", GST_PAD_SINK, GST_PAD_ALWAYS,
+    GST_STATIC_CAPS("video/x-raw, format=(string){ BGRA, GRAY16_LE }, "
+                    "width=(int)[1,MAX], height=(int)[1,MAX], "
+                    "framerate=(fraction)[0/1,MAX]"));
 static GstStaticPadTemplate sink_data_factory = GST_STATIC_PAD_TEMPLATE(
     "sink_data", GST_PAD_SINK, GST_PAD_ALWAYS, GST_STATIC_CAPS("application/data"));
 
@@ -282,6 +74,21 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
 
 /* GObject vmethod implementations */
 
+// The cached buffers are private copies owned by the element.
+static void gst_zeddatamux_finalize(GObject *object) {
+    GstZedDataMux *filter = GST_ZEDDATAMUX(object);
+    if (filter->last_video_buf) {
+        gst_buffer_unref(filter->last_video_buf);
+    }
+    if (filter->last_data_buf) {
+        gst_buffer_unref(filter->last_data_buf);
+    }
+    if (filter->caps) {
+        gst_caps_unref(filter->caps);
+    }
+    G_OBJECT_CLASS(gst_zeddatamux_parent_class)->finalize(object);
+}
+
 /* initialize the plugin's class */
 static void gst_zeddatamux_class_init(GstZedDataMuxClass *klass) {
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
@@ -289,6 +96,7 @@ static void gst_zeddatamux_class_init(GstZedDataMuxClass *klass) {
 
     GST_DEBUG_OBJECT(gobject_class, "Class Init");
 
+    gobject_class->finalize = gst_zeddatamux_finalize;
     gobject_class->set_property = gst_zeddatamux_set_property;
     gobject_class->get_property = gst_zeddatamux_get_property;
 
@@ -463,6 +271,8 @@ static gboolean gst_zeddatamux_sink_data_event(GstPad *pad, GstObject *parent, G
  * this function does the actual processing
  */
 static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, GstBuffer *buf) {
+    // Chain functions own their input, including on error or when a frame is discarded.
+    std::unique_ptr<GstBuffer, decltype(&gst_buffer_unref)> input(buf, gst_buffer_unref);
     GstZedDataMux *filter;
     filter = GST_ZEDDATAMUX(parent);
 
@@ -479,6 +289,11 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
     GST_TRACE_OBJECT(filter, "Processing data...");
     if (gst_buffer_map(buf, &map_in, GST_MAP_READ)) {
         GST_TRACE("Input buffer size %lu B", map_in.size);
+        if (map_in.size < sizeof(GstZedSrcMeta)) {
+            GST_ELEMENT_ERROR(filter, STREAM, FORMAT, ("Truncated ZED metadata buffer"), (NULL));
+            gst_buffer_unmap(buf, &map_in);
+            return GST_FLOW_ERROR;
+        }
 
         if (timestamp == filter->last_video_ts) {
             GST_TRACE("Data sync");
@@ -493,24 +308,30 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
                     // ----> Release incoming buffer
                     GST_TRACE("Input buffer unmap");
                     gst_buffer_unmap(buf, &map_in);
-                    // gst_buffer_unref(buf);
                     //  <---- Release incoming buffer
 
                     return GST_FLOW_ERROR;
                 }
 
-                if (gst_buffer_map(out_buf, &map_out, (GstMapFlags) (GST_MAP_WRITE)) &&
-                    gst_buffer_map(filter->last_video_buf, &map_store,
-                                   (GstMapFlags) (GST_MAP_READ))) {
+                if (!gst_buffer_map(out_buf, &map_out, GST_MAP_WRITE)) {
+                    gst_buffer_unref(out_buf);
+                    gst_buffer_unmap(buf, &map_in);
+                    return GST_FLOW_ERROR;
+                }
+                if (!gst_buffer_map(filter->last_video_buf, &map_store, GST_MAP_READ)) {
+                    gst_buffer_unmap(out_buf, &map_out);
+                    gst_buffer_unref(out_buf);
+                    gst_buffer_unmap(buf, &map_in);
+                    return GST_FLOW_ERROR;
+                }
+                {
                     GST_TRACE("Copying video buffer %lu B", out_buf_size);
                     memcpy(map_out.data, map_store.data, out_buf_size);
 
-                    GstZedSrcMeta *meta = (GstZedSrcMeta *) buf;
+                    GstZedSrcMeta *meta = (GstZedSrcMeta *) map_in.data;
 
                     GST_TRACE("Adding metadata");
-                    gst_buffer_add_zed_src_meta(out_buf, meta->info, meta->pose, meta->sens,
-                                                meta->od_enabled, meta->obj_count, meta->objects,
-                                                meta->frame_id);
+                    gst_buffer_copy_zed_src_meta(out_buf, meta);
 
                     // ----> Timestamp meta-data
                     GST_TRACE("Out buffer set timestamp");
@@ -519,29 +340,16 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
                     GST_BUFFER_OFFSET(out_buf) = GST_BUFFER_OFFSET(filter->last_video_buf);
                     // <---- Timestamp meta-data
 
+                    // Unmap before transferring ownership: downstream may free out_buf immediately.
+                    gst_buffer_unmap(out_buf, &map_out);
+                    gst_buffer_unmap(filter->last_video_buf, &map_store);
                     GST_TRACE("Out buffer push");
                     GstFlowReturn ret = gst_pad_push(filter->srcpad, out_buf);
-
                     if (ret != GST_FLOW_OK) {
-                        GST_DEBUG_OBJECT(filter, "Error pushing out buffer: %s",
-                                         gst_flow_get_name(ret));
-
-                        // ----> Release incoming buffer
-                        GST_TRACE("Input buffer unmap");
+                        GST_DEBUG_OBJECT(filter, "Error pushing out buffer: %s", gst_flow_get_name(ret));
                         gst_buffer_unmap(buf, &map_in);
-                        // gst_buffer_unref(buf);
-                        GST_TRACE("Out buffer unmap");
-                        gst_buffer_unmap(out_buf, &map_out);
-                        // gst_buffer_unref(out_buf);
-                        //  <---- Release incoming buffer
                         return ret;
                     }
-
-                    GST_TRACE("Out buffer unmap");
-                    gst_buffer_unmap(out_buf, &map_out);
-                    GST_TRACE("Store buffer unmap");
-                    gst_buffer_unmap(filter->last_video_buf, &map_store);
-                    // gst_buffer_unref(data_buf);
                 }
             } else {
                 GST_TRACE("No video buffer to be muxed");
@@ -559,7 +367,10 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
             } else if (map_in.size != filter->last_data_buf_size) {
                 GST_TRACE("Resizing stored data buffer");
                 filter->last_data_buf_size = map_in.size;
-                gst_buffer_resize(filter->last_data_buf, 0, filter->last_data_buf_size);
+                // resize() cannot grow the allocation backing a GstBuffer.
+                gst_buffer_unref(filter->last_data_buf);
+                filter->last_data_buf =
+                    gst_buffer_new_allocate(NULL, filter->last_data_buf_size, NULL);
             }
 
             if (!GST_IS_BUFFER(filter->last_data_buf)) {
@@ -568,7 +379,6 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
                 // ----> Release incoming buffer
                 GST_TRACE("Input buffer unmap");
                 gst_buffer_unmap(buf, &map_in);
-                // gst_buffer_unref(buf);
                 //  <---- Release incoming buffer
 
                 return GST_FLOW_ERROR;
@@ -580,6 +390,9 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
 
                 GST_TRACE("Store buffer unmap");
                 gst_buffer_unmap(filter->last_data_buf, &map_store);
+            } else {
+                gst_buffer_unmap(buf, &map_in);
+                return GST_FLOW_ERROR;
             }
         }
 
@@ -600,6 +413,8 @@ static GstFlowReturn gst_zeddatamux_chain_data(GstPad *pad, GstObject *parent, G
  * this function does the actual processing
  */
 static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, GstBuffer *buf) {
+    // Chain functions own their input, including on error or when a frame is discarded.
+    std::unique_ptr<GstBuffer, decltype(&gst_buffer_unref)> input(buf, gst_buffer_unref);
     GstZedDataMux *filter;
 
     filter = GST_ZEDDATAMUX(parent);
@@ -631,24 +446,30 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
                     // ----> Release incoming buffer
                     GST_TRACE("Input buffer unmap");
                     gst_buffer_unmap(buf, &map_in);
-                    // gst_buffer_unref(buf);
                     //  <---- Release incoming buffer
 
                     return GST_FLOW_ERROR;
                 }
 
-                if (gst_buffer_map(out_buf, &map_out, (GstMapFlags) (GST_MAP_WRITE)) &&
-                    gst_buffer_map(filter->last_data_buf, &map_store,
-                                   (GstMapFlags) (GST_MAP_WRITE))) {
+                if (!gst_buffer_map(out_buf, &map_out, GST_MAP_WRITE)) {
+                    gst_buffer_unref(out_buf);
+                    gst_buffer_unmap(buf, &map_in);
+                    return GST_FLOW_ERROR;
+                }
+                if (!gst_buffer_map(filter->last_data_buf, &map_store, GST_MAP_READ)) {
+                    gst_buffer_unmap(out_buf, &map_out);
+                    gst_buffer_unref(out_buf);
+                    gst_buffer_unmap(buf, &map_in);
+                    return GST_FLOW_ERROR;
+                }
+                {
                     GST_TRACE("Copying video buffer %lu B", map_in.size);
                     memcpy(map_out.data, map_in.data, map_in.size);
 
                     GstZedSrcMeta *meta = (GstZedSrcMeta *) map_store.data;
 
                     GST_TRACE("Adding metadata");
-                    gst_buffer_add_zed_src_meta(out_buf, meta->info, meta->pose, meta->sens,
-                                                meta->od_enabled, meta->obj_count, meta->objects,
-                                                meta->frame_id);
+                    gst_buffer_copy_zed_src_meta(out_buf, meta);
 
                     // ----> Timestamp meta-data
                     GST_TRACE("Out buffer set timestamp");
@@ -657,29 +478,16 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
                     GST_BUFFER_OFFSET(out_buf) = GST_BUFFER_OFFSET(buf);
                     // <---- Timestamp meta-data
 
+                    // Unmap before transferring ownership: downstream may free out_buf immediately.
+                    gst_buffer_unmap(out_buf, &map_out);
+                    gst_buffer_unmap(filter->last_data_buf, &map_store);
                     GST_TRACE("Out buffer push");
                     GstFlowReturn ret = gst_pad_push(filter->srcpad, out_buf);
-
                     if (ret != GST_FLOW_OK) {
-                        GST_DEBUG_OBJECT(filter, "Error pushing out buffer: %s",
-                                         gst_flow_get_name(ret));
-
-                        // ----> Release incoming buffer
-                        GST_TRACE("Input buffer unmap");
+                        GST_DEBUG_OBJECT(filter, "Error pushing out buffer: %s", gst_flow_get_name(ret));
                         gst_buffer_unmap(buf, &map_in);
-                        // gst_buffer_unref(buf);
-                        GST_TRACE("Out buffer unmap");
-                        gst_buffer_unmap(out_buf, &map_out);
-                        // gst_buffer_unref(out_buf);
-                        //  <---- Release incoming buffer
                         return ret;
                     }
-
-                    GST_TRACE("Out buffer unmap");
-                    gst_buffer_unmap(out_buf, &map_out);
-                    GST_TRACE("Store buffer unmap");
-                    gst_buffer_unmap(filter->last_data_buf, &map_store);
-                    // gst_buffer_unref(data_buf);
                 }
             } else {
                 GST_TRACE("No data buffer to be muxed");
@@ -696,7 +504,10 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
                     gst_buffer_new_allocate(NULL, filter->last_video_buf_size, NULL);
             } else if (map_in.size != filter->last_video_buf_size) {
                 filter->last_video_buf_size = map_in.size;
-                gst_buffer_resize(filter->last_video_buf, 0, filter->last_video_buf_size);
+                // resize() cannot grow the allocation backing a GstBuffer.
+                gst_buffer_unref(filter->last_video_buf);
+                filter->last_video_buf =
+                    gst_buffer_new_allocate(NULL, filter->last_video_buf_size, NULL);
             }
 
             if (!GST_IS_BUFFER(filter->last_video_buf)) {
@@ -705,7 +516,6 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
                 // ----> Release incoming buffer
                 GST_TRACE("Input buffer unmap");
                 gst_buffer_unmap(buf, &map_in);
-                // gst_buffer_unref(buf);
                 //  <---- Release incoming buffer
 
                 return GST_FLOW_ERROR;
@@ -717,6 +527,9 @@ static GstFlowReturn gst_zeddatamux_chain_video(GstPad *pad, GstObject *parent, 
 
                 GST_TRACE("Store buffer unmap");
                 gst_buffer_unmap(filter->last_video_buf, &map_store);
+            } else {
+                gst_buffer_unmap(buf, &map_in);
+                return GST_FLOW_ERROR;
             }
         }
 
