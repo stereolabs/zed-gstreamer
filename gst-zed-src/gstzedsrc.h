@@ -82,6 +82,7 @@ struct _GstZedSrc {
     gboolean sensors_required;
     gboolean enable_image_enhancement;
     gfloat open_timeout_sec;
+    gfloat camera_recovery_timeout_sec;   // How long to wait for a restarting camera, 0: no wait
     gboolean async_grab_camera_recovery;
     gfloat grab_compute_capping_fps;
     gboolean enable_image_validity_check;

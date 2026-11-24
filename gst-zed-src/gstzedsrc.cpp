@@ -352,6 +352,7 @@ enum {
     PROP_ENABLE_IMAGE_ENHANCEMENT,
     PROP_OPEN_TIMEOUT_SEC,
     PROP_ASYNC_GRAB_CAMERA_RECOVERY,
+    PROP_CAMERA_RECOVERY_TIMEOUT_SEC,
     PROP_GRAB_COMPUTE_CAPPING_FPS,
     PROP_ENABLE_IMAGE_VALIDITY_CHECK,
     PROP_ASYNC_IMAGE_RETRIEVAL,
@@ -531,6 +532,7 @@ static_assert(static_cast<int>(sl::BODY_TRACKING_MODEL_GEN::GEN_1) == GST_ZEDSRC
 #define DEFAULT_PROP_SENSORS_REQUIRED FALSE
 #define DEFAULT_PROP_ENABLE_IMAGE_ENHANCEMENT TRUE
 #define DEFAULT_PROP_OPEN_TIMEOUT_SEC 5.0f
+#define DEFAULT_PROP_CAMERA_RECOVERY_TIMEOUT_SEC 10.0f
 #define DEFAULT_PROP_ASYNC_GRAB_CAMERA_RECOVERY FALSE
 #define DEFAULT_PROP_GRAB_COMPUTE_CAPPING_FPS 0.0f
 #define DEFAULT_PROP_ENABLE_IMAGE_VALIDITY_CHECK TRUE
@@ -1897,6 +1899,15 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_CAMERA_RECOVERY_TIMEOUT_SEC,
+        g_param_spec_float("camera-recovery-timeout-sec", "Camera Recovery Timeout Seconds",
+                           "How long to wait for a restarting camera (ZED X reboot, USB "
+                           "reconnection) before stopping the stream with an error, in seconds. "
+                           "0 stops the stream at once",
+                           0.0f, 600.0f, DEFAULT_PROP_CAMERA_RECOVERY_TIMEOUT_SEC,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
         gobject_class, PROP_GRAB_COMPUTE_CAPPING_FPS,
         g_param_spec_float("grab-compute-capping-fps", "Grab Compute Capping FPS",
                            "Grab Compute Capping FPS", 0.0f, 1000.0f,
@@ -2041,6 +2052,7 @@ static void gst_zedsrc_init(GstZedSrc *src) {
     src->sensors_required = DEFAULT_PROP_SENSORS_REQUIRED;
     src->enable_image_enhancement = DEFAULT_PROP_ENABLE_IMAGE_ENHANCEMENT;
     src->open_timeout_sec = DEFAULT_PROP_OPEN_TIMEOUT_SEC;
+    src->camera_recovery_timeout_sec = DEFAULT_PROP_CAMERA_RECOVERY_TIMEOUT_SEC;
     src->async_grab_camera_recovery = DEFAULT_PROP_ASYNC_GRAB_CAMERA_RECOVERY;
     src->grab_compute_capping_fps = DEFAULT_PROP_GRAB_COMPUTE_CAPPING_FPS;
     src->enable_image_validity_check = DEFAULT_PROP_ENABLE_IMAGE_VALIDITY_CHECK;
@@ -2524,6 +2536,9 @@ void gst_zedsrc_set_property(GObject *object, guint property_id, const GValue *v
     case PROP_OPEN_TIMEOUT_SEC:
         src->open_timeout_sec = g_value_get_float(value);
         break;
+    case PROP_CAMERA_RECOVERY_TIMEOUT_SEC:
+        src->camera_recovery_timeout_sec = g_value_get_float(value);
+        break;
     case PROP_ASYNC_GRAB_CAMERA_RECOVERY:
         src->async_grab_camera_recovery = g_value_get_boolean(value);
         break;
@@ -2890,6 +2905,9 @@ void gst_zedsrc_get_property(GObject *object, guint property_id, GValue *value, 
         break;
     case PROP_OPEN_TIMEOUT_SEC:
         g_value_set_float(value, src->open_timeout_sec);
+        break;
+    case PROP_CAMERA_RECOVERY_TIMEOUT_SEC:
+        g_value_set_float(value, src->camera_recovery_timeout_sec);
         break;
     case PROP_ASYNC_GRAB_CAMERA_RECOVERY:
         g_value_set_boolean(value, src->async_grab_camera_recovery);
@@ -4385,6 +4403,7 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     // ----> ZED grab
 grab:
     flow_ret = gst_zed_grab(GST_ELEMENT(src), &src->wait, unlock_count,
+                            src->camera_recovery_timeout_sec,
                             [src, &zedRtParams]() { return src->zed.grab(zedRtParams); });
     if (flow_ret != GST_FLOW_OK) {
         goto out;
@@ -4756,6 +4775,7 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
     sl::RawBuffer *raw_buffer = NULL;
     for (;;) {
         flow_ret = gst_zed_grab(GST_ELEMENT(src), &src->wait, unlock_count,
+                                src->camera_recovery_timeout_sec,
                                 [src, &zedRtParams]() { return src->zed.grab(zedRtParams); });
         if (flow_ret != GST_FLOW_OK) {
             cuCtxPopCurrent_v2(NULL);

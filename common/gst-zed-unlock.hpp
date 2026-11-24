@@ -40,9 +40,6 @@ typedef struct {
     gboolean camera_restarting;   // Streaming thread only: grab() reports a camera restart
 } GstZedWait;
 
-// How long a camera restart may last before the stream stops with an error
-#define GST_ZED_RESTART_TIMEOUT_S 60
-
 static inline void gst_zed_wait_init(GstZedWait *wait) {
     g_mutex_init(&wait->lock);
     g_cond_init(&wait->cond);
@@ -113,10 +110,10 @@ static inline gboolean gst_zed_is_restarting(sl::ERROR_CODE ret) {
 
 // Grabs the next frame with grab_fn. grab() itself cannot be interrupted: it returns within a
 // frame period while the camera delivers images, and at once while the camera restarts. A restart
-// is waited for, up to GST_ZED_RESTART_TIMEOUT_S, instead of stopping the stream.
+// is waited for up to timeout_s seconds (camera-recovery-timeout-sec), 0 stops the stream at once.
 template <typename GrabFn>
 static inline GstFlowReturn gst_zed_grab(GstElement *element, GstZedWait *wait, guint unlock_count,
-                                         GrabFn grab_fn) {
+                                         gfloat timeout_s, GrabFn grab_fn) {
     gint64 restart_start = 0;
     for (;;) {
         const sl::ERROR_CODE ret = grab_fn();
@@ -126,6 +123,12 @@ static inline GstFlowReturn gst_zed_grab(GstElement *element, GstZedWait *wait, 
         }
 
         if (gst_zed_is_restarting(ret)) {
+            if (timeout_s <= 0.0f) {
+                GST_ELEMENT_ERROR(element, RESOURCE, READ, ("The camera is restarting"),
+                                  ("grab: %s, camera-recovery-timeout-sec is 0",
+                                   sl::toString(ret).c_str()));
+                return GST_FLOW_ERROR;
+            }
             const gint64 now = g_get_monotonic_time();
             if (!wait->camera_restarting) {
                 wait->camera_restarting = TRUE;
@@ -135,10 +138,9 @@ static inline GstFlowReturn gst_zed_grab(GstElement *element, GstZedWait *wait, 
             }
             if (restart_start == 0) {
                 restart_start = now;
-            } else if (now - restart_start > GST_ZED_RESTART_TIMEOUT_S * G_TIME_SPAN_SECOND) {
+            } else if (now - restart_start > (gint64) (timeout_s * G_TIME_SPAN_SECOND)) {
                 GST_ELEMENT_ERROR(element, RESOURCE, READ,
-                                  ("The camera did not come back within %d seconds",
-                                   GST_ZED_RESTART_TIMEOUT_S),
+                                  ("The camera did not come back within %g seconds", timeout_s),
                                   ("grab: %s", sl::toString(ret).c_str()));
                 return GST_FLOW_ERROR;
             }

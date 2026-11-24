@@ -90,6 +90,7 @@ enum {
     PROP_SDK_LOG_FILE,
     PROP_SETTINGS_PATH,
     PROP_ASYNC_RECOVERY,
+    PROP_CAMERA_RECOVERY_TIMEOUT_SEC,
     PROP_SATURATION,
     PROP_SHARPNESS,
     PROP_GAMMA,
@@ -178,6 +179,7 @@ typedef enum {
 #define DEFAULT_PROP_SDK_LOG_FILE ""
 #define DEFAULT_PROP_SETTINGS_PATH ""
 #define DEFAULT_PROP_ASYNC_RECOVERY FALSE
+#define DEFAULT_PROP_CAMERA_RECOVERY_TIMEOUT_SEC 10.0f
 #define DEFAULT_PROP_OPENCV_CALIB_FILE ""
 #define DEFAULT_PROP_SATURATION 4
 #define DEFAULT_PROP_SHARPNESS 1
@@ -669,6 +671,15 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
+        gobject_class, PROP_CAMERA_RECOVERY_TIMEOUT_SEC,
+        g_param_spec_float("camera-recovery-timeout-sec", "Camera Recovery Timeout Seconds",
+                           "How long to wait for a restarting camera (ZED X One reboot, recovery "
+                           "of the capture) before stopping the stream with an error, in seconds. "
+                           "0 stops the stream at once",
+                           0.0f, 600.0f, DEFAULT_PROP_CAMERA_RECOVERY_TIMEOUT_SEC,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
         gobject_class, PROP_SATURATION,
         g_param_spec_int("ctrl-saturation", "Camera control: saturation", "Image saturation", 0, 8,
                          DEFAULT_PROP_SATURATION,
@@ -917,6 +928,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_sdkLogFile = g_string_new(DEFAULT_PROP_SDK_LOG_FILE);
     src->_settingsPath = g_string_new(DEFAULT_PROP_SETTINGS_PATH);
     src->_asyncRecovery = DEFAULT_PROP_ASYNC_RECOVERY;
+    src->_cameraRecoveryTimeout_sec = DEFAULT_PROP_CAMERA_RECOVERY_TIMEOUT_SEC;
 
     src->_saturation = DEFAULT_PROP_SATURATION;
     src->_sharpness = DEFAULT_PROP_SHARPNESS;
@@ -1077,6 +1089,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_ASYNC_RECOVERY:
         src->_asyncRecovery = g_value_get_boolean(value);
+        break;
+    case PROP_CAMERA_RECOVERY_TIMEOUT_SEC:
+        src->_cameraRecoveryTimeout_sec = g_value_get_float(value);
         break;
     case PROP_SATURATION:
         src->_saturation = g_value_get_int(value);
@@ -1286,6 +1301,9 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
         break;
     case PROP_ASYNC_RECOVERY:
         g_value_set_boolean(value, src->_asyncRecovery);
+        break;
+    case PROP_CAMERA_RECOVERY_TIMEOUT_SEC:
+        g_value_set_float(value, src->_cameraRecoveryTimeout_sec);
         break;
     case PROP_SATURATION:
         g_value_set_int(value, src->_saturation);
@@ -2109,8 +2127,9 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
     sl::RawBuffer *raw_buffer = NULL;
     for (;;) {
         // Grab frame
-        GstFlowReturn flow_ret = gst_zed_grab(GST_ELEMENT(src), &src->_wait, unlock_count,
-                                              [src]() { return src->_zed->grab(); });
+        GstFlowReturn flow_ret =
+            gst_zed_grab(GST_ELEMENT(src), &src->_wait, unlock_count,
+                         src->_cameraRecoveryTimeout_sec, [src]() { return src->_zed->grab(); });
         if (flow_ret != GST_FLOW_OK) {
             return flow_ret;
         }
@@ -2266,8 +2285,9 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     for (;;) {
         // ----> ZED grab
         GST_TRACE(" Data Grabbing");
-        GstFlowReturn flow_ret = gst_zed_grab(GST_ELEMENT(src), &src->_wait, unlock_count,
-                                              [src]() { return src->_zed->grab(); });
+        GstFlowReturn flow_ret =
+            gst_zed_grab(GST_ELEMENT(src), &src->_wait, unlock_count,
+                         src->_cameraRecoveryTimeout_sec, [src]() { return src->_zed->grab(); });
         if (flow_ret != GST_FLOW_OK) {
             return flow_ret;
         }

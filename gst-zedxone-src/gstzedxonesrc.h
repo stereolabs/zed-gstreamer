@@ -75,6 +75,7 @@ struct _GstZedXOneSrc {
     GString *_sdkLogFile;      // SDK Log file path
     GString *_settingsPath;    // Settings file path
     gboolean _asyncRecovery;   // Async grab camera recovery
+    gfloat _cameraRecoveryTimeout_sec;   // How long to wait for a restarting camera, 0: no wait
 
     gint _saturation;   // Image Saturation
     gint _sharpness;    // Image Sharpness

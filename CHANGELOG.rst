@@ -47,9 +47,11 @@ ZED SDK v5.5
   When all its NV12 buffers are in use downstream, `zedsrc` now waits for one to be released instead of allocating a
   temporary one, which the Jetson Thor encoder could still access after it was freed
 - While the camera restarts (for example a ZED X or ZED X One reboot, or the recovery of a GMSL capture shared by
-  several cameras), `zedsrc` and `zedxonesrc` now wait for it, up to 60 seconds, and resume the stream when it is back,
-  with a warning on the bus meanwhile, instead of stopping the stream or sending the last image again. Stopping, pausing
-  or flushing the pipeline during that wait, or while `zedsrc` waits for downstream to release a buffer, returns at once
+  several cameras), `zedsrc` and `zedxonesrc` now wait for it and resume the stream when it is back, with a warning on
+  the bus meanwhile, instead of stopping the stream or sending the last image again. The new property
+  `camera-recovery-timeout-sec` sets how long they wait before stopping the stream with an error: 10 seconds by default,
+  0 to stop it at once. Stopping, pausing or flushing the pipeline during that wait, or while `zedsrc` waits for
+  downstream to release a buffer, returns at once
 - A CUDA error left by another element in the streaming thread no longer stops `zedsrc`
 
 ZED SDK v5.1
