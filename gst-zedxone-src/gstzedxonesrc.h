@@ -26,6 +26,8 @@
 
 #include "sl/CameraOne.hpp"
 
+#include "common/gst-zed-unlock.hpp"
+
 G_BEGIN_DECLS
 
 #define GST_TYPE_ZED_X_ONE_SRC (gst_zedxonesrc_get_type())
@@ -45,8 +47,8 @@ struct _GstZedXOneSrc {
     // ZED X One camera object
     std::unique_ptr<sl::CameraOne> _zed;   // ZED X One object
 
-    gboolean _isStarted;       // grab started flag
-    gboolean _stopRequested;   // stop request flagout_framesize
+    gboolean _isStarted;   // grab started flag
+    GstZedWait _wait;      // What create() waits for, ended by unlock()
 
     // ----> Properties
     gint _cameraResolution;            // Camera resolution [enum]

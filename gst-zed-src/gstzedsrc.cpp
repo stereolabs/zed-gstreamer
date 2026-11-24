@@ -1889,7 +1889,11 @@ static void gst_zedsrc_class_init(GstZedSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_ASYNC_GRAB_CAMERA_RECOVERY,
         g_param_spec_boolean("async-grab-camera-recovery", "Async Grab Camera Recovery",
-                             "Async Grab Camera Recovery", DEFAULT_PROP_ASYNC_GRAB_CAMERA_RECOVERY,
+                             "Reconnect a USB camera in the background when its connection is "
+                             "lost: the pipeline can still be stopped or paused meanwhile, and the "
+                             "stream resumes when the camera is back. When false, the stream is "
+                             "blocked until the reconnection ends",
+                             DEFAULT_PROP_ASYNC_GRAB_CAMERA_RECOVERY,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
@@ -1988,6 +1992,7 @@ static void gst_zedsrc_reset(GstZedSrc *src) {
 
     src->out_framesize = 0;
     src->is_started = FALSE;
+    src->wait.camera_restarting = FALSE;
 
     src->last_frame_count = 0;
     src->total_dropped_frames = 0;
@@ -3814,7 +3819,7 @@ static gboolean gst_zedsrc_unlock(GstBaseSrc *bsrc) {
 
     GST_TRACE_OBJECT(src, "gst_zedsrc_unlock");
 
-    // Wakes up create() if it waits for a surface held downstream
+    // Wakes up create() if it waits for a camera restart or for a surface held downstream
     gst_zed_wait_unlock(&src->wait);
 
     return TRUE;
@@ -4345,14 +4350,17 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     gst_zedsrc_setup_runtime_parameters(src, zedRtParams);
     // <---- Set runtime parameters
 
-    /// Push zed cuda context as current
-    int cu_err = (int) cudaGetLastError();
-    if (cu_err > 0) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Cuda ERROR trigger before ZED SDK : %d", cu_err),
-                          (NULL));
-        return GST_FLOW_ERROR;
+    // A CUDA error left in this thread by another element is not ours: clear it so that it does
+    // not fail the ZED SDK calls below
+    {
+        const cudaError_t cu_err = cudaGetLastError();
+        if (cu_err != cudaSuccess) {
+            GST_WARNING_OBJECT(src, "Clearing a CUDA error raised before grabbing: %s",
+                               cudaGetErrorString(cu_err));
+        }
     }
 
+    /// Push zed cuda context as current
     zctx = src->zed.getCUDAContext();
     cuCtxPushCurrent_v2(zctx);
 
@@ -4360,6 +4368,10 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
 #define CHECK_RET_OR_GOTO(_ret_expr)                                                               \
     do {                                                                                           \
         ret = (_ret_expr);                                                                         \
+        if (gst_zed_is_restarting(ret)) {                                                          \
+            /* The camera started to restart after grab(): wait for it as grab() does */           \
+            goto grab;                                                                             \
+        }                                                                                          \
         if (ret != sl::ERROR_CODE::SUCCESS) {                                                      \
             GST_ELEMENT_ERROR(src, RESOURCE, FAILED,                                               \
                               ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(), \
@@ -4371,17 +4383,10 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     } while (0)
 
     // ----> ZED grab
-    ret = src->zed.grab(zedRtParams);
-    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
-        GST_INFO_OBJECT(src, "End of SVO file");
-        flow_ret = GST_FLOW_EOS;
-        goto out;
-    } else if (ret > sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
-                           sl::toVerbose(ret).c_str()),
-                          (NULL));
-        flow_ret = GST_FLOW_ERROR;
+grab:
+    flow_ret = gst_zed_grab(GST_ELEMENT(src), &src->wait, unlock_count,
+                            [src, &zedRtParams]() { return src->zed.grab(zedRtParams); });
+    if (flow_ret != GST_FLOW_OK) {
         goto out;
     }
     // <---- ZED grab
@@ -4395,13 +4400,16 @@ static GstFlowReturn gst_zedsrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     }
     // <---- Clock update
 
-    // Memory mapping
-    if (FALSE == gst_buffer_map(buf, &minfo, GST_MAP_WRITE)) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"), (NULL));
-        flow_ret = GST_FLOW_ERROR;
-        goto out;
+    // Memory mapping, already done when grabbing again after a camera restart
+    if (!mapped) {
+        if (FALSE == gst_buffer_map(buf, &minfo, GST_MAP_WRITE)) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"),
+                              (NULL));
+            flow_ret = GST_FLOW_ERROR;
+            goto out;
+        }
+        mapped = TRUE;
     }
-    mapped = TRUE;
 
     // ----> Mats retrieving
     // NOTE: NV12 zero-copy modes (GST_ZEDSRC_RAW_NV12, GST_ZEDSRC_RAW_NV12_RIGHT,
@@ -4740,40 +4748,47 @@ static GstFlowReturn gst_zedsrc_create(GstPushSrc *psrc, GstBuffer **outbuf) {
         return GST_FLOW_ERROR;
     }
 
-    ret = src->zed.grab(zedRtParams);
-    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
-        GST_INFO_OBJECT(src, "End of SVO file");
-        cuCtxPopCurrent_v2(NULL);
-        return GST_FLOW_EOS;
-    } else if (ret > sl::ERROR_CODE::SUCCESS) {
-        GST_ERROR_OBJECT(src, "grab() failed: %s", sl::toString(ret).c_str());
-        cuCtxPopCurrent_v2(NULL);
-        return GST_FLOW_ERROR;
-    }
-
-    // Get clock for timestamp
-    clock = gst_element_get_clock(GST_ELEMENT(src));
-    if (clock) {
-        clock_time = gst_clock_get_time(clock);
-        gst_object_unref(clock);
-    }
-
-    // Retrieve RawBuffer - allocate on heap for GstBuffer lifecycle
-    sl::RawBuffer *raw_buffer = new sl::RawBuffer();
 #ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
     const gboolean rectified = src->nv12_rectified;   // Read once: the property may change
-    ret = src->zed.retrieveImage(*raw_buffer, rectified == TRUE);
 #else
     const gboolean rectified = FALSE;
-    ret = src->zed.retrieveImage(*raw_buffer);
 #endif
-    if (ret != sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()),
-                          (NULL));
+    sl::RawBuffer *raw_buffer = NULL;
+    for (;;) {
+        flow_ret = gst_zed_grab(GST_ELEMENT(src), &src->wait, unlock_count,
+                                [src, &zedRtParams]() { return src->zed.grab(zedRtParams); });
+        if (flow_ret != GST_FLOW_OK) {
+            cuCtxPopCurrent_v2(NULL);
+            return flow_ret;
+        }
+
+        // Get clock for timestamp
+        clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (clock) {
+            clock_time = gst_clock_get_time(clock);
+            gst_object_unref(clock);
+        }
+
+        // Retrieve RawBuffer - allocate on heap for GstBuffer lifecycle
+        raw_buffer = new sl::RawBuffer();
+#ifdef GST_ZEDSRC_HAVE_RECTIFIED_NV12
+        ret = src->zed.retrieveImage(*raw_buffer, rectified == TRUE);
+#else
+        ret = src->zed.retrieveImage(*raw_buffer);
+#endif
+        if (ret == sl::ERROR_CODE::SUCCESS) {
+            break;
+        }
         delete raw_buffer;
-        cuCtxPopCurrent_v2(NULL);
-        return GST_FLOW_ERROR;
+        raw_buffer = NULL;
+        if (!gst_zed_is_restarting(ret)) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()),
+                              (NULL));
+            cuCtxPopCurrent_v2(NULL);
+            return GST_FLOW_ERROR;
+        }
+        // The camera started to restart after grab(): wait for it as grab() does
     }
 
     // Get NvBufSurface for left eye

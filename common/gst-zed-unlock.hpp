@@ -19,12 +19,14 @@
 //
 // /////////////////////////////////////////////////////////////////////////
 
-// Waits of the ZED sources in create() (a free output buffer), ended at once by unlock(). Include
-// it after GST_CAT_DEFAULT is defined, so that its logs use the element category.
+// Waits of the ZED sources in create() (a camera restart, a free output buffer), ended at once by
+// unlock(). Include it after GST_CAT_DEFAULT is defined, so that its logs use the element category.
 
 #pragma once
 
+#include <cuda_runtime.h>
 #include <gst/gst.h>
+#include <sl/Camera.hpp>
 
 // GstBaseSrc calls unlock() to make create() return GST_FLOW_FLUSHING as soon as possible (stop,
 // flush, EOS event, PLAYING to PAUSED), then unlock_stop(). create() reads unlock_count once when
@@ -35,13 +37,18 @@ typedef struct {
     GCond cond;                   // Signaled by unlock() and when what create() waits for changes
     gboolean stop_requested;      // Set by unlock(), cleared by unlock_stop()
     guint unlock_count;           // Incremented by unlock()
+    gboolean camera_restarting;   // Streaming thread only: grab() reports a camera restart
 } GstZedWait;
+
+// How long a camera restart may last before the stream stops with an error
+#define GST_ZED_RESTART_TIMEOUT_S 60
 
 static inline void gst_zed_wait_init(GstZedWait *wait) {
     g_mutex_init(&wait->lock);
     g_cond_init(&wait->cond);
     wait->stop_requested = FALSE;
     wait->unlock_count = 0;
+    wait->camera_restarting = FALSE;
 }
 
 static inline void gst_zed_wait_clear(GstZedWait *wait) {
@@ -95,4 +102,73 @@ static inline gboolean gst_zed_wait_for(GstZedWait *wait, guint unlock_count, gi
     const gboolean unlocked = gst_zed_wait_is_unlocked_locked(wait, unlock_count);
     g_mutex_unlock(&wait->lock);
     return !unlocked;
+}
+
+// What grab() and retrieveImage() return while the camera restarts (ZED X reboot, USB reconnection
+// with async-grab-camera-recovery, recovery of a GMSL capture shared by several cameras, which can
+// report CUDA_ERROR for a while): there is no new image yet
+static inline gboolean gst_zed_is_restarting(sl::ERROR_CODE ret) {
+    return ret == sl::ERROR_CODE::CAMERA_REBOOTING || ret == sl::ERROR_CODE::CUDA_ERROR;
+}
+
+// Grabs the next frame with grab_fn. grab() itself cannot be interrupted: it returns within a
+// frame period while the camera delivers images, and at once while the camera restarts. A restart
+// is waited for, up to GST_ZED_RESTART_TIMEOUT_S, instead of stopping the stream.
+template <typename GrabFn>
+static inline GstFlowReturn gst_zed_grab(GstElement *element, GstZedWait *wait, guint unlock_count,
+                                         GrabFn grab_fn) {
+    gint64 restart_start = 0;
+    for (;;) {
+        const sl::ERROR_CODE ret = grab_fn();
+
+        if (gst_zed_wait_is_unlocked(wait, unlock_count)) {
+            return GST_FLOW_FLUSHING;
+        }
+
+        if (gst_zed_is_restarting(ret)) {
+            const gint64 now = g_get_monotonic_time();
+            if (!wait->camera_restarting) {
+                wait->camera_restarting = TRUE;
+                GST_ELEMENT_WARNING(element, RESOURCE, READ,
+                                    ("The camera is restarting, the stream resumes when it is back"),
+                                    ("grab: %s", sl::toString(ret).c_str()));
+            }
+            if (restart_start == 0) {
+                restart_start = now;
+            } else if (now - restart_start > GST_ZED_RESTART_TIMEOUT_S * G_TIME_SPAN_SECOND) {
+                GST_ELEMENT_ERROR(element, RESOURCE, READ,
+                                  ("The camera did not come back within %d seconds",
+                                   GST_ZED_RESTART_TIMEOUT_S),
+                                  ("grab: %s", sl::toString(ret).c_str()));
+                return GST_FLOW_ERROR;
+            }
+            // Do not let a CUDA error of the restart fail the next calls of this thread
+            cudaGetLastError();
+            if (!gst_zed_wait_for(wait, unlock_count, 50 * G_TIME_SPAN_MILLISECOND)) {
+                return GST_FLOW_FLUSHING;
+            }
+            continue;
+        }
+
+        if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
+            GST_INFO_OBJECT(element, "End of SVO file");
+            return GST_FLOW_EOS;
+        }
+
+        if (ret > sl::ERROR_CODE::SUCCESS) {
+            GST_ELEMENT_ERROR(element, RESOURCE, FAILED,
+                              ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                               sl::toVerbose(ret).c_str()),
+                              (NULL));
+            return GST_FLOW_ERROR;
+        }
+
+        // SUCCESS, or a warning (negative code) that comes with a new image
+        if (wait->camera_restarting) {
+            wait->camera_restarting = FALSE;
+            GST_ELEMENT_INFO(element, RESOURCE, READ, ("The camera is back, the stream resumes"),
+                             (NULL));
+        }
+        return GST_FLOW_OK;
+    }
 }
