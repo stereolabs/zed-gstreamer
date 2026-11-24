@@ -187,6 +187,8 @@ struct _GstZedSrc {
     guint32 total_dropped_frames;
     guint64 buffer_index;   // Frame counter for buffer offset
 
+    gint effective_fps;   // Effective output FPS (accounts for grab_compute_capping_fps)
+
     GstCaps *caps;
     guint out_framesize;
     sl::Resolution retrieve_res;   // Size of the BGRA and depth images: the working resolution
