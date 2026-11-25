@@ -41,6 +41,18 @@ ZED SDK v5.5
   Fix a `GStreamer-CRITICAL` when an output fails to push
 - `zedsrc` retrieves the BGRA and depth images straight into the output buffer instead of copying them: 24 to 35 % less
   CPU per frame with the BGRA stream types at HD1200 60 FPS on Jetson Orin
+- Fix the NV12 stereo zero-copy stream type (`stream-type=7`) stopping after a few frames with a CUDA error 700
+  (`an illegal memory access was encountered`) on Jetson Thor when the stream is encoded with `nvv4l2h264enc` behind
+  `gst-zed-rtsp-launch` (GstRTSPServer), or more generally when downstream holds several frames.
+  When all its NV12 buffers are in use downstream, `zedsrc` now waits for one to be released instead of allocating a
+  temporary one, which the Jetson Thor encoder could still access after it was freed
+- While the camera restarts (for example a ZED X or ZED X One reboot, or the recovery of a GMSL capture shared by
+  several cameras), `zedsrc` and `zedxonesrc` now wait for it and resume the stream when it is back, with a warning on
+  the bus meanwhile, instead of stopping the stream or sending the last image again. The new property
+  `camera-recovery-timeout-sec` sets how long they wait before stopping the stream with an error: 10 seconds by default,
+  0 to stop it at once. Stopping, pausing or flushing the pipeline during that wait, or while `zedsrc` waits for
+  downstream to release a buffer, returns at once
+- A CUDA error left by another element in the streaming thread no longer stops `zedsrc`
 
 ZED SDK v5.1
 --------------

@@ -26,6 +26,8 @@
 
 #include "sl/Camera.hpp"
 
+#include "common/gst-zed-unlock.hpp"
+
 G_BEGIN_DECLS
 
 #define GST_TYPE_ZED_SRC (gst_zedsrc_get_type())
@@ -80,6 +82,7 @@ struct _GstZedSrc {
     gboolean sensors_required;
     gboolean enable_image_enhancement;
     gfloat open_timeout_sec;
+    gfloat camera_recovery_timeout_sec;   // How long to wait for a restarting camera, 0: no wait
     gboolean async_grab_camera_recovery;
     gfloat grab_compute_capping_fps;
     gboolean enable_image_validity_check;
@@ -191,7 +194,7 @@ struct _GstZedSrc {
     guint out_framesize;
     sl::Resolution retrieve_res;   // Size of the BGRA and depth images: the working resolution
 
-    gboolean stop_requested;
+    GstZedWait wait;   // What create() waits for, ended by unlock()
 
 #ifdef SL_ENABLE_ADVANCED_CAPTURE_API
     // Raw NV12 buffers point into the camera capture buffers: the camera is only closed once the
@@ -203,10 +206,12 @@ struct _GstZedSrc {
 
 #if defined(SL_ENABLE_ADVANCED_CAPTURE_API) && defined(HAVE_NVBUFSURFTRANSFORM)
     // Reusable destination surfaces for NV12 stereo side-by-side composition, also used to hold
-    // the copies of rectified NV12 frames (see nv12_rectified)
+    // the copies of rectified NV12 frames (see nv12_rectified). Never destroyed while downstream
+    // holds them (see gst_zedsrc_stereo_sbs_pool_acquire)
 #define GST_ZEDSRC_STEREO_SBS_POOL_SIZE 4
     gpointer stereo_sbs_pool[GST_ZEDSRC_STEREO_SBS_POOL_SIZE];
     gint stereo_sbs_pool_in_use[GST_ZEDSRC_STEREO_SBS_POOL_SIZE];
+    guint stereo_sbs_release_count;   // Incremented under wait.lock when downstream releases one
     guint32 stereo_sbs_pool_width;
     guint32 stereo_sbs_pool_height;
     gint stereo_sbs_pool_gpu_id;

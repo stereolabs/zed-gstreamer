@@ -30,6 +30,10 @@
 #include <nvbufsurface.h>
 #endif
 
+// Defined before the element header, so that the waits it includes log in the element category
+GST_DEBUG_CATEGORY_STATIC(gst_zedxonesrc_debug);
+#define GST_CAT_DEFAULT gst_zedxonesrc_debug
+
 #include "gst-zed-meta/gstzedmeta.h"
 #include "gstzedxonesrc.h"
 
@@ -39,9 +43,6 @@
 #define GST_ZEDXONESRC_SDK_AT_LEAST(major, minor)                                                  \
     (ZED_SDK_MAJOR_VERSION > (major) ||                                                            \
      (ZED_SDK_MAJOR_VERSION == (major) && ZED_SDK_MINOR_VERSION >= (minor)))
-
-GST_DEBUG_CATEGORY_STATIC(gst_zedxonesrc_debug);
-#define GST_CAT_DEFAULT gst_zedxonesrc_debug
 
 /* prototypes */
 static void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValue *value,
@@ -89,6 +90,7 @@ enum {
     PROP_SDK_LOG_FILE,
     PROP_SETTINGS_PATH,
     PROP_ASYNC_RECOVERY,
+    PROP_CAMERA_RECOVERY_TIMEOUT_SEC,
     PROP_SATURATION,
     PROP_SHARPNESS,
     PROP_GAMMA,
@@ -177,6 +179,7 @@ typedef enum {
 #define DEFAULT_PROP_SDK_LOG_FILE ""
 #define DEFAULT_PROP_SETTINGS_PATH ""
 #define DEFAULT_PROP_ASYNC_RECOVERY FALSE
+#define DEFAULT_PROP_CAMERA_RECOVERY_TIMEOUT_SEC 10.0f
 #define DEFAULT_PROP_OPENCV_CALIB_FILE ""
 #define DEFAULT_PROP_SATURATION 4
 #define DEFAULT_PROP_SHARPNESS 1
@@ -661,8 +664,20 @@ static void gst_zedxonesrc_class_init(GstZedXOneSrcClass *klass) {
     g_object_class_install_property(
         gobject_class, PROP_ASYNC_RECOVERY,
         g_param_spec_boolean("async-grab-camera-recovery", "Async Grab Camera Recovery",
-                             "Async Grab Camera Recovery", DEFAULT_PROP_ASYNC_RECOVERY,
+                             "Do not block while the camera does not deliver images: the pipeline "
+                             "can still be stopped or paused meanwhile, and the stream resumes "
+                             "when the camera is back",
+                             DEFAULT_PROP_ASYNC_RECOVERY,
                              (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+    g_object_class_install_property(
+        gobject_class, PROP_CAMERA_RECOVERY_TIMEOUT_SEC,
+        g_param_spec_float("camera-recovery-timeout-sec", "Camera Recovery Timeout Seconds",
+                           "How long to wait for a restarting camera (ZED X One reboot, recovery "
+                           "of the capture) before stopping the stream with an error, in seconds. "
+                           "0 stops the stream at once",
+                           0.0f, 600.0f, DEFAULT_PROP_CAMERA_RECOVERY_TIMEOUT_SEC,
+                           (GParamFlags) (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(
         gobject_class, PROP_SATURATION,
@@ -832,6 +847,7 @@ static void gst_zedxonesrc_reset(GstZedXOneSrc *src) {
 
     src->_outFramesize = 0;
     src->_isStarted = FALSE;
+    src->_wait.camera_restarting = FALSE;
     src->_bufferIndex = 0;
 
     if (src->_caps) {
@@ -912,6 +928,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_sdkLogFile = g_string_new(DEFAULT_PROP_SDK_LOG_FILE);
     src->_settingsPath = g_string_new(DEFAULT_PROP_SETTINGS_PATH);
     src->_asyncRecovery = DEFAULT_PROP_ASYNC_RECOVERY;
+    src->_cameraRecoveryTimeout_sec = DEFAULT_PROP_CAMERA_RECOVERY_TIMEOUT_SEC;
 
     src->_saturation = DEFAULT_PROP_SATURATION;
     src->_sharpness = DEFAULT_PROP_SHARPNESS;
@@ -941,7 +958,7 @@ static void gst_zedxonesrc_init(GstZedXOneSrc *src) {
     src->_resolvedStreamType = -1;   // Not resolved yet
     // <---- Parameters initialization
 
-    src->_stopRequested = FALSE;
+    gst_zed_wait_init(&src->_wait);
     src->_caps = NULL;
 
     if (!src->_zed) {
@@ -1072,6 +1089,9 @@ void gst_zedxonesrc_set_property(GObject *object, guint property_id, const GValu
         break;
     case PROP_ASYNC_RECOVERY:
         src->_asyncRecovery = g_value_get_boolean(value);
+        break;
+    case PROP_CAMERA_RECOVERY_TIMEOUT_SEC:
+        src->_cameraRecoveryTimeout_sec = g_value_get_float(value);
         break;
     case PROP_SATURATION:
         src->_saturation = g_value_get_int(value);
@@ -1282,6 +1302,9 @@ void gst_zedxonesrc_get_property(GObject *object, guint property_id, GValue *val
     case PROP_ASYNC_RECOVERY:
         g_value_set_boolean(value, src->_asyncRecovery);
         break;
+    case PROP_CAMERA_RECOVERY_TIMEOUT_SEC:
+        g_value_set_float(value, src->_cameraRecoveryTimeout_sec);
+        break;
     case PROP_SATURATION:
         g_value_set_int(value, src->_saturation);
         break;
@@ -1380,6 +1403,7 @@ void gst_zedxonesrc_finalize(GObject *object) {
     }
     g_mutex_clear(&src->_closeLock);
 #endif
+    gst_zed_wait_clear(&src->_wait);
 
     if (src->_caps) {
         gst_caps_unref(src->_caps);
@@ -1945,7 +1969,8 @@ static gboolean gst_zedxonesrc_unlock(GstBaseSrc *bsrc) {
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_unlock");
 
-    src->_stopRequested = TRUE;
+    // Wakes up create() if it waits for a camera restart
+    gst_zed_wait_unlock(&src->_wait);
 
     return TRUE;
 }
@@ -1955,7 +1980,7 @@ static gboolean gst_zedxonesrc_unlock_stop(GstBaseSrc *bsrc) {
 
     GST_TRACE_OBJECT(src, "gst_zedxonesrc_unlock_stop");
 
-    src->_stopRequested = FALSE;
+    gst_zed_wait_unlock_stop(&src->_wait);
 
     return TRUE;
 }
@@ -2087,6 +2112,7 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
     sl::ERROR_CODE ret;
     GstClock *clock = nullptr;
     GstClockTime clock_time = GST_CLOCK_TIME_NONE;
+    const guint unlock_count = gst_zed_wait_get_unlock_count(&src->_wait);
 
     // Acquisition start time
     if (!src->_isStarted) {
@@ -2098,32 +2124,38 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
         src->_isStarted = TRUE;
     }
 
-    // Grab frame
-    ret = src->_zed->grab();
-    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
-        GST_INFO_OBJECT(src, "End of SVO file");
-        return GST_FLOW_EOS;
-    } else if (ret != sl::ERROR_CODE::SUCCESS) {
-        GST_ERROR_OBJECT(src, "grab() failed: %s", sl::toString(ret).c_str());
-        return GST_FLOW_ERROR;
-    }
+    sl::RawBuffer *raw_buffer = NULL;
+    for (;;) {
+        // Grab frame
+        GstFlowReturn flow_ret =
+            gst_zed_grab(GST_ELEMENT(src), &src->_wait, unlock_count,
+                         src->_cameraRecoveryTimeout_sec, [src]() { return src->_zed->grab(); });
+        if (flow_ret != GST_FLOW_OK) {
+            return flow_ret;
+        }
 
-    // Get clock for timestamp
-    clock = gst_element_get_clock(GST_ELEMENT(src));
-    if (clock) {
-        clock_time = gst_clock_get_time(clock);
-        gst_object_unref(clock);
-    }
+        // Get clock for timestamp
+        clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (clock) {
+            clock_time = gst_clock_get_time(clock);
+            gst_object_unref(clock);
+        }
 
-    // Retrieve RawBuffer - allocate on heap for GstBuffer lifecycle
-    sl::RawBuffer *raw_buffer = new sl::RawBuffer();
-    ret = src->_zed->retrieveImage(*raw_buffer);
-    if (ret != sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()),
-                          (NULL));
+        // Retrieve RawBuffer - allocate on heap for GstBuffer lifecycle
+        raw_buffer = new sl::RawBuffer();
+        ret = src->_zed->retrieveImage(*raw_buffer);
+        if (ret == sl::ERROR_CODE::SUCCESS) {
+            break;
+        }
         delete raw_buffer;
-        return GST_FLOW_ERROR;
+        raw_buffer = NULL;
+        if (!gst_zed_is_restarting(ret)) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Failed to retrieve RawBuffer: '%s'", sl::toString(ret).c_str()),
+                              (NULL));
+            return GST_FLOW_ERROR;
+        }
+        // The camera started to restart after grab(): wait for it as grab() does
     }
 
     // Get NvBufSurface
@@ -2213,7 +2245,7 @@ static GstFlowReturn gst_zedxonesrc_create(GstPushSrc *psrc, GstBuffer **outbuf)
         gst_buffer_add_zed_src_meta(buf, info, pose, sens, false, 0, NULL, offset);
     gst_zedxonesrc_set_meta_timestamps(src, meta, cam_info.camera_model);
 
-    if (src->_stopRequested) {
+    if (gst_zed_wait_is_unlocked(&src->_wait, unlock_count)) {
         gst_buffer_unref(buf);
         return GST_FLOW_FLUSHING;
     }
@@ -2232,6 +2264,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     GstMapInfo minfo;
     GstClock *clock;
     GstClockTime clock_time;
+    const guint unlock_count = gst_zed_wait_get_unlock_count(&src->_wait);
 
     if (!src->_isStarted) {
         GstClock *start_clock = gst_element_get_clock(GST_ELEMENT(src));
@@ -2244,32 +2277,49 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         src->_isStarted = TRUE;
     }
 
-    // ----> ZED grab
-    GST_TRACE(" Data Grabbing");
-    ret = src->_zed->grab();
+    // ZED Mats
+    sl::Mat img;
+    const sl::VIEW view_type =
+        src->_outputRectifiedImage ? sl::VIEW::LEFT : sl::VIEW::LEFT_UNRECTIFIED;
 
-    if (ret == sl::ERROR_CODE::END_OF_SVOFILE_REACHED) {
-        GST_INFO_OBJECT(src, "End of SVO file");
-        return GST_FLOW_EOS;
-    } else if (ret > sl::ERROR_CODE::SUCCESS) {
-        GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                          ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
-                           sl::toVerbose(ret).c_str()),
-                          (NULL));
-        return GST_FLOW_ERROR;
-    }
-    // <---- ZED grab
+    for (;;) {
+        // ----> ZED grab
+        GST_TRACE(" Data Grabbing");
+        GstFlowReturn flow_ret =
+            gst_zed_grab(GST_ELEMENT(src), &src->_wait, unlock_count,
+                         src->_cameraRecoveryTimeout_sec, [src]() { return src->_zed->grab(); });
+        if (flow_ret != GST_FLOW_OK) {
+            return flow_ret;
+        }
+        // <---- ZED grab
 
-    // ----> Clock update
-    GST_TRACE("Clock update");
-    clock = gst_element_get_clock(GST_ELEMENT(src));
-    if (clock) {
-        clock_time = gst_clock_get_time(clock);
-        gst_object_unref(clock);
-    } else {
-        clock_time = GST_CLOCK_TIME_NONE;
+        // ----> Clock update
+        GST_TRACE("Clock update");
+        clock = gst_element_get_clock(GST_ELEMENT(src));
+        if (clock) {
+            clock_time = gst_clock_get_time(clock);
+            gst_object_unref(clock);
+        } else {
+            clock_time = GST_CLOCK_TIME_NONE;
+        }
+        // <---- Clock update
+
+        // ----> Retrieve images
+        GST_TRACE("Retrieve images");
+        ret = src->_zed->retrieveImage(img, view_type, sl::MEM::CPU);
+        if (ret == sl::ERROR_CODE::SUCCESS) {
+            break;
+        }
+        if (!gst_zed_is_restarting(ret)) {
+            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
+                              ("Grabbing failed with error: '%s' - %s", sl::toString(ret).c_str(),
+                               sl::toVerbose(ret).c_str()),
+                              (NULL));
+            return GST_FLOW_ERROR;
+        }
+        // The camera started to restart after grab(): wait for it as grab() does
+        // <---- Retrieve images
     }
-    // <---- Clock update
 
     // Memory mapping
     GST_TRACE("Memory mapping");
@@ -2277,31 +2327,6 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
         GST_ELEMENT_ERROR(src, RESOURCE, FAILED, ("Failed to map buffer for writing"), (NULL));
         return GST_FLOW_ERROR;
     }
-
-    // ZED Mats
-    sl::Mat img;
-
-    // ----> Retrieve images
-    GST_TRACE("Retrieve images");
-    auto check_ret = [src](sl::ERROR_CODE err) {
-        if (err != sl::ERROR_CODE::SUCCESS) {
-            GST_ELEMENT_ERROR(src, RESOURCE, FAILED,
-                              ("Grabbing failed with error: '%s' - %s", sl::toString(err).c_str(),
-                               sl::toVerbose(err).c_str()),
-                              (NULL));
-            return false;
-        }
-        return true;
-    };
-
-    const sl::VIEW view_type =
-        src->_outputRectifiedImage ? sl::VIEW::LEFT : sl::VIEW::LEFT_UNRECTIFIED;
-    ret = src->_zed->retrieveImage(img, view_type, sl::MEM::CPU);
-    if (!check_ret(ret)) {
-        gst_buffer_unmap(buf, &minfo);
-        return GST_FLOW_ERROR;
-    }
-    // <---- Retrieve images
 
     // Memory copy
     GST_TRACE("Memory copy");
@@ -2392,7 +2417,7 @@ static GstFlowReturn gst_zedxonesrc_fill(GstPushSrc *psrc, GstBuffer *buf) {
     gst_buffer_unmap(buf, &minfo);
     // gst_buffer_unref(buf); // NOTE(Walter) do not uncomment to not crash
 
-    if (src->_stopRequested) {
+    if (gst_zed_wait_is_unlocked(&src->_wait, unlock_count)) {
         return GST_FLOW_FLUSHING;
     }
 
