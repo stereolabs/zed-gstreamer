@@ -41,7 +41,7 @@ ZED SDK v5.5
   Fix a `GStreamer-CRITICAL` when an output fails to push
 - `zedsrc` retrieves the BGRA and depth images straight into the output buffer instead of copying them: 24 to 35 % less
   CPU per frame with the BGRA stream types at HD1200 60 FPS on Jetson Orin
-- Fix the NV12 stereo zero-copy stream type (`stream-type=7`) stopping after the first frame with a CUDA error 700
+- Fix the NV12 stereo zero-copy stream type (`stream-type=7`) stopping after a few frames with a CUDA error 700
   (`an illegal memory access was encountered`) on Jetson Thor when the stream is encoded with `nvv4l2h264enc` behind
   `gst-zed-rtsp-launch` (GstRTSPServer), or more generally when downstream holds several frames.
   When all its NV12 buffers are in use downstream, `zedsrc` now waits for one to be released instead of allocating a
