@@ -21,6 +21,7 @@
 
 #ifndef GST_ZEDDEMUX_H
 #define GST_ZEDDEMUX_H
+#include <gst/base/gstflowcombiner.h>
 #include <gst/gst.h>
 #include <gst/gstelement.h>
 
@@ -51,6 +52,10 @@ struct _GstZedDemux {
     gboolean is_depth;
     gboolean is_mono;
     gboolean stream_data;
+
+    // Combines the flow returns of the outputs in use, listed by `combined_pads`
+    GstFlowCombiner *flow_combiner;
+    guint combined_pads;
 };
 
 struct _GstZedDemuxClass {

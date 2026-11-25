@@ -59,8 +59,7 @@ static void run_case(gboolean data_first, GstFlowReturn result) {
     g_assert_cmpint(gst_zeddatamux_chain_video(mux->sinkpad_video, GST_OBJECT(mux),
                                               input(FALSE, 16, 1)), ==, GST_FLOW_OK);
     g_assert_cmpint(freed, ==, 1); // Incoming video is copied, never retained.
-    GstBuffer *cached_video = mux->last_video_buf;
-    g_assert_nonnull(cached_video);
+    g_assert_cmpuint(g_queue_get_length(&mux->pending_video), ==, 1);
     expected_size = 4096;
     auto *video = input(FALSE, expected_size, 2);
     auto *data = input(TRUE, 0, 2);
@@ -84,13 +83,14 @@ static void run_case(gboolean data_first, GstFlowReturn result) {
     g_assert_cmpint(freed, ==, 4); // Unmatched input is also released immediately.
     int cached_freed = 0;
     auto count_cached = [](gpointer count, GstMiniObject *) { ++*(int *) count; };
-    if (mux->last_video_buf) {
-        gst_mini_object_weak_ref(GST_MINI_OBJECT(mux->last_video_buf), count_cached, &cached_freed);
+    for (GQueue *pending : {&mux->pending_video, &mux->pending_data}) {
+        for (GList *l = pending->head; l; l = l->next) {
+            gst_mini_object_weak_ref(GST_MINI_OBJECT(l->data), count_cached, &cached_freed);
+        }
     }
-    if (mux->last_data_buf) {
-        gst_mini_object_weak_ref(GST_MINI_OBJECT(mux->last_data_buf), count_cached, &cached_freed);
-    }
-    const int cached_count = !!mux->last_video_buf + !!mux->last_data_buf;
+    const int cached_count =
+        g_queue_get_length(&mux->pending_video) + g_queue_get_length(&mux->pending_data);
+    g_assert_cmpint(cached_count, ==, 1);   // The last video frame still waits for its data
     gst_pad_unlink(mux->srcpad, sink);
     gst_pad_set_active(mux->srcpad, FALSE);
     gst_pad_set_active(sink, FALSE);
@@ -102,6 +102,8 @@ static void run_case(gboolean data_first, GstFlowReturn result) {
 
 int main(int argc, char **argv) {
     gst_init(&argc, &argv);
+    // plugin_init() is not called: register the debug category so that GST_DEBUG works
+    GST_DEBUG_CATEGORY_INIT(gst_zeddatamux_debug, "zeddatamux", 0, "test");
     g_log_set_always_fatal((GLogLevelFlags) (G_LOG_FATAL_MASK | G_LOG_LEVEL_CRITICAL));
     for (auto result : {GST_FLOW_OK, GST_FLOW_ERROR}) {
         run_case(FALSE, result);

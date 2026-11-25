@@ -53,6 +53,17 @@ ZED SDK v5.5
   0 to stop it at once. Stopping, pausing or flushing the pipeline during that wait, or while `zedsrc` waits for
   downstream to release a buffer, returns at once
 - A CUDA error left by another element in the streaming thread no longer stops `zedsrc`
+- Fix `zeddemux` stopping the whole stream when one of its outputs is not linked or has reached the end of the stream:
+  the other outputs keep receiving frames. The stream now stops only when none of the outputs takes frames anymore, or
+  on an error
+- Fix `zeddatamux` dropping the video frames that arrive after the metadata of the next frame, which happened whenever
+  the video branch runs behind the data branch (for example the scaled video of the README pipelines): up to 16
+  metadata buffers now wait for their video frame, and up to 4 video frames for their metadata
+- Fix `zeddatamux` producing no output after the pipeline is stopped and started again, or after a seek, when either
+  input can arrive first
+- Fix a data race in `zeddatamux` between its video and data inputs
+- `zeddatamux` now ends its output when both inputs have ended instead of at the end of the first one, so that the
+  video frames still queued at the end of the stream are output
 
 ZED SDK v5.1
 --------------

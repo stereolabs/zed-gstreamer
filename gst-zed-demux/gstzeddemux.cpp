@@ -79,10 +79,23 @@ static void gst_zeddemux_set_property(GObject *object, guint prop_id, const GVal
 static void gst_zeddemux_get_property(GObject *object, guint prop_id, GValue *value,
                                       GParamSpec *pspec);
 
+static GstStateChangeReturn gst_zeddemux_change_state(GstElement *element,
+                                                      GstStateChange transition);
 static gboolean gst_zeddemux_sink_event(GstPad *pad, GstObject *parent, GstEvent *event);
 static GstFlowReturn gst_zeddemux_chain(GstPad *pad, GstObject *parent, GstBuffer *buf);
 
 /* GObject vmethod implementations */
+
+static void gst_zeddemux_finalize(GObject *object) {
+    GstZedDemux *filter = GST_ZEDDEMUX(object);
+    gst_flow_combiner_free(filter->flow_combiner);
+    for (GstCaps *caps : {filter->caps_left, filter->caps_mono, filter->caps_aux}) {
+        if (caps) {
+            gst_caps_unref(caps);
+        }
+    }
+    G_OBJECT_CLASS(gst_zeddemux_parent_class)->finalize(object);
+}
 
 /* initialize the plugin's class */
 static void gst_zeddemux_class_init(GstZedDemuxClass *klass) {
@@ -91,8 +104,11 @@ static void gst_zeddemux_class_init(GstZedDemuxClass *klass) {
 
     GST_DEBUG_OBJECT(gobject_class, "Class Init");
 
+    gobject_class->finalize = gst_zeddemux_finalize;
     gobject_class->set_property = gst_zeddemux_set_property;
     gobject_class->get_property = gst_zeddemux_get_property;
+
+    gstelement_class->change_state = GST_DEBUG_FUNCPTR(gst_zeddemux_change_state);
 
     g_object_class_install_property(gobject_class, PROP_IS_DEPTH,
                                     g_param_spec_boolean("is-depth", "Depth",
@@ -160,6 +176,8 @@ static void gst_zeddemux_init(GstZedDemux *filter) {
     filter->caps_left = nullptr;
     filter->caps_mono = nullptr;
     filter->caps_aux = nullptr;
+    filter->flow_combiner = gst_flow_combiner_new();
+    filter->combined_pads = 0;
 }
 
 static void gst_zeddemux_set_property(GObject *object, guint prop_id, const GValue *value,
@@ -297,6 +315,58 @@ static gboolean set_out_caps(GstZedDemux *filter, GstCaps *sink_caps) {
     return TRUE;
 }
 
+static GstStateChangeReturn gst_zeddemux_change_state(GstElement *element,
+                                                      GstStateChange transition) {
+    GstZedDemux *filter = GST_ZEDDEMUX(element);
+
+    if (transition == GST_STATE_CHANGE_READY_TO_PAUSED) {
+        gst_flow_combiner_reset(filter->flow_combiner);
+    }
+
+    return GST_ELEMENT_CLASS(gst_zeddemux_parent_class)->change_state(element, transition);
+}
+
+enum { COMBINED_LEFT = 1, COMBINED_MONO = 2, COMBINED_AUX = 4, COMBINED_DATA = 8 };
+
+// The flow combiner lists the outputs this buffer is pushed to: an output never pushed would hide
+// that all the others are not linked or at the end of the stream
+static void update_combined_pads(GstZedDemux *filter, gboolean with_data) {
+    const guint pads = (filter->is_mono ? COMBINED_MONO : COMBINED_LEFT | COMBINED_AUX) |
+                       (with_data ? COMBINED_DATA : 0);
+    if (pads == filter->combined_pads) {
+        return;
+    }
+    gst_flow_combiner_clear(filter->flow_combiner);
+    if (pads & COMBINED_LEFT) {
+        gst_flow_combiner_add_pad(filter->flow_combiner, filter->srcpad_left);
+    }
+    if (pads & COMBINED_MONO) {
+        gst_flow_combiner_add_pad(filter->flow_combiner, filter->srcpad_mono);
+    }
+    if (pads & COMBINED_AUX) {
+        gst_flow_combiner_add_pad(filter->flow_combiner, filter->srcpad_aux);
+    }
+    if (pads & COMBINED_DATA) {
+        gst_flow_combiner_add_pad(filter->flow_combiner, filter->srcpad_data);
+    }
+    filter->combined_pads = pads;
+}
+
+// Pushes `buf` on `srcpad` and returns the combined flow of all the outputs: one output not linked
+// or at the end of the stream does not stop the others, as long as one of them still takes buffers
+static GstFlowReturn push_output(GstZedDemux *filter, GstPad *srcpad, GstBuffer *buf) {
+    const GstFlowReturn ret = gst_pad_push(srcpad, buf);
+    if (ret != GST_FLOW_OK) {
+        GST_DEBUG_OBJECT(filter, "%s returned %s", GST_PAD_NAME(srcpad), gst_flow_get_name(ret));
+    }
+    return gst_flow_combiner_update_pad_flow(filter->flow_combiner, srcpad, ret);
+}
+
+// An error or a flush stops the push to the remaining outputs
+static gboolean stops_outputs(GstFlowReturn combined) {
+    return combined != GST_FLOW_OK && combined != GST_FLOW_NOT_LINKED && combined != GST_FLOW_EOS;
+}
+
 /* this function handles sink events */
 static gboolean gst_zeddemux_sink_event(GstPad *pad, GstObject *parent, GstEvent *event) {
     GstZedDemux *filter;
@@ -321,6 +391,10 @@ static gboolean gst_zeddemux_sink_event(GstPad *pad, GstObject *parent, GstEvent
         ret = gst_pad_event_default(pad, parent, event);
         break;
     }
+    case GST_EVENT_FLUSH_STOP:
+        gst_flow_combiner_reset(filter->flow_combiner);
+        ret = gst_pad_event_default(pad, parent, event);
+        break;
     default:
         ret = gst_pad_event_default(pad, parent, event);
         break;
@@ -343,9 +417,6 @@ static GstFlowReturn gst_zeddemux_chain(GstPad *pad, GstObject *parent, GstBuffe
 
     GstZedSrcMeta *meta = nullptr;
 
-    GstFlowReturn ret_left = GST_FLOW_ERROR;
-    GstFlowReturn ret_mono = GST_FLOW_ERROR;
-    GstFlowReturn ret_aux = GST_FLOW_ERROR;
     GstFlowReturn flow_ret = GST_FLOW_ERROR;
 
     GstClockTime timestamp = GST_BUFFER_TIMESTAMP(buf);
@@ -365,6 +436,8 @@ static GstFlowReturn gst_zeddemux_chain(GstPad *pad, GstObject *parent, GstBuffe
     if (meta == NULL) {
         GST_WARNING("The Input Stream does not contain metadata");
     }
+
+    update_combined_pads(filter, filter->stream_data && meta != NULL);
 
     // ----> Data buffer
     if (filter->stream_data && meta != NULL) {
@@ -431,16 +504,11 @@ static GstFlowReturn gst_zeddemux_chain(GstPad *pad, GstObject *parent, GstBuffe
             gst_buffer_unmap(data_buf, &map_out_data);
 
             GST_TRACE("Data buffer push");
-            GstFlowReturn ret_data = gst_pad_push(filter->srcpad_data, data_buf);
-
-            // gst_pad_push() took the buffer, even on failure
-            if (ret_data != GST_FLOW_OK) {
-                GST_DEBUG_OBJECT(filter, "Error pushing data buffer: %s",
-                                 gst_flow_get_name(ret_data));
-                flow_ret = ret_data;
+            // gst_pad_push() takes the buffer, even on failure
+            flow_ret = push_output(filter, filter->srcpad_data, data_buf);
+            if (stops_outputs(flow_ret)) {
                 goto out;
             }
-            // Now downstream owns data
         } else {
             GST_ELEMENT_ERROR(pad, RESOURCE, FAILED, ("Failed to map data buffer for writing"),
                               (NULL));
@@ -474,12 +542,8 @@ static GstFlowReturn gst_zeddemux_chain(GstPad *pad, GstObject *parent, GstBuffe
         GST_BUFFER_DTS(left_proc_buf) = GST_BUFFER_DTS(buf);
         GST_BUFFER_TIMESTAMP(left_proc_buf) = GST_BUFFER_TIMESTAMP(buf);
 
-        ret_left = gst_pad_push(filter->srcpad_left, left_proc_buf);
-
-        // gst_pad_push() took the buffer, even on failure
-        if (ret_left != GST_FLOW_OK) {
-            GST_DEBUG_OBJECT(filter, "Error pushing left buffer: %s", gst_flow_get_name(ret_left));
-            flow_ret = ret_left;
+        flow_ret = push_output(filter, filter->srcpad_left, left_proc_buf);
+        if (stops_outputs(flow_ret)) {
             goto out;
         }
     }
@@ -509,12 +573,8 @@ static GstFlowReturn gst_zeddemux_chain(GstPad *pad, GstObject *parent, GstBuffe
         GST_BUFFER_TIMESTAMP(mono_proc_buf) = GST_BUFFER_TIMESTAMP(buf);
 
         GST_TRACE("Mono buffer push");
-        ret_mono = gst_pad_push(filter->srcpad_mono, mono_proc_buf);
-
-        // gst_pad_push() took the buffer, even on failure
-        if (ret_mono != GST_FLOW_OK) {
-            GST_DEBUG_OBJECT(filter, "Error pushing mono buffer: %s", gst_flow_get_name(ret_mono));
-            flow_ret = ret_mono;
+        flow_ret = push_output(filter, filter->srcpad_mono, mono_proc_buf);
+        if (stops_outputs(flow_ret)) {
             goto out;
         }
     }
@@ -589,28 +649,15 @@ static GstFlowReturn gst_zeddemux_chain(GstPad *pad, GstObject *parent, GstBuffe
         GST_BUFFER_TIMESTAMP(aux_proc_buf) = GST_BUFFER_TIMESTAMP(buf);
 
         GST_TRACE("Aux buffer push");
-        ret_aux = gst_pad_push(filter->srcpad_aux, aux_proc_buf);
-
-        // gst_pad_push() took the buffer, even on failure
-        if (ret_aux != GST_FLOW_OK) {
-            GST_DEBUG_OBJECT(filter, "Error pushing aux buffer: %s", gst_flow_get_name(ret_aux));
-            flow_ret = ret_aux;
+        flow_ret = push_output(filter, filter->srcpad_aux, aux_proc_buf);
+        if (stops_outputs(flow_ret)) {
             goto out;
         }
     }
     // <---- Aux buffer
     GST_TRACE("... processed");
 
-    // Everyting pushed
-    if (!filter->is_mono) {
-        if (ret_left == GST_FLOW_OK && ret_aux == GST_FLOW_OK) {
-            flow_ret = GST_FLOW_OK;
-        } else {
-            flow_ret = GST_FLOW_ERROR;
-        }
-    } else {
-        flow_ret = (ret_mono == GST_FLOW_OK) ? GST_FLOW_OK : GST_FLOW_ERROR;
-    }
+    // flow_ret is the flow of all the outputs combined
 
 out:
     /// Release incoming buffer any case
