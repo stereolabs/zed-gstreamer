@@ -44,13 +44,15 @@ struct _GstZedDataMux {
 
     GstCaps *caps;
 
-    GstClockTime last_data_ts;
-    GstClockTime last_video_ts;
-
-    GstBuffer *last_video_buf;
-    gsize last_video_buf_size;
-    GstBuffer *last_data_buf;
-    gsize last_data_buf_size;
+    // The two sink pads are fed by different streaming threads: `lock` protects the members below
+    GMutex lock;
+    // Private copies of the buffers of one input still waiting for the buffer of the other input
+    // with the same timestamp, oldest first
+    GQueue pending_video;
+    GQueue pending_data;
+    gboolean video_eos;
+    gboolean data_eos;
+    gboolean overflow_warned;
 };
 
 struct _GstZedDataMuxClass {

@@ -28,6 +28,8 @@ static GstFlowReturn consume(GstPad *pad, GstObject *, GstBuffer *buf) {
 
 int main(int argc, char **argv) {
     gst_init(&argc, &argv);
+    // plugin_init() is not called: register the debug category so that GST_DEBUG works
+    GST_DEBUG_CATEGORY_INIT(gst_zeddemux_debug, "zeddemux", 0, "test");
     g_log_set_always_fatal((GLogLevelFlags) (G_LOG_FATAL_MASK | G_LOG_LEVEL_CRITICAL));
     auto *mux = GST_ZEDDEMUX(g_object_new(gst_zeddemux_get_type(), "is-depth", TRUE, NULL));
     for (const char *spec : {
